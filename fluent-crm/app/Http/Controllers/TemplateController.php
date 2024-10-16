@@ -21,15 +21,19 @@ class TemplateController extends Controller
     public function templates(Request $request)
     {
         $order = $request->getSafe('order', 'desc', 'sanitize_sql_orderby');
-        $orderBy = $request->get('orderBy', 'ID', 'sanitize_sql_orderby');
+        $orderBy = $request->getSafe('orderBy', 'ID', 'sanitize_sql_orderby');
 
-        $templates = Template::emailTemplates(
+        $templatesQuery = Template::emailTemplates(
             $request->get('types', ['publish', 'draft'])
         );
-        if (!empty($request->get('search'))) {
-            $templates = $templates->where('post_title', 'LIKE', '%' . $request->getSafe('search') . '%');
+
+        if ($search = $request->getSafe('search')) {
+            $templatesQuery->where('post_title', 'LIKE', '%' . $search . '%');
         }
-        $templates = $templates->orderBy($orderBy, $order)
+
+        // Order the query results and paginate
+        $templates = $templatesQuery
+            ->orderBy($orderBy, $order)
             ->paginate();
 
         foreach ($templates as $template) {
@@ -165,27 +169,32 @@ class TemplateController extends Controller
 
     public function duplicate($templateId)
     {
-        $template = Template::find($templateId)->toArray();
-        $postData = Arr::only($template, [
-            'post_title',
-            'post_content',
-            'post_excerpt'
-        ]);
+        $template = Template::findOrFail($templateId);
 
-        $postData['post_modified'] = current_time('mysql');
-        $postData['post_modified_gmt'] = date('Y-m-d H:i:s');
-        $postData['post_date'] = current_time('mysql');
-        $postData['post_date_gmt'] = date('Y-m-d H:i:s');
-        $postData['post_type'] = fluentcrmTemplateCPTSlug();
-        $postData['post_title'] = __('[Duplicate] ', 'fluent-crm') . $postData['post_title'];
+        $postData = [
+            'post_title'        => __('[Duplicate] ', 'fluent-crm') . $template['post_title'],
+            'post_content'      => $template['post_content'],
+            'post_excerpt'      => $template['post_excerpt'],
+            'post_modified'     => current_time('mysql'),
+            'post_modified_gmt' => gmdate('Y-m-d H:i:s'),
+            'post_date'         => current_time('mysql'),
+            'post_date_gmt'     => gmdate('Y-m-d H:i:s'),
+            'post_type'         => fluentcrmTemplateCPTSlug(),
+        ];
 
         $newTemplateId = wp_insert_post($postData);
 
-        update_post_meta($newTemplateId, '_email_subject', get_post_meta($templateId, '_email_subject', true));
-        update_post_meta($newTemplateId, '_edit_type', get_post_meta($templateId, '_edit_type', true));
-        update_post_meta($newTemplateId, '_template_config', get_post_meta($templateId, '_template_config', true));
-        update_post_meta($newTemplateId, '_design_template', get_post_meta($templateId, '_design_template', true));
-        update_post_meta($newTemplateId, '_footer_settings', get_post_meta($templateId, '_footer_settings', true));
+        // Meta fields to copy over
+        $metaKeys = [
+            '_email_subject',
+            '_edit_type',
+            '_template_config',
+            '_design_template',
+            '_footer_settings'
+        ];
+
+        // Update post meta in a loop
+        $this->copyMetaFields($templateId, $newTemplateId, $metaKeys);
 
         do_action('fluent_crm/email_template_duplicated', $newTemplateId, $template);
 
@@ -193,6 +202,16 @@ class TemplateController extends Controller
             'message'     => __('Template successfully duplicated', 'fluent-crm'),
             'template_id' => $newTemplateId
         ]);
+    }
+
+    /**
+     * Helper method to copy meta fields from one post to another
+     */
+    protected function copyMetaFields($oldPostId, $newPostId, $metaKeys)
+    {
+        foreach ($metaKeys as $metaKey) {
+            update_post_meta($newPostId, $metaKey, get_post_meta($oldPostId, $metaKey, true));
+        }
     }
 
     public function update(Request $request, $id)

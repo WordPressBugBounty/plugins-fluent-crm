@@ -48,6 +48,13 @@ class Stats
                 'route' => [
                     'name' => 'templates'
                 ]
+            ],
+            'total_automations'   => [
+                'title' => __('Active Automations', 'fluent-crm'),
+                'count' => Funnel::where('status', 'published')->count(),
+                'route' => [
+                    'name' => 'funnels'
+                ]
             ]
         ];
 

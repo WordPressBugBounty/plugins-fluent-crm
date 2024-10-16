@@ -240,6 +240,22 @@ class BlockParser
     {
         $defaultClass = Arr::get($data, 'attrs.className', '');
         $backgroundColor = Arr::get($data, 'attrs.style.color.background');
+
+        $typoTextTransform = Arr::get($data, 'attrs.style.typography.textTransform');
+        $typoFontWeight = Arr::get($data, 'attrs.style.typography.fontWeight');
+        $typoFontStyle = Arr::get($data, 'attrs.style.typography.fontStyle');
+
+        $typography = '';
+        if ($typoTextTransform) {
+            $typography .= 'text-transform: ' . $typoTextTransform . ';';
+        }
+        if ($typoFontWeight) {
+            $typography .= 'font-weight: ' . $typoFontWeight . ';';
+        }
+        if ($typoFontStyle) {
+            $typography .= 'font-style: ' . $typoFontStyle . ';';
+        }
+
         if (!$backgroundColor) {
             $bgClass = Arr::get($data, 'attrs.backgroundColor');
             $backgroundColor = Helper::getColorSchemeValue($bgClass);
@@ -268,11 +284,11 @@ class BlockParser
 
         $content = trim(preg_replace("/<\/?div[^>]*\>/i", "", $content));
 
-        $td = '<td class="fc_btn ' . trim($btn_wrapper_class) . '" align="center" style="border-radius: ' . $borderRadius . ';" bgcolor="' . $backgroundColor . '" border-radius="30px">';
+        $td = '<td class="fc_btn ' . trim($btn_wrapper_class) . '" align="center" style="' . $typography . ' border-radius: ' . $borderRadius . ';" bgcolor="' . $backgroundColor . '" border-radius="30px">';
 
         $align = Arr::get($data, 'parent_attrs.parent_attrs.layout.justifyContent', 'center');
 
-        $alignment = $align == 'center' ? 'text-align: -webkit-center' : ' ';
+        $alignment = $align == 'center' ? 'text-align: -webkit-center;' : ' ';
 
         return '<td style="padding-right: 10px;' . $alignment . '" align="' . $align . '" valign="middle" class="fce_column"><table style="margin-bottom: 4px; margin-top: 4px;" border="0" cellspacing="0" cellpadding="0"><tr>' . $td . $content . '</td></tr></table></td>';
     }

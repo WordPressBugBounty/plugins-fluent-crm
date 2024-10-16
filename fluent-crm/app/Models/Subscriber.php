@@ -90,8 +90,9 @@ class Subscriber extends Model
 
                     if ($email_mismatch && apply_filters('fluentcrm_update_wp_user_email_on_change', false)) {
                         $user->user_email = $model->email;
-                        wp_update_user($user);
                     }
+
+                    wp_update_user($user);
 
                     $model->user_id = $user->ID; // in case user id mismatch
                 }
@@ -1127,6 +1128,7 @@ class Subscriber extends Model
 
         $listIds = Sanitize::sanitizeListIds($listIds);
 
+        $this->load('lists');
         $existingLists = $this->lists;
         $existingListIds = [];
         foreach ($existingLists as $list) {
@@ -1167,6 +1169,7 @@ class Subscriber extends Model
 
         $tagIds = Sanitize::sanitizeTagIds($tagIds);
 
+        $this->load('tags');
         $existingTags = $this->tags;
         $existingTagIds = [];
         foreach ($existingTags as $tag) {
@@ -1205,6 +1208,8 @@ class Subscriber extends Model
         if (!$companyIds) {
             return $this;
         }
+
+        $this->load('companies');
 
         $existingCompanies = $this->companies;
         $existingCompanyIds = [];
@@ -1247,6 +1252,8 @@ class Subscriber extends Model
 
         $listIds = Sanitize::sanitizeListIds($listIds, false);
 
+        $this->load('lists');
+
         $existingLists = $this->lists;
         $existingListIds = [];
         foreach ($existingLists as $list) {
@@ -1278,6 +1285,8 @@ class Subscriber extends Model
 
         $tagsIds = Sanitize::sanitizeTagIds($tagsIds, false);
 
+        $this->load('tags');
+
         $existingTags = $this->tags;
         $existingTagIds = [];
         foreach ($existingTags as $tag) {
@@ -1306,6 +1315,9 @@ class Subscriber extends Model
         if (!$companyIds) {
             return $this;
         }
+
+
+        $this->load('companies');
 
         $existingCompanies = $this->companies;
         $existingCompanyIds = [];
@@ -1356,6 +1368,8 @@ class Subscriber extends Model
 
         $tagIds = Sanitize::sanitizeTagIds($tagIds, false);
 
+        $this->load('tags');
+
         foreach ($this->tags as $tag) {
             if (in_array($tag->id, $tagIds)) {
                 return true;
@@ -1371,6 +1385,8 @@ class Subscriber extends Model
         }
 
         $listIds = Sanitize::sanitizeListIds($listIds, false);
+
+        $this->load('lists');
 
         foreach ($this->lists as $list) {
             if (in_array($list->id, $listIds)) {
@@ -1909,7 +1925,7 @@ class Subscriber extends Model
                         return $subQuery->select(fluentCrmDb()->raw(1))
                             ->from('usermeta')
                             ->whereRaw("{$wpdb->prefix}usermeta.user_id = {$wpdb->prefix}users.ID")
-                            ->where('usermeta.meta_key', '=', 'wp_capabilities')
+                            ->where('usermeta.meta_key', '=', $wpdb->prefix . 'capabilities')
                             ->where('usermeta.meta_value', 'LIKE', '%"' . $userRole . '"%');
                     });
                 });

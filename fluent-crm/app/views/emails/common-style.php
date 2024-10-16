@@ -557,6 +557,14 @@ if(fluentcrm_is_rtl()) {
     .fc_latest_post_item {
         border:1px solid #edeef4;
     }
+    .fc_latest_post_item tbody tr td .fc_latest_post_overlay {
+        display: block;
+        width: 100%;
+        height: 100%;
+    }
+    .fc_latest_post_item tbody tr td {
+        position: relative;
+    }
     .fc_latest_post_item tbody tr td img {
         width: 100%;
         max-height: 400px;

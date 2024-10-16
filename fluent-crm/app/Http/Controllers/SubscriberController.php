@@ -366,22 +366,24 @@ class SubscriberController extends Controller
         }
 
         $data = [];
-
         if (isset($originalData['email'])) {
             $data = $this->validate($originalData, [
                 'email' => 'required|email|unique:fc_subscribers,email,' . $id,
             ], [
                 'email.unique' => __('Provided email already assigned to another subscriber.', 'fluent-crm')
             ]);
+        } else {
+            $data = $originalData;
         }
 
         if (isset($data['email'])) {
             // Maybe update user id
-            if ($user = get_user_by('email', $data['email'])) {
-                $data['user_id'] = $user->ID;
-            } else {
-                $data['user_id'] = NULL;
+            $user = get_user_by('email', $data['email']);
+            if (!$user && apply_filters('fluentcrm_update_wp_user_email_on_change', false)) {
+                $user = get_user_by('ID', $data['user_id']);
             }
+            
+            $data['user_id'] = $user ? $user->ID : NULL;
         }
 
         if (!empty($data['user_id'])) {
@@ -1181,7 +1183,6 @@ class SubscriberController extends Controller
         ];
 
         if (!isset($validActions[$actionName])) {
-
             $response = $this->sendError([
                 'message' => __('Selected Action is not valid', 'fluent-crm')
             ]);
@@ -1192,6 +1193,8 @@ class SubscriberController extends Controller
                 $result['last_contact_id'] = $lastContactId;
                 $result['completed_contacts'] = count($subscriberIds);
             }
+
+            return $result;
         }
 
         $options = $request->get('action_options', []);
@@ -1427,14 +1430,14 @@ class SubscriberController extends Controller
 
     public function getUrlMetrics(Request $request, $id)
     {
-        $sort_by    = sanitize_sql_orderby($this->request->get('sort_by', 'id'));
-        $sort_type  = sanitize_sql_orderby($this->request->get('sort_type', 'DESC'));
+        $sort_by = sanitize_sql_orderby($this->request->get('sort_by', 'id'));
+        $sort_type = sanitize_sql_orderby($this->request->get('sort_type', 'DESC'));
         $subscriber = Subscriber::findOrFail($id);
 
         $urlActivityQuery = CampaignUrlMetric::with('url_stores')
             ->where('subscriber_id', $subscriber->id)
             ->where('type', 'click');
-        
+
         // Apply custom sorting if provided
         if (!empty($sort_by) && !empty($sort_type)) {
             $urlActivityQuery->orderBy($sort_by, $sort_type);

@@ -22,6 +22,8 @@ class AdminMenu
 {
     public $version = FLUENTCRM_PLUGIN_VERSION;
 
+    protected static $mainScriptLoaded = false;
+
     public function init()
     {
 
@@ -449,7 +451,6 @@ class AdminMenu
         if (!isset($_GET['page']) || $_GET['page'] != 'fluentcrm-admin') {
             return;
         }
-
         /*
          * LearnPress loads all their JS weired way on every Admin Pages
          */
@@ -459,57 +460,17 @@ class AdminMenu
             });
         }
 
-        add_action('wp_print_scripts', function () {
-
-            $isSkip = apply_filters('fluent_crm/skip_no_conflict', false);
-
-            if ($isSkip) {
-                return;
-            }
-
-            global $wp_scripts;
-            if (!$wp_scripts) {
-                return;
-            }
-
-            $approvedSlugs = apply_filters('fluent_crm_asset_listed_slugs', [
-                '\/gutenberg\/'
-            ]);
-
-            $approvedSlugs[] = 'fluent-crm';
-
-            $approvedSlugs = array_unique($approvedSlugs);
-
-            $approvedSlugs = implode('|', $approvedSlugs);
-
-            $pluginUrl = plugins_url();
-
-            $pluginUrl = str_replace(['http:', 'https:'], '', $pluginUrl);
-
-            foreach ($wp_scripts->queue as $script) {
-                if (empty($wp_scripts->registered[$script]) || empty($wp_scripts->registered[$script]->src)) {
-                    continue;
-                }
-
-                $src = $wp_scripts->registered[$script]->src;
-                $isMatched = (strpos($src, $pluginUrl) !== false) && !preg_match('/' . $approvedSlugs . '/', $src);
-                if (!$isMatched) {
-                    continue;
-                }
-
-                wp_dequeue_script($wp_scripts->registered[$script]->handle);
-            }
-        }, 1);
-
         $this->loadCssJs();
     }
 
     public function loadCssJs()
     {
-        wp_enqueue_script('fluentcrm_global_admin.js', fluentCrmMix('admin/js/global_admin.js'), array('jquery'), $this->version);
-        wp_enqueue_script('fluentcrm_admin_app_boot', fluentCrmMix('admin/js/boot.js'), array('moment'), $this->version);
+        $this->unloadOtherScripts();
 
+        wp_enqueue_script('fluentcrm_global_admin', fluentCrmMix('admin/js/global_admin.js'), array('jquery'), $this->version);
+        wp_enqueue_script('fluentcrm_admin_app_boot', fluentCrmMix('admin/js/boot.js'), array('moment'), $this->version);
         $this->emailBuilderBlockInit();
+
         /**
          * Action Hook when global admin scripts are loaded
          */
@@ -532,8 +493,8 @@ class AdminMenu
             <script>
                 document.addEventListener('DOMContentLoaded', function () {
                     if (_ && _.noConflict) {
-                        if(window._.each.length == 2) {
-                            window.lodash =  _.noConflict();
+                        if (window._.each.length == 2) {
+                            window.lodash = _.noConflict();
                             console.log('_.noConflict() Loaded');
                         }
                     }
@@ -546,7 +507,6 @@ class AdminMenu
 
         wp_enqueue_script('fluentcrm-chartjs', fluentCrmMix('libs/chartjs/Chart.min.js'), [], $this->version, true);
         wp_enqueue_script('fluentcrm-vue-chartjs', fluentCrmMix('libs/chartjs/vue-chartjs.min.js'), [], $this->version, true);
-
         wp_enqueue_script('dompurify', fluentCrmMix('libs/purify/purify.min.js'), [], $this->version, true);
 
         $inlineCss = Helper::generateThemePrefCss();
@@ -678,7 +638,8 @@ class AdminMenu
             'debugs'                              => [
                 '_fc_last_automation_processor' => get_option('_fc_last_funnel_processor_ran'),
                 '_fcrm_last_scheduler'          => fluentCrmGetOptionCache('_fcrm_last_scheduler')
-            ]
+            ],
+            'custom_contact_bulk_actions'         => apply_filters('fluent_crm/custom_contact_bulk_actions', [])
         );
 
         if (Arr::get($activatedFeatures, 'company_module')) {
@@ -704,7 +665,6 @@ class AdminMenu
 
         wp_enqueue_style('fluentcrm_admin_app', fluentCrmMix($adminAppCss), array(), $this->version);
         wp_enqueue_style('fluentcrm_app_global', fluentCrmMix($appGlobalCss), array(), $this->version);
-
     }
 
     protected function getRestInfo($app)
@@ -725,6 +685,9 @@ class AdminMenu
 
     public function emailBuilderBlockInit()
     {
+
+        wp_enqueue_script('underscore_js', includes_url('js/underscore.min.js'), [], '1.13.6', false);
+
         if (function_exists('wp_enqueue_media')) {
             // Editor default styles.
             add_filter('user_can_richedit', '__return_true');
@@ -787,12 +750,6 @@ class AdminMenu
                 $version,
                 true
             );
-//            wp_enqueue_script(
-//                'fc_block_product',
-//                fluentCrmMix($assetFolder . '/product-index.js'),
-//                array(),
-//                $version
-//            );
         }
 
         wp_enqueue_script(
@@ -1472,5 +1429,73 @@ class AdminMenu
         $format = strtr($phpFormat, $replacements);
 
         return apply_filters('fluent_crm/moment_date_time_format', $format);
+    }
+
+    private function unloadOtherScripts()
+    {
+        $isSkip = apply_filters('fluent_crm/skip_no_conflict', false);
+        if ($isSkip) {
+            return;
+        }
+
+        $approvedSlugs = apply_filters('fluent_crm_asset_listed_slugs', [
+            '\/gutenberg\/'
+        ]);
+        $approvedSlugs[] = 'fluent-crm';
+        $approvedSlugs = array_unique($approvedSlugs);
+        $approvedSlugs = implode('|', $approvedSlugs);
+
+        $pluginUrl = str_replace(['http:', 'https:'], '', plugins_url());
+
+        add_filter('script_loader_src', function ($src, $handle) use ($approvedSlugs, $pluginUrl) {
+            if (!$src) {
+                return $src;
+            }
+
+            if ($handle == 'underscore') {
+                return false;
+            }
+
+            $willSkip = (strpos($src, $pluginUrl) !== false) && !preg_match('/' . $approvedSlugs . '/', $src);
+            if ($willSkip) {
+                return false;
+            }
+            return $src;
+        }, 1, 2);
+
+        add_action('wp_print_scripts', function () {
+            global $wp_scripts;
+            if (!$wp_scripts) {
+                return;
+            }
+
+            $approvedSlugs = apply_filters('fluent_crm_asset_listed_slugs', [
+                '\/gutenberg\/'
+            ]);
+
+            $approvedSlugs[] = 'fluent-crm';
+
+            $approvedSlugs = array_unique($approvedSlugs);
+
+            $approvedSlugs = implode('|', $approvedSlugs);
+
+            $pluginUrl = plugins_url();
+
+            $pluginUrl = str_replace(['http:', 'https:'], '', $pluginUrl);
+
+            foreach ($wp_scripts->queue as $script) {
+                if (empty($wp_scripts->registered[$script]) || empty($wp_scripts->registered[$script]->src)) {
+                    continue;
+                }
+
+                $src = $wp_scripts->registered[$script]->src;
+                $isMatched = (strpos($src, $pluginUrl) !== false) && !preg_match('/' . $approvedSlugs . '/', $src);
+                if (!$isMatched) {
+                    continue;
+                }
+
+                wp_dequeue_script($wp_scripts->registered[$script]->handle);
+            }
+        }, 1);
     }
 }

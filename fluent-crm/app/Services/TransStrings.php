@@ -1705,6 +1705,23 @@ class TransStrings
             'Set up an automation'                                                                   => __('Set up an automation', 'fluent-crm'),
             'No active Abandoned Cart automation.'                                                   => __('No active Abandoned Cart automation.', 'fluent-crm'),
             'Site URL'                                                                               => __('Site URL', 'fluent-crm'),
+            'Pause/Run'                                                                              => __('Pause/Run', 'fluent-crm'),
+            'Export Campaign'                                                                        => __('Export Campaign', 'fluent-crm'),
+            'Recurring_Campaign_Export_Alert'                                                        => __('Recurring Campaign export is only available on pro version of FluentCRM', 'fluent-crm'),
+            'Import_Recurring_Campaign'                                                              => __('Import your exported recurring email campaigns JSON file here. Please upload your JSON file.', 'fluent-crm'),
+            'Not_Import_Recurring_Campaigns_Alert'                                                   => __('Do not import recurring campaigns from untrusted sources.', 'fluent-crm'),
+            'Tax(es)'                                                                                => __('Tax(es)', 'fluent-crm'),
+            'Order Comments'                                                                         => __('Order Comments', 'fluent-crm'),
+            'Recovery URL'                                                                           => __('Recovery URL', 'fluent-crm'),
+            'View Original Order'                                                                    => __('View Original Order', 'fluent-crm'),
+            'All carts'                                                                              => __('All carts', 'fluent-crm'),
+            'Draft Carts'                                                                            => __('Draft Carts', 'fluent-crm'),
+            'Image'                                                                                  => __('Image', 'fluent-crm'),
+            'In Progress'                                                                            => __('In Progress', 'fluent-crm'),
+            'Recovered Carts'                                                                        => __('Recovered Carts', 'fluent-crm'),
+            'Lost Carts'                                                                             => __('Lost Carts', 'fluent-crm'),
+            'Opt-Out Carts'                                                                          => __('Opt-Out Carts', 'fluent-crm'),
+            'Skipped Carts'                                                                          => __('Skipped Carts', 'fluent-crm'),
         ];
     }
 }

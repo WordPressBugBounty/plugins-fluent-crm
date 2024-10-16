@@ -45,6 +45,7 @@ class FunnelController extends Controller
 
         foreach ($funnels as $funnel) {
             $funnel->subscribers_count = $funnel->getSubscribersCount();
+            $funnel->description = $funnel->getMeta('description');
         }
 
         $data = [
@@ -83,6 +84,10 @@ class FunnelController extends Controller
         $funnel = apply_filters('fluentcrm_funnel_editor_details_' . $funnel->trigger_name, $funnel);
 
         $funnel->description = $funnel->getMeta('description');
+
+        if (!$funnel->settings) {
+            $funnel->settings = (object)[];
+        }
 
         $data = [
             'funnel' => $funnel
@@ -446,7 +451,7 @@ class FunnelController extends Controller
 
         if ($funnel->status == $newStatus) {
             return $this->sendError([
-                'message' => 'Funnel already have the same status'
+                'message' => __('Funnel already have the same status', 'fluent-crm')
             ]);
         }
 

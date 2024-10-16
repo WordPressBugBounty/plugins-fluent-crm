@@ -74,7 +74,7 @@ class FunnelProcessor
             }
         }
 
-        if ($subscriber->status == 'pending' || $subscriber->status == 'unsubscribed') {
+        if ($subscriber->status == 'pending') {
             $subscriber->sendDoubleOptinEmail();
         }
 

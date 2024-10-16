@@ -30,6 +30,7 @@ class EmailDesignTemplates
         $view = FluentCrm('view');
         $emailBody = $view->make('emails.plain.Template', $templateData);
         $emailBody = $emailBody->__toString();
+
         $emogrifier = new Emogrifier($emailBody);
         $emogrifier->disableInvisibleNodeRemoval();
         return $emogrifier->emogrify();

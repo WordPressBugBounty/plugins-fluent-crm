@@ -213,6 +213,14 @@ $content_font_family = $config['content_font_family'];
     .fc_latest_post_item {
         border:1px solid #edeef4;
     }
+    .fc_latest_post_item tbody tr td .fc_latest_post_overlay {
+        display: block;
+        width: 100%;
+        height: 100%;
+    }
+    .fc_latest_post_item tbody tr td {
+        position: relative;
+    }
     .fc_latest_post_item tbody tr td img {
         width: 100%;
         max-height: 400px;
@@ -265,6 +273,7 @@ $content_font_family = $config['content_font_family'];
     }
     .fc_latest_post_item .fc_latest_post_content .meta .author img {
         margin-right: 7px;
+        flex: none;
     }
     .fc_latest_post_item .fc_latest_post_content .meta .comments {
         display: block;

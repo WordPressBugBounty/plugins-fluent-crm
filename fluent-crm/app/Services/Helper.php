@@ -24,9 +24,15 @@ class Helper
 
     public static function urlReplaces($string)
     {
-        preg_match_all('/<a[^>]+(href\=["|\'](http.*?)["|\'])/m', $string, $urls);
+        preg_match_all('/<a[^>]+(href=["\'](http[^"\']*)["\'])/m', $string, $urls);
         $replaces = $urls[1];
         $urls = $urls[2];
+
+        // Replace '|' with '%7C' in the URLs
+        $urls = array_map(function($url) {
+            return str_replace('|', '%7C', $url);
+        }, $urls);
+
         $formatted = [];
         $baseUrl = self::getSiteUrl();
 
@@ -199,7 +205,7 @@ class Helper
                 '{{crm.business_name}}'                              => __('Business Name', 'fluent-crm'),
                 '{{crm.business_address}}'                           => __('Business Address', 'fluent-crm'),
                 '{{wp.admin_email}}'                                 => __('Admin Email', 'fluent-crm'),
-                '{{wp.url}}'                                         => __('Site URL', 'fluent-crm'),
+                '##wp.url##'                                         => __('Site URL', 'fluent-crm'),
                 '{{other.date.+2 days}}'                             => __('Dynamic Date (ex: +2 days from now)', 'fluent-crm'),
                 '{{other.date_format.D, d M, Y}}'                    => __('Custom Date Format (Any PHP Date Format)', 'fluent-crm'),
                 '{{other.latest_post.title}}'                        => __('Latest Post Title (Published)', 'fluent-crm'),

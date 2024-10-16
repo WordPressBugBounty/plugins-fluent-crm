@@ -98,7 +98,20 @@ class PurchaseHistory
         $page = (int)$app->request->get('page', 1);
         $per_page = (int)$app->request->get('per_page', 10);
 
-        $orders = $this->getWooOrders($subscriber);
+        $sort_by   = sanitize_sql_orderby($app->request->get('sort_by', 'id'));
+        $sort_type = sanitize_sql_orderby($app->request->get('sort_type', 'DESC'));
+
+        $valid_columns = ['id', 'date_created', 'total_amount'];
+        $valid_directions = ['ASC', 'DESC'];
+
+        if (!in_array($sort_by, $valid_columns)) {
+            $sort_by = 'id';
+        }
+        if (!in_array(strtoupper($sort_type), $valid_directions)) {
+            $sort_type = 'DESC';
+        }
+
+        $orders = $this->getWooOrders($subscriber, $sort_by, $sort_type);
         $totalOrders = count($orders);
         $orders = array_slice($orders, ($page - 1) * $per_page, $per_page);
 
@@ -125,19 +138,25 @@ class PurchaseHistory
             'has_recount'    => $hasRecount,
             'columns_config' => [
                 'order'   => [
-                    'label' => __('Order', 'fluent-crm'),
-                    'width' => '100px'
+                    'label'    => __('Order', 'fluent-crm'),
+                    'width'    => '100px',
+                    'sortable' => true,
+                    'key'      => 'id'
                 ],
                 'date'    => [
-                    'label' => __('Date', 'fluent-crm')
+                    'label'    => __('Date', 'fluent-crm'),
+                    'sortable' => true,
+                    'key'      => 'date_created_gmt'
                 ],
                 'status'  => [
                     'label' => __('Status', 'fluent-crm'),
                     'width' => '100px'
                 ],
                 'total'   => [
-                    'label' => __('Total', 'fluent-crm'),
-                    'width' => '160px'
+                    'label'    => __('Total', 'fluent-crm'),
+                    'width'    => '160px',
+                    'sortable' => true,
+                    'key'      => 'total_amount'
                 ],
                 'actions' => [
                     'label' => __('Actions', 'fluent-crm'),
@@ -241,6 +260,8 @@ class PurchaseHistory
             (new \FluentCampaign\App\Services\Integrations\Edd\DeepIntegration)->syncCustomerBySubscriber($subscriber);
         }
 
+        $sort_by   = sanitize_sql_orderby($app->request->get('sort_by', 'id'));
+        $sort_type = sanitize_sql_orderby($app->request->get('sort_type', 'DESC'));
         $per_page = (int)$app->request->get('per_page', 10);
         $customer = new \EDD_Customer($subscriber->email);
 
@@ -262,9 +283,20 @@ class PurchaseHistory
                 return $data;
             }
 
+            $valid_columns = ['id', 'date_created', 'total'];
+            $valid_directions = ['ASC', 'DESC'];
+
+            if (!in_array($sort_by, $valid_columns)) {
+                $sort_by = 'id';
+            }
+            if (!in_array(strtoupper($sort_type), $valid_directions)) {
+                $sort_type = 'DESC';
+            }
+
+
             $orders = fluentCrmDb()->table('edd_orders')
                 ->where('customer_id', $customer->id)
-                ->orderBy('id', 'DESC')
+                ->orderBy($sort_by, $sort_type)
                 ->limit($per_page)
                 ->offset(($page - 1) * $per_page)
                 ->get();
@@ -338,26 +370,35 @@ class PurchaseHistory
             'data'           => $formattedOrders,
             'total'          => $totalCount,
             'sidebar_html'   => $beforeHtml,
+            'after_html'       => '<p><a target="_blank" rel="noopener" href="'.admin_url('edit.php?post_type=download&page=edd-customers&view=overview&id='.$customer->id).'">' . esc_html__('View Customer Profile', 'fluent-crm') . '</a></p>',
             'has_recount'    => $hasRecount,
             'columns_config' => [
                 'order'  => [
                     'label' => __('Order', 'fluent-crm'),
-                    'width' => '100px'
+                    'width' => '100px',
+                    'sortable' => true,
+                    'key' => 'id'
                 ],
                 'date'   => [
-                    'label' => __('Date', 'fluent-crm')
+                    'label' => __('Date', 'fluent-crm'),
+                    'sortable' => true,
+                    'key' => 'edd_orders'
                 ],
                 'status' => [
                     'label' => __('Status', 'fluent-crm'),
-                    'width' => '140px'
+                    'width' => '140px',
+                    'sortable' => false
                 ],
                 'total'  => [
                     'label' => __('Total', 'fluent-crm'),
-                    'width' => '120px'
+                    'width' => '120px',
+                    'sortable' => true,
+                    'key' => 'total'
                 ],
                 'action' => [
                     'label' => __('Actions', 'fluent-crm'),
-                    'width' => '100px'
+                    'width' => '100px',
+                    'sortable' => false
                 ]
             ]
         ];
@@ -476,7 +517,7 @@ class PurchaseHistory
     }
 
 
-    private function getWooOrders($subscriber)
+    private function getWooOrders($subscriber, $sort_by, $sort_type)
     {
         $email = $subscriber->email;
 
@@ -495,14 +536,14 @@ class PurchaseHistory
                                     ->where('customer_id', 0);
                             });
                     })
-                    ->orderBy('id', 'DESC')
+                    ->orderBy($sort_by, $sort_type)
                     ->get();
             } else {
                 $hposOrders = fluentCrmDb()->table('wc_orders')
                     ->select(['id'])
                     ->where('billing_email', $email)
                     ->where('customer_id', 0)
-                    ->orderBy('id', 'DESC')
+                    ->orderBy($sort_by, $sort_type)
                     ->get();
             }
 
@@ -530,9 +571,14 @@ class PurchaseHistory
             $userOrders = wc_get_orders([
                 'customer_id' => $storeUseId,
                 'limit'       => -1,
-                'orderby'     => 'date',
-                'order'       => 'DESC',
+                'orderby'     => $sort_by,
+                'order'       => $sort_type,
             ]);
+
+            // Sort orders by total amount manually
+            if ($sort_by === 'total_amount') {
+                $this->wooSortOrdersByTotalAmount($userOrders, $sort_type);
+            }
 
             foreach ($userOrders as $order) {
                 $orders[$order->get_id()] = $order;
@@ -543,9 +589,13 @@ class PurchaseHistory
         $guestOrders = wc_get_orders([
             'customer' => $email,
             'limit'    => -1,
-            'orderby'     => 'date',
-            'order'       => 'DESC',
+            'orderby'  => $sort_by,
+            'order'    => $sort_type,
         ]);
+
+        if ($sort_by === 'total_amount') {
+            $this->wooSortOrdersByTotalAmount($userOrders, $sort_type);
+        }
 
         foreach ($guestOrders as $order) {
             $userId = $order->get_user_id();
@@ -557,6 +607,28 @@ class PurchaseHistory
 
 
         return array_values($orders);
+    }
+
+    /**
+     * Sorts an array of WooCommerce orders by their total amount.
+     *
+     * This method sorts an array of WooCommerce order objects based on the total order amount.
+     * The sorting can be done in either ascending ('ASC') or descending ('DESC') order,
+     * as specified by the $sort_type parameter.
+     *
+     * @param array $orders Array of WooCommerce order objects to be sorted.
+     * @param string $sort_type Specifies the sorting order.
+     *                          Accepts 'ASC' for ascending or 'DESC' for descending.
+     *
+     * @return void The $orders array is sorted in place.
+     */
+    public function wooSortOrdersByTotalAmount(&$orders, $sort_type) {
+        usort($orders, function ($a, $b) use ($sort_type) {
+            $a_total = (float)$a->get_total();
+            $b_total = (float)$b->get_total();
+
+            return $sort_type === 'ASC' ? $a_total <=> $b_total : $b_total <=> $a_total;
+        });
     }
 
 }
