@@ -16,9 +16,29 @@ class PurchaseHistory
 {
     public function getCommerceStatWidget($subscriber)
     {
+        /**
+         * Determine the commerce provider for the purchase history in FluentCRM.
+         *
+         * This filter allows you to modify the commerce provider used in FluentCRM.
+         *
+         * @since 2.8.0
+         * 
+         * @param string $commerceProvider The current commerce provider.
+         * @return string The modified commerce provider.
+         */
         $commerceProvider = apply_filters('fluentcrm_commerce_provider', '');
 
         if ($commerceProvider) {
+            /**
+             * Determine the purchase statistics for a specific commerce provider for a specific subscriber in FluentCRM.
+             *
+             * The dynamic portion of the hook name, `$commerceProvider`, refers to the specific commerce provider.
+             *
+             * @since 2.8.0
+             *
+             * @param array $stats An array of purchase statistics.
+             * @param int $subscriber->id The ID of the subscriber.
+             */
             $stats = apply_filters('fluent_crm/contact_purchase_stat_' . $commerceProvider, [], $subscriber->id);
             if (!$stats) {
                 return false;
@@ -129,6 +149,17 @@ class PurchaseHistory
             ];
         }
 
+        /**
+         * Determine the WooCommerce purchase history sidebar HTML in FluentCRM.
+         *
+         * This filter allows customization of the HTML content displayed in the WooCommerce purchase sidebar.
+         *
+         * @since 2.7.0
+         *
+         * @param string The current HTML content of the sidebar.
+         * @param object $subscriber The subscriber object containing subscriber data.
+         * @param int $page The current page identifier as an integer.
+         */
         $sidebarHtml = apply_filters('fluent_crm/woo_purchase_sidebar_html', '', $subscriber, $page);
 
         return [
@@ -350,6 +381,18 @@ class PurchaseHistory
             }
         }
 
+        /**
+         * Determine the HTML content displayed in the EDD purchase history sidebar for a subscriber in FluentCRM.
+         *
+         * This filter allows customization of the HTML content that appears in the EDD purchase
+         * history sidebar for a given subscriber on a specific page.
+         *
+         * @since 2.7.0
+         *
+         * @param string $beforeHtml The HTML content to be displayed before the purchase history.
+         * @param object $subscriber The subscriber object.
+         * @param int $page The current page identifier as an integer.
+         */
         $beforeHtml = apply_filters('fluent_crm/edd_purchase_sidebar_html', '', $subscriber, $page);
 
 //        if (!$beforeHtml && $subscriber->user_id && $page == 1 && $formattedOrders) {
@@ -463,11 +506,11 @@ class PurchaseHistory
     {
         $blocks = [];
         if (!empty($data['first_order_date'])) {
-            $blocks['Customer Since'] = date(get_option('date_format'), strtotime($data['first_order_date']));
+            $blocks['Customer Since'] = gmdate(get_option('date_format'), strtotime($data['first_order_date']));
         }
 
         if (!empty($data['last_order_date'])) {
-            $blocks['Last Order'] = date(get_option('date_format'), strtotime($data['last_order_date']));
+            $blocks['Last Order'] = gmdate(get_option('date_format'), strtotime($data['last_order_date']));
         }
 
         $blocks['Order Count (paid)'] = $data['order_count'] . $this->getPercentChangeHtml($data['order_count'], $data['stat_avg_count']);

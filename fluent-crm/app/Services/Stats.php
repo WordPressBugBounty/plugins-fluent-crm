@@ -79,39 +79,19 @@ class Stats
 
         $quickLinks = [
             [
-                'title' => __('View Contacts', 'fluent-crm'),
-                'url'   => $urlBase . 'subscribers',
-                'icon'  => 'el-icon-user'
-            ],
-            [
                 'title' => __('Contact Segments', 'fluent-crm'),
                 'url'   => $urlBase . 'contact-groups/lists',
                 'icon'  => 'el-icon-folder'
             ],
             [
-                'title' => __('Email Campaigns', 'fluent-crm'),
-                'url'   => $urlBase . 'email/campaigns',
+                'title' => __('Recurring Campaigns', 'fluent-crm'),
+                'url'   => $urlBase . 'email/recurring-campaigns',
                 'icon'  => 'el-icon-message'
             ],
             [
                 'title' => __('Email Sequences', 'fluent-crm'),
                 'url'   => $urlBase . 'email/sequences',
                 'icon'  => 'el-icon-alarm-clock'
-            ],
-            [
-                'title' => __('Forms', 'fluent-crm'),
-                'url'   => $urlBase . 'forms',
-                'icon'  => 'el-icon-document-checked'
-            ],
-            [
-                'title' => __('Automations', 'fluent-crm'),
-                'url'   => $urlBase . 'funnels',
-                'icon'  => 'el-icon-cold-drink'
-            ],
-            [
-                'title' => __('Settings', 'fluent-crm'),
-                'url'   => $urlBase . 'settings',
-                'icon'  => 'el-icon-setting'
             ],
             [
                 'title' => __('Documentations', 'fluent-crm'),
@@ -125,14 +105,6 @@ class Stats
                 'is_external' => true
             ]
         ];
-
-        if(defined('FLUENTMAIL_PLUGIN_FILE')) {
-            $quickLinks[] = [
-                'title' => __('FluentSMTP', 'fluent-crm'),
-                'url'   => admin_url('options-general.php?page=fluent-mail'),
-                'icon'  => 'el-icon-envelope'
-            ];
-        }
 
         return apply_filters('fluent_crm/quick_links', $quickLinks);
     }

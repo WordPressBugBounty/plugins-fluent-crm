@@ -222,7 +222,7 @@ class ShortcodeParser
                     'secure_hash' => fluentCrmGetContactManagedHash($subscriber->id)
                 ]), site_url('/'));
             case "unsubscribe_html":
-                if ($defaultValue) {
+                if (!$defaultValue) {
                     $defaultValue = __('Unsubscribe', 'fluent-crm');
                 }
 
@@ -235,7 +235,7 @@ class ShortcodeParser
 
                 return '<a class="fc_unsub_url" href="' . $url . '">' . $defaultValue . '</a>';
             case "manage_subscription_html":
-                if ($defaultValue) {
+                if (!$defaultValue) {
                     $defaultValue = __('Email Preference', 'fluent-crm');
                 }
 
@@ -304,7 +304,12 @@ class ShortcodeParser
 
             $multiLines = preg_split("/\r\n|\n|\r/", $value);
             if ($multiLines && is_array($multiLines)) {
-                return implode('<br/> ', $multiLines);
+                $formattedValue = implode('<br/> ', $multiLines);
+                if (strtotime($formattedValue)) {
+                    $date_format = get_option('date_format');
+                    $formattedValue = date_i18n($date_format, strtotime($formattedValue));
+                }
+                return $formattedValue;
             }
 
             if ($value) {

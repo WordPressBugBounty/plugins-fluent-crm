@@ -81,18 +81,27 @@ class Subscriber extends Model
                 }
 
                 if ($user) {
-                    if ($model->first_name) {
+                    if ($model->first_name && $model->last_name != $user->first_name) {
                         update_user_meta($user->ID, 'first_name', $model->first_name);
                     }
-                    if ($model->last_name) {
+                    if ($model->last_name && $model->last_name != $user->last_name) {
                         update_user_meta($user->ID, 'last_name', $model->last_name);
                     }
 
+                    /**
+                     * Determine whether to update the WordPress user email when there is a mismatch.
+                     *
+                     * This filter allows you to control whether the WordPress user email should be updated
+                     * when there is a mismatch between the subscriber email and the WordPress user email.
+                     *
+                     * @since 2.3.1
+                     *
+                     * @param bool Whether to update the WordPress user email. Default false.
+                     */
                     if ($email_mismatch && apply_filters('fluentcrm_update_wp_user_email_on_change', false)) {
                         $user->user_email = $model->email;
+                        wp_update_user($user);
                     }
-
-                    wp_update_user($user);
 
                     $model->user_id = $user->ID; // in case user id mismatch
                 }

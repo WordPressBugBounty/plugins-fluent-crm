@@ -1,6 +1,6 @@
 <?php
 $width       = $config['content_width'];
-$hFont       = $config['heading_font_family'];
+$hFont       = $config['headings_font_family'];
 $hColor      = $config['headings_color'];
 $mainColor   = $config['text_color'];
 $linkColor   = $config['link_color'];
@@ -148,8 +148,26 @@ if(fluentcrm_is_rtl()) {
         padding: 0;
     }
 
-    .wp-block-table table {
+    .wp-block-table {
+        margin-left: 0;
+        margin-right: 0;
+    }
+    .wp-block-table.alignleft table {
+        margin-left: 0;
+        margin-right: auto;
+    }
+    .wp-block-table.alignright table {
+        margin-right: 0;
+        margin-left: auto;
+    }
+    .wp-block-table.aligncenter table {
+        margin-left: auto;
+        margin-right: auto;
+    }
+    .wp-block-table table.has-fixed-layout {
         width: 100%;
+    }
+    .wp-block-table table {
         border: 1px solid #868686;
     }
 
@@ -485,6 +503,9 @@ if(fluentcrm_is_rtl()) {
         width: 100%;
     }
 
+    .fc_column_content {
+        padding: 0;
+    }
 </style>
 
 

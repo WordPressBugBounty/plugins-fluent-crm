@@ -44,6 +44,16 @@ class CampaignProcessor
         }
 
         if (!$perChunk || $perChunk <= 0) {
+            /**
+             * Filter the number of subscribers processed per request while processing Campaign Emails.
+             *
+             * This filter allows you to modify the number of subscribers that are processed
+             * in each request when processing campaigns.
+             *
+             * @since 2.7.0
+             * 
+             * @param int The number of subscribers to process per request. Default is 30.
+             */
             $perChunk = (int)apply_filters('fluent_crm/process_subscribers_per_request', 30);
         }
 

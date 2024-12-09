@@ -2,9 +2,9 @@
 Contributors: techjewel,adreastrian,heera,wpmanageninja
 Tags: email marketing, newsletter, crm, email newsletter, subscribers
 Requires at least: 5.0
-Tested up to: 6.6
+Tested up to: 6.7
 Requires PHP: 7.3
-Stable tag: 2.9.25
+Stable tag: 2.9.30
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -260,6 +260,23 @@ You can report any security bugs found in the source code of FluentCRM plugins t
 10. Pro Integrations
 
 == Changelog ==
+
+= 2.9.30 (Date: December 09, 2024) =
+New: Labels in Automations & Campaign
+New: WordPress date format support in Custom Field
+New: Test Outgoing Webhook functionality
+Improvement: UI enhancements for Lists & Tags popover
+Improvement: Corrected date handling
+Improvement: Auto-Mapping CSV Fields with Custom Fields
+Improvement: Better SQL Queries
+Improvement: Users now searchable in manager settings
+Fixed: Default link color issue while editing the email template
+Fixed: Default values not working for Smartcode (manage_subscription_html, unsubscribe_html)
+Fixed: Ordering in Dashboard Chart
+Fixed: Campaign Revenue Report issues
+Fixed: URL decode issue in A/B Testing for Campaigns
+Fixed: Some Deprecation Warnings
+Other Improvements & Bug Fixes
 
 = 2.9.25 (Date: October 16, 2024) =
 - New: Export/Import Recurring Campaign

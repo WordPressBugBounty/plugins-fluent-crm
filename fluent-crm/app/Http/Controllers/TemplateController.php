@@ -90,6 +90,14 @@ class TemplateController extends Controller
                 ]
             ];
 
+            /**
+             * Filter the template data before editing.
+             *
+             * @since 2.6.51
+             *
+             * @param array  $templateData The data of the template being edited.
+             * @param object $template     The template object.
+             */
             $templateData = apply_filters('fluent_crm/editing_template_data', $templateData, $template);
 
         } else {
@@ -140,9 +148,9 @@ class TemplateController extends Controller
         }
 
         $postData['post_modified'] = current_time('mysql');
-        $postData['post_modified_gmt'] = date('Y-m-d H:i:s');
+        $postData['post_modified_gmt'] = gmdate('Y-m-d H:i:s');
         $postData['post_date'] = current_time('mysql');
-        $postData['post_date_gmt'] = date('Y-m-d H:i:s');
+        $postData['post_date_gmt'] = gmdate('Y-m-d H:i:s');
         $postData['post_type'] = fluentcrmTemplateCPTSlug();
 
         $templateId = wp_insert_post($postData);
@@ -230,11 +238,11 @@ class TemplateController extends Controller
         }
 
         if(empty($templateData['post_title'])) {
-            $templateData['post_title'] = 'Email template created at '.date('Y-m-d H:i');
+            $templateData['post_title'] = 'Email template created at '.gmdate('Y-m-d H:i');
         }
 
         if(empty($templateData['email_subject'])) {
-            $templateData['email_subject'] = 'Email template created at '.date('Y-m-d H:i');
+            $templateData['email_subject'] = 'Email template created at '.gmdate('Y-m-d H:i');
         }
 
         $postData = Arr::only($templateData, [
@@ -246,7 +254,7 @@ class TemplateController extends Controller
 
 
         $postData['post_modified'] = current_time('mysql');
-        $postData['post_modified_gmt'] = date('Y-m-d H:i:s');
+        $postData['post_modified_gmt'] = gmdate('Y-m-d H:i:s');
         Template::where('ID', $id)->update($postData);
 
         update_post_meta($id, '_email_subject', Arr::get($templateData, 'email_subject'));

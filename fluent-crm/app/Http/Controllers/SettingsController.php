@@ -383,6 +383,16 @@ class SettingsController extends Controller
         ];
 
         $data = [
+            /**
+             * Determine FluentCRM Bounce Handler settings.
+             *
+             * This filter allows modification of the bounce handler settings.
+             *
+             * @since 2.5.95
+             *
+             * @param array  $bounceSettings The current bounce settings.
+             * @param string $securityCode   The security code for the bounce handler.
+             */
             'bounce_settings' => apply_filters('fluent_crm/bounce_handlers', $bounceSettings, $securityCode)
         ];
 
@@ -538,7 +548,7 @@ class SettingsController extends Controller
         $selectedLogs = $data['selected_logs'];
         $daysBefore = $data['days_before'];
 
-        $refDate = date('Y-m-d 00:00:01', time() - $daysBefore * 86400);
+        $refDate = gmdate('Y-m-d 00:00:01', time() - $daysBefore * 86400);
 
         $dataCounters = [];
         if (in_array('emails', $selectedLogs)) {
@@ -749,7 +759,7 @@ class SettingsController extends Controller
                         $crmApps[] = [
                             'uuid'    => $password['uuid'],
                             'name'    => $password['name'],
-                            'created' => date('Y-m-d H:i:s', $password['created'])
+                            'created' => gmdate('Y-m-d H:i:s', $password['created'])
                         ];
                     }
                 }
@@ -850,6 +860,16 @@ class SettingsController extends Controller
     {
         $withFields = in_array('fields', $request->get('with', []));
 
+        /**
+         * Determine the deep integration providers for FluentCRM.
+         *
+         * This filter allows modification of the deep integration providers used in FluentCRM such as Woocommerce, Easy Digital Downloads, etc.
+         * 
+         * @since 2.5.1
+         * 
+         * @param array An array of deep integration providers.
+         * @param bool  $withFields Whether to include fields in the integration providers.
+         */
         $deepIntegrationProviders = apply_filters('fluentcrm_deep_integration_providers', [], $withFields);
 
         return [
@@ -864,8 +884,28 @@ class SettingsController extends Controller
         $data = $request->all();
 
         if ($action == 'sync') {
+            /**
+             * Determine whether to allow deep integration sync for a specific provider.
+             *
+             * This filter allows you to modify the result of the deep integration sync for a given provider.
+             *
+             * @since 2.5.1
+             *
+             * @param mixed  The result of the integration sync. Default false. Expected to be a boolean.
+             * @param array  $data     The data to be synced.
+             */
             $result = apply_filters('fluentcrm_deep_integration_sync_' . $provider, false, $data);
         } else {
+            /**
+             * Determine the result of saving deep integration settings for a specific provider.
+             *
+             * The dynamic portion of the hook name, `$provider`, refers to the specific integration provider.
+             *
+             * @since 2.5.1
+             *
+             * @param mixed  The result of the save operation. Default false. Expected to be a boolean.
+             * @param array  $data    The data being saved.
+             */
             $result = apply_filters('fluentcrm_deep_integration_save_' . $provider, false, $data);
         }
 

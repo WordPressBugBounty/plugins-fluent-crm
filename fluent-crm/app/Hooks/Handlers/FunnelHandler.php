@@ -60,6 +60,16 @@ class FunnelHandler
 
         if ($triggers) {
             foreach ($triggers as $triggerName) {
+                /**
+                 * Determine the number of arguments passed to the funnel trigger in FluentCRM.
+                 *
+                 * This filter allows you to modify the number of arguments that are passed to the funnel trigger
+                 * based on the trigger name.
+                 *
+                 * @since 2.5.6
+                 * 
+                 * @param int $argNum The number of arguments to pass to the funnel trigger. Default is 1.
+                 */
                 $argNum = apply_filters('fluentcrm_funnel_arg_num_' . $triggerName, 1);
                 add_action($triggerName, function () use ($triggerName, $argNum) {
                     $this->mapTriggers($triggerName, func_get_args(), $argNum);
@@ -241,12 +251,23 @@ class FunnelHandler
 
         $funnelId = intval($_REQUEST['funnel_id']);
         $funnel = Funnel::findOrFail($funnelId);
+        /**
+         * Determine the funnel editor details based on the funnel's trigger name.
+         *
+         * The dynamic portion of the hook name, `$funnel->trigger_name`, refers to the trigger name of the funnel.
+         *
+         * @since 2.0.0
+         *
+         * @param object $funnel The funnel object containing the editor details.
+         */
         $funnel = apply_filters('fluentcrm_funnel_editor_details_' . $funnel->trigger_name, $funnel);
+
+        $funnel->labels = $funnel->getFormattedLabels();
 
         $funnel->sequences = FunnelHelper::getFunnelSequences($funnel, true);
 
         $funnel->site_hash = md5(site_url());
-        $funnel->export_date = date('Y-m-d H:i:s');
+        $funnel->export_date = gmdate('Y-m-d H:i:s');
 
         header('Content-disposition: attachment; filename=' . sanitize_title($funnel->title, 'funnel', 'display') . '-' . $funnelId . '.json');
         header('Content-type: application/json');

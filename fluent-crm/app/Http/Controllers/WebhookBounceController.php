@@ -22,7 +22,25 @@ class WebhookBounceController extends Controller
     {
 
         if (!in_array($serviceName, $this->validServices)) {
-            // This is a custom bounce handler
+            /**
+             * Filter the bounce handling response for a specific service.
+             *
+             * The dynamic portion of the hook name, `$serviceName`, refers to the name of the email service. This is a custom bounce handler.
+             *
+             * @since 2.5.95
+             *
+             * @param array {
+             *     The response data.
+             *
+             *     @type int    $success      Indicates if the bounce handling was successful (0 or 1).
+             *     @type string $message      The message associated with the bounce handling.
+             *     @type string $service      The name of the email service.
+             *     @type string $result       The result of the bounce handling.
+             *     @type int    $time         The timestamp when the bounce was handled.
+             * }
+             * @param object $request      The request object.
+             * @param string $securityCode The security code for the request.
+             */
             return apply_filters('fluent_crm_handle_bounce_' . $serviceName, [
                 'success' => 0,
                 'message' => '',

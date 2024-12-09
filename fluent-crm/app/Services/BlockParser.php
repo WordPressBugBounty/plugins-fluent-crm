@@ -302,6 +302,16 @@ class BlockParser
     {
         $subscriber = BlockParserHelper::getSubscriber();
         if (!$subscriber) {
+            /**
+             * Filter the current subscriber while rendering the Conditional Block in FluentCRM.
+             *
+             * This filter allows you to modify the subscriber object used in the current block condition.
+             *
+             * @since 2.8.44
+             *
+             * @param object $subscriber The current subscriber object.
+             * @return object The modified subscriber object.
+             */
             $subscriber = apply_filters('fluent_crm/get_current_block_condition_subscriber', $subscriber);
         }
 

@@ -281,8 +281,7 @@ class Helper
             'paragraph_font_size'   => '',
             'paragraph_font_family' => '',
             'paragraph_line_height' => '',
-            'headings_color'        => '#202020',
-            'heading_font_family'   => '',
+            'headings_color'        => '#202020'
         ];
 
 
@@ -571,6 +570,22 @@ class Helper
 
     }
 
+    public static function funnelLabelColors()
+    {
+        $colors = [
+            '#D6D8FF',
+            '#D4ECD6',
+            '#FEE8B5',
+            '#D7E8EF',
+            '#FFCACA',
+            '#F8D7C4',
+            '#D4D7DC',
+            '#FFD9E3'
+        ];
+
+        return apply_filters('fluent_crm/funnel_label_color', $colors);
+    }
+
     public static function getColorSchemeValue($colorName)
     {
         static $colorMap = [];
@@ -689,29 +704,39 @@ class Helper
         return $globalHeaders;
     }
 
-    public static function recordCampaignRevenue($campaignId, $amount, $currency = 'USD', $isRefunded = false)
+    public static function recordCampaignRevenue($campaignId, $amount, $orderId, $currency = 'USD', $isRefunded = false)
     {
         $currency = strtolower($currency);
         $existing = fluentcrm_get_campaign_meta($campaignId, '_campaign_revenue');
-        $data = [];
-        if ($existing && $existing->value) {
-            $data = $existing->value;
-        }
+        $data = ['orderIds' => []];
 
-        if (!isset($data[$currency]) || !is_array($data)) {
+        if ($existing && isset($existing->value['orderIds']) && $existing->value['orderIds']) {
+            $data['orderIds'] = $existing->value['orderIds'];
+            $data[$currency] = $existing->value[$currency];
+        } else {
             $data[$currency] = 0;
+        }
+        if (!in_array($orderId, $data['orderIds'])) {
+            $data['orderIds'][] = $orderId;
         }
 
         if ($isRefunded) {
             if ($data[$currency] > $amount) {
                 $data[$currency] -= $amount;
+                if (in_array($orderId, $data['orderIds'])) {
+                    unset($data['orderIds'][$orderId]);
+                }
             }
         } else {
-            $data[$currency] += $amount;
+            if ($existing && isset($existing->value['orderIds']) && in_array($orderId, $existing->value['orderIds'])) {
+                $data[$currency] = $existing->value[$currency];
+            }
+            else {
+                $data[$currency] += $amount;
+            }
         }
 
         return fluentcrm_update_campaign_meta($campaignId, '_campaign_revenue', $data);
-
     }
 
     public static function getWPMapUserInfo($user)
@@ -1941,5 +1966,24 @@ class Helper
         $enabled = class_exists('\Automattic\WooCommerce\Utilities\OrderUtil') && \Automattic\WooCommerce\Utilities\OrderUtil::custom_orders_table_usage_is_enabled();
 
         return $enabled;
+    }
+
+    public static function searchWPUsers($searchQuery, $limit = 20)
+    {
+        $search = sanitize_text_field($searchQuery);
+
+        // Search by user login, email, and nicename
+        $args = array(
+            'role__not_in' => array('Administrator'),
+            'search' => '*' . $search . '*',
+            'number' => $limit
+        );
+
+        // Get users by login, email, and nicename
+        $user_query = new \WP_User_Query($args);
+        $users_by_login = $user_query->get_results();
+        $users = array_unique($users_by_login, SORT_REGULAR);
+
+        return $users;
     }
 }
