@@ -963,6 +963,8 @@ class CampaignController extends Controller
             }
         }
 
+        $emailBody = str_replace(['https://fonts.googleapis.com/css2', 'https://fonts.googleapis.com/css'], 'https://fonts.bunny.net/css', $emailBody);
+
         return [
             'preview_html' => $emailBody
         ];

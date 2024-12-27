@@ -881,7 +881,10 @@ class SubscriberController extends Controller
     public function sendCustomEmail(Request $request, $contactId)
     {
         $contact = Subscriber::findOrFail($contactId);
-        if ($contact->status != 'subscribed') {
+
+        $validStatuses = ['subscribed', 'transactional'];
+
+        if (!in_array($contact->status, $validStatuses)) {
             return $this->sendError([
                 'message' => __('Subscriber\'s status need to be subscribed.', 'fluent-crm')
             ]);

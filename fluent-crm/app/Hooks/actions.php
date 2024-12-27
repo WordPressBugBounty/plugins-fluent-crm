@@ -82,6 +82,7 @@ $app->addAction('fluent_crm/campaign_deleted', 'Cleanup@deleteCampaignAssets', 1
 $app->addAction('fluent_crm/list_deleted', 'Cleanup@deleteListAssets', 10, 1);
 $app->addAction('fluent_crm/tag_deleted', 'Cleanup@deleteTagAssets', 10, 1);
 $app->addAction('fluent_crm/campaign_archived', 'Cleanup@archiveCampaignAssets', 10, 1);
+$app->addAction('fluent_crm/sync_subscriber_delete_setting', 'Cleanup@SyncSubscriberDeleteSettings', 10, 2);
 
 $app->addAction('fluentcrm_subscriber_status_to_unsubscribed', 'Cleanup@handleUnsubscribe');
 $app->addAction('fluentcrm_subscriber_status_to_bounced', 'Cleanup@handleUnsubscribe');

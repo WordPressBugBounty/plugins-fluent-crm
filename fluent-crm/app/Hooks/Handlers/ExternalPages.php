@@ -1544,7 +1544,6 @@ class ExternalPages
             }
         }
 
-        $content = str_replace('https://fonts.googleapis.com/css2', 'https://fonts.bunny.net/css', $content);
 
         /**
          * Determine the email design template content for various types in FluentCRM.
@@ -1582,6 +1581,8 @@ class ExternalPages
              */
             $content = apply_filters('fluent_crm/parse_extended_crm_text', $content, $subscriber);
         }
+
+        $content = str_replace(['https://fonts.googleapis.com/css2', 'https://fonts.googleapis.com/css'], 'https://fonts.bunny.net/css', $content);
 
         $data = [
             'business'      => $businessSettings,
@@ -1744,7 +1745,7 @@ class ExternalPages
             );
         }
 
-        $content = str_replace('https://fonts.googleapis.com/css2', 'https://fonts.bunny.net/css', $content);
+        $content = str_replace(['https://fonts.googleapis.com/css2', 'https://fonts.googleapis.com/css'], 'https://fonts.bunny.net/css', $content);
 
         $data = [
             'business'      => $businessSettings,

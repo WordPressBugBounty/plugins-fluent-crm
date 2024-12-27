@@ -215,7 +215,7 @@ class ImporterController extends Controller
         foreach ($users as $user) {
             $subscriber = Helper::getWPMapUserInfo($user);
             $subscriber['source'] = 'wp_users';
-            if ($subscriber['email']) {
+            if (isset($subscriber['email']) && $subscriber['email']) {
                 $subscribers[] = $subscriber;
             }
         }

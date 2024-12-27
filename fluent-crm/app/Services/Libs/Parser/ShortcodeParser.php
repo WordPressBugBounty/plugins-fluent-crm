@@ -296,25 +296,40 @@ class ShortcodeParser
         $customProperty = $valueKeys[1];
 
         if ($customKey == 'custom') {
+            $existingCustomFields = fluentcrm_get_custom_contact_fields();
             $customValues = $subscriber->custom_fields();
+
             $value = Arr::get($customValues, $customProperty, $defaultValue);
             if (is_array($value)) {
                 return implode(', ', $value);
             }
 
             $multiLines = preg_split("/\r\n|\n|\r/", $value);
-            if ($multiLines && is_array($multiLines)) {
-                $formattedValue = implode('<br/> ', $multiLines);
-                if (strtotime($formattedValue)) {
-                    $date_format = get_option('date_format');
-                    $formattedValue = date_i18n($date_format, strtotime($formattedValue));
-                }
+
+            if (!$multiLines) {
+                return $value;
+            }
+
+            $formattedValue = implode('<br/> ', $multiLines);
+
+            // Find the custom field
+            $fieldKeys = array_column($existingCustomFields, 'slug');
+            $customFieldIndex = array_search($customProperty, $fieldKeys);
+
+            if ($customFieldIndex === false) {
                 return $formattedValue;
             }
 
-            if ($value) {
-                return $value;
+            $matchedObject = $existingCustomFields[$customFieldIndex];
+
+            // Format date or date_time fields
+            $timestamp = strtotime($formattedValue);
+
+            if ($timestamp && in_array($matchedObject['type'], ['date', 'date_time'])) {
+                $date_format = get_option('date_format');
+                $formattedValue = date_i18n($date_format, $timestamp);
             }
+            return $formattedValue;
         }
 
         if ($customKey == 'company') {

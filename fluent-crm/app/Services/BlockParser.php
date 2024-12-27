@@ -202,13 +202,6 @@ class BlockParser
         $align = Arr::get($block, 'attrs.layout.justifyContent', 'left');
         $tableCssClass = 'fce_row fce_buttons_row';
 
-        $width = 'auto';
-        if ($align == 'right' || $alignment == 'center') {
-            $width = '100%';
-        } else if (Arr::get($block, 'innerBlocks.0.attrs.width') == 100) {
-            $width = '100%';
-        }
-
         $tableCssClass .= ' tb_btn_' . $alignment;
 
         if ($definedWidth = Arr::get($block, 'innerBlocks.0.attrs.width')) {
@@ -233,7 +226,7 @@ class BlockParser
             }
         }
 
-        return '<table valign="middle" align="' . $align . '" class="' . $tableCssClass . '" border="0" cellpadding="0" cellspacing="0" width="100%" style="table-layout: fixed; border-collapse: collapse;mso-table-lspace: 0pt;mso-table-rspace: 0pt;-ms-text-size-adjust: 100%;-webkit-text-size-adjust: 100%; width: ' . $width . '; float:none;' . $extraStyle . '"><tbody><tr>';
+        return '<table valign="middle" align="' . $align . '" class="' . $tableCssClass . '" border="0" cellpadding="0" cellspacing="0" width="100%" style="table-layout: fixed; border-collapse: collapse;mso-table-lspace: 0pt;mso-table-rspace: 0pt;-ms-text-size-adjust: 100%;-webkit-text-size-adjust: 100%; float:none;' . $extraStyle . '"><tbody><tr>';
     }
 
     private function getButtonWrapper($content, $data)
@@ -283,6 +276,10 @@ class BlockParser
         $borderRadius = Arr::get($data, 'attrs.style.border.radius', '0px');
 
         $content = trim(preg_replace("/<\/?div[^>]*\>/i", "", $content));
+
+        if (Arr::get($data, 'attrs.fontSize')) {
+            $btn_wrapper_class .= ' has-' . Helper::kebabCase(Arr::get($data, 'attrs.fontSize')) . '-font-size ';
+        }
 
         $td = '<td class="fc_btn ' . trim($btn_wrapper_class) . '" align="center" style="' . $typography . ' border-radius: ' . $borderRadius . ';" bgcolor="' . $backgroundColor . '" border-radius="30px">';
 

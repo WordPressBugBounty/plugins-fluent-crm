@@ -14,6 +14,8 @@ use FluentCrm\App\Models\SubscriberNote;
 use FluentCrm\App\Models\SubscriberPivot;
 use FluentCrm\App\Services\BlockParser;
 use FluentCrm\App\Services\Helper;
+use FluentCrm\App\Models\Meta;
+
 
 /**
  *  Cleanup Class
@@ -318,5 +320,28 @@ class Cleanup
         WHERE a.action_id IS NULL");
 
         return $deleted;
+    }
+
+    public function SyncSubscriberDeleteSettings($fromKey, $value)
+    {
+        if ($fromKey == 'compliance_settings') {
+            $option = Meta::where('key', 'user_syncing_settings')
+                ->where('object_type', 'option')
+                ->first();
+
+            $settings = $option->value;
+
+            if ($settings['delete_contact_on_user_delete'] != $value) {
+                $settings['delete_contact_on_user_delete'] = $value;
+                $option->value = $settings;
+                $option->save();
+            }
+        } else {
+            $complianceSettings = get_option('_fluentcrm_compliance_settings');
+            if ($complianceSettings) {
+                $complianceSettings['delete_contact_on_user'] = $value;
+                update_option('_fluentcrm_compliance_settings', $complianceSettings, 'no');
+            }
+        }
     }
 }

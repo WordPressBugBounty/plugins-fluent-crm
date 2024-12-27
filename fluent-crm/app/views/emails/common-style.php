@@ -212,10 +212,36 @@ if(fluentcrm_is_rtl()) {
 
     .fc_btn a {
         font-size: 16px;
+        font-size: inherit;
         text-decoration: none;
         border-radius: 0px;
         padding: 12px 18px;
         display: block;
+        line-height: 1.8;
+    }
+    .fc_btn.has-xx-large-font-size {
+        font-size: 2.15rem;
+    }
+    .fc_btn.has-x-large-font-size {
+        font-size: 1.75rem;
+    }
+    .fc_btn.has-large-font-size {
+        font-size: 1.38rem;
+    }
+    .fc_btn.has-extra-large-font-size {
+        font-size: 2.5rem;
+    }
+    .fc_btn.has-huge-font-size {
+        font-size: 6rem;
+    }
+    .fc_btn.has-gigantic-font-size {
+        font-size: 9rem;
+    }
+    .fc_btn.has-medium-font-size {
+        font-size: 1rem;
+    }
+    .fc_btn.has-small-font-size {
+        font-size: 0.875rem;
     }
 
     .fc_d_btn_bg.is-style-outline a {
@@ -484,7 +510,9 @@ if(fluentcrm_is_rtl()) {
         }
     <?php endif; ?>
 
-    table.wp-block-button__width-100, table.wp-block-button__width-75, table.wp-block-button__width-50 {
+    table.wp-block-button__width-100,
+    table.wp-block-button__width-75,
+    table.wp-block-button__width-50 {
         width: 100% !important;
     }
     .wp-block-button__width-100 table {
@@ -501,6 +529,20 @@ if(fluentcrm_is_rtl()) {
 
     .fc_btn_count_2.wp-block-button__width-50 table {
         width: 100%;
+    }
+    .fce_buttons_row.is-content-justification-right table {
+        margin-left: auto;
+        margin-right: 0;
+    }
+    .fce_buttons_row table,
+    .fce_buttons_row.is-content-justification-left table {
+        margin-left: 0;
+        margin-right: auto;
+        float: none;
+    }
+    .fce_buttons_row.is-content-justification-center table {
+        margin-left: auto;
+        margin-right: auto;
     }
 
     .fc_column_content {

@@ -206,6 +206,9 @@ class CampaignEmail extends Model
         $preViewUrl = site_url('?fluentcrm=1&route=email_preview&_e_hash=' . $this->email_hash);
         $email_body = str_replace(['##web_preview_url##', '{{crm_global_email_footer}}', '{{crm_preheader_text}}'], [$preViewUrl, $footerText, ''], $email_body);
 
+
+        $email_body = str_replace(['https://fonts.googleapis.com/css2', 'https://fonts.googleapis.com/css'], 'https://fonts.bunny.net/css', $email_body);
+
         return [
             'to'            => [
                 'email' => $this->email_address,

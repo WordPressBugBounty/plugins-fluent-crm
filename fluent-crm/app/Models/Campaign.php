@@ -501,8 +501,10 @@ class Campaign extends Model
             $subscribers = Subscriber::whereIn('id', $subscriberIds)->get();
         }
 
+        $validStatuses = ['subscribed', 'transactional'];
+
         foreach ($subscribers as $subscriber) {
-            if ($subscriber->status != 'subscribed') {
+            if (!in_array($subscriber->status, $validStatuses)) {
                 continue; // We don't want to send emails to non-subscribed members
             }
 

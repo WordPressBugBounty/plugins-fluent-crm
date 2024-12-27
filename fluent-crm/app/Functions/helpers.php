@@ -268,6 +268,11 @@ function fluentcrm_update_option($optionName, $value)
     if ($option) {
         $option->value = $value;
         $option->save();
+
+        if ($optionName == 'user_syncing_settings') {
+            do_action('fluent_crm/sync_subscriber_delete_setting', 'general_settings', $value['delete_contact_on_user_delete']);
+        }
+
         return $option->id;
     }
 

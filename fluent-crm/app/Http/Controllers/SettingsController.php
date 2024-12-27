@@ -938,7 +938,11 @@ class SettingsController extends Controller
             $data[$key] = sanitize_text_field($datum);
         }
 
-        update_option('_fluentcrm_compliance_settings', $data, 'no');
+        $result = update_option('_fluentcrm_compliance_settings', $data, 'no');
+
+        if ($result) {
+            do_action('fluent_crm/sync_subscriber_delete_setting', 'compliance_settings', $data['delete_contact_on_user']);
+        }
 
         return [
             'message'  => __('Settings has been successfully updated'),

@@ -4,7 +4,7 @@ Tags: email marketing, newsletter, crm, email newsletter, subscribers
 Requires at least: 5.0
 Tested up to: 6.7
 Requires PHP: 7.3
-Stable tag: 2.9.30
+Stable tag: 2.9.31
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -130,8 +130,6 @@ FluentCRM is a self-hosted WordPress plugin. You own your data, and no external 
 >Finally, an email marketing solution that looks native to the WordPress user interface and is super easy to use. Ideal for beginners to quickly get started with email lead generation to advanced users wanting to set up funnels with advanced tagging.
 
 = FluentCRM Review by Experts =
-
-[youtube https://www.youtube.com/watch?v=Yl2f_UqLxwU]
 
 [youtube https://www.youtube.com/watch?v=Vl3Tybe73e8]
 
@@ -260,6 +258,21 @@ You can report any security bugs found in the source code of FluentCRM plugins t
 10. Pro Integrations
 
 == Changelog ==
+
+= 2.9.31 (Date: December 27, 2024) =
+New: Added Email Preview in Campaigns
+Improvement: AB Cart item table responsive
+Improvement: Replaced Google fonts with Bunny
+Fixed: AB Cart Recovered Revenue issue
+Fixed: Campaigns revenue report issue
+Fixed: Latest Post Block random sort issue
+Fixed: Table alignment issue in blocks
+Fixed: Number values in the 'Text' custom field misinterpreted as date issue.
+Fixed: Variable button size not working in block editor
+Fixed: MailChimp Migration import limitations
+Fixed: Theme & default color issue in editor
+Improvement: user delete option sync between compliance settings and general settings
+
 
 = 2.9.30 (Date: December 09, 2024) =
 New: Labels in Automations & Campaign
