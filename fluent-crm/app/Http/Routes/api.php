@@ -268,6 +268,7 @@ $router->prefix('setting')->withPolicy('SettingsPolicy')->group(function ($route
 
     $router->get('experiments', 'SettingsController@getExperimentalSettings');
     $router->post('experiments', 'SettingsController@updateExperimentalSettings');
+    $router->get('experiments/campaigns', 'SettingsController@getCampaigns');
 
     $router->get('system-logs', 'SystemLogController@index');
     $router->get('system-logs/reset', 'SystemLogController@deleteAll');

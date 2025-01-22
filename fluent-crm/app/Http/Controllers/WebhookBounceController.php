@@ -16,11 +16,10 @@ use FluentCrm\Framework\Request\Request;
  */
 class WebhookBounceController extends Controller
 {
-    private $validServices = ['mailgun', 'pepipost', 'postmark', 'sendgrid', 'sparkpost', 'elasticemail', 'postalserver', 'smtp2go'];
+    private $validServices = ['mailgun', 'pepipost', 'postmark', 'sendgrid', 'sparkpost', 'elasticemail', 'postalserver', 'smtp2go', 'brevo'];
 
     public function handleBounce(Request $request, $serviceName, $securityCode)
     {
-
         if (!in_array($serviceName, $this->validServices)) {
             /**
              * Filter the bounce handling response for a specific service.

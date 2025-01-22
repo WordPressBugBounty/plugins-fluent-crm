@@ -317,7 +317,7 @@ class ExternalPages
             }
 
             wp_send_json_success([
-                'message' => __('You are successfully unsubscribed from the email list', 'fluent-crm')
+                'message' => __("You’ve successfully unsubscribed from our email list.", 'fluent-crm')
             ], 200);
             return;
         }
@@ -373,16 +373,18 @@ class ExternalPages
             'button_text'         => __('Unsubscribe', 'fluent-crm')
         ], $subscriber);
 
+        $complianceSettings = Helper::getComplianceSettings();
         $data = [
-            'business'       => $businessSettings,
-            'campaign_email' => $campaignEmail,
-            'subscriber'     => $subscriber,
-            'mask_email'     => $absEmail,
-            'abs_hash'       => $absEmailHash,
-            'combined_hash'  => md5($subscriber->email . $absEmail),
-            'reasons'        => $this->unsubscribeReasons(),
-            'secure_hash'    => fluentCrmGetContactManagedHash($subscriber->id),
-            'texts'          => $texts
+            'business'              => $businessSettings,
+            'campaign_email'        => $campaignEmail,
+            'subscriber'            => $subscriber,
+            'mask_email'            => $absEmail,
+            'abs_hash'              => $absEmailHash,
+            'combined_hash'         => md5($subscriber->email . $absEmail),
+            'reasons'               => $this->unsubscribeReasons(),
+            'secure_hash'           => fluentCrmGetContactManagedHash($subscriber->id),
+            'texts'                 => $texts,
+            'one_click_unsubscribe' => Arr::get($complianceSettings, 'one_click_unsubscribe')
         ];
 
         add_action('wp_loaded', function () use ($data) {
@@ -653,7 +655,7 @@ class ExternalPages
             'description'   => sprintf(__('Subscriber unsubscribed from IP Address: %1s <br />Reason: %2s', 'fluent-crm'), FluentCrm()->request->getIp(fluentCrmWillAnonymizeIp()), $reason)
         ]);
 
-        $message = __('You are successfully unsubscribed from the email list', 'fluent-crm');
+        $message = __("You’ve successfully unsubscribed from our email list.", 'fluent-crm');
         wp_send_json_success([
             /**
              * Determine the unsubscribe response message in FluentCRM.

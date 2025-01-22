@@ -590,14 +590,14 @@ class Bootstrap extends IntegrationManagerController
     private function registerPaymentEvents()
     {
         add_action('fluentform/subscription_payment_active', function ($subscription, $submission) {
-            $this->handlePaymentEvent($submission, 'fluentform_subscription_payment_active');
+            $this->handlePaymentEvent($submission, 'fluentform/subscription_payment_active');
         }, 10, 2);
         add_action('fluentform/subscription_payment_canceled', function ($subscription, $submission) {
-            $this->handlePaymentEvent($submission, 'fluentform_subscription_payment_canceled');
+            $this->handlePaymentEvent($submission, 'fluentform/subscription_payment_canceled');
         }, 10, 2);
 
         add_action('fluentform/payment_refunded', function ($refund, $transaction, $submission) {
-            $this->handlePaymentEvent($submission, 'fluentform_payment_refunded');
+            $this->handlePaymentEvent($submission, 'fluentform/payment_refunded');
         }, 10, 3);
     }
 

@@ -87,6 +87,7 @@ $app->addAction('fluent_crm/sync_subscriber_delete_setting', 'Cleanup@SyncSubscr
 $app->addAction('fluentcrm_subscriber_status_to_unsubscribed', 'Cleanup@handleUnsubscribe');
 $app->addAction('fluentcrm_subscriber_status_to_bounced', 'Cleanup@handleUnsubscribe');
 $app->addAction('fluentcrm_subscriber_status_to_complained', 'Cleanup@handleUnsubscribe');
+$app->addAction('fluentcrm_subscriber_status_to_spammed', 'Cleanup@handleUnsubscribe');
 
 $app->addAction('fluent_crm/contact_email_changed', 'Cleanup@handleContactEmailChanged');
 $app->addAction('delete_user', 'Cleanup@handleUserDelete', 10, 3);

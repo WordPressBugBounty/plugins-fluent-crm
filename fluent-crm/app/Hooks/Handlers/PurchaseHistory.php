@@ -571,6 +571,7 @@ class PurchaseHistory
             // high performance order is enabled
             if ($user) {
                 $hposOrders = fluentCrmDb()->table('wc_orders')
+                    ->where('status', '!=', 'trash')
                     ->select(['id'])
                     ->where(function ($query) use ($user) {
                         $query->where('customer_id', $user->ID)

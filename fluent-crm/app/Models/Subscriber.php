@@ -1012,7 +1012,7 @@ class Subscriber extends Model
                 $subscriberData['status'] = $status;
             } else if ($exist && $exist->status == 'subscribed') {
                 unset($subscriberData['status']);
-            } else if ($exist && in_array($exist->status, ['bounced', 'complained'])) {
+            } else if ($exist && in_array($exist->status, ['bounced', 'complained', 'spammed'])) {
                 unset($subscriberData['status']);
             } else {
                 $subscriberData['status'] = $status;
@@ -1057,15 +1057,19 @@ class Subscriber extends Model
             $customFieldsChanges = $exist->syncCustomFieldValues($customValues, $deleteOtherValues);
         }
 
+        /*
+         * TODO: investigate this attachTags and attachLists method. for Masiur
+         */
+        // Syncing Lists
+        if ($lists) {
+            $exist->attachLists($lists);
+        }
+
         // Syncing Tags
         if ($tags) {
             $exist->attachTags($tags);
         }
 
-        // Syncing Lists
-        if ($lists) {
-            $exist->attachLists($lists);
-        }
 
         if (Helper::isCompanyEnabled()) {
             $companyId = $exist->company_id;
@@ -1502,7 +1506,7 @@ class Subscriber extends Model
 
         if (in_array($operator, $exactOperators)) {
             if ($operator == '>' || $operator == '<') {
-                $filter['value'] = (int)$filter['value'];
+                $filter['value'] = $filter['value'];
             } else {
                 $filter['value'] = sanitize_text_field($filter['value']);
             }
@@ -2095,7 +2099,7 @@ class Subscriber extends Model
     public function buildActivitiesFilterQuery($query, $filters)
     {
         foreach ($filters as $filter) {
-            if (empty($filter['value'])) {
+            if (empty($filter['value']) && $filter['property'] !== 'email_opened' && $filter['property'] !== 'email_link_clicked') {
                 continue;
             }
 
@@ -2111,6 +2115,20 @@ class Subscriber extends Model
             ];
 
             $filterProp = $filter['property'];
+
+            if ($filterProp == 'email_opened' && $filter['operator'] == 'never') {
+                $query->whereDoesntHave('campaignEmails', function ($q) {
+                    $q->where('is_open', 1);
+                });
+                continue;
+            }
+
+            if ($filterProp == 'email_link_clicked' && $filter['operator'] == 'never') {
+                $query->whereDoesntHave('campaignEmails', function ($q) {
+                    $q->whereNotNull('click_counter');
+                });
+                continue;
+            }
 
             if ($filterProp == 'campaign_email_activity') {
                 $campaignId = (int)$filter['value'];

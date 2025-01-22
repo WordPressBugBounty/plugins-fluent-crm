@@ -493,7 +493,8 @@ function fluentcrm_subscriber_statuses($isOptions = false)
         'unsubscribed',
         'transactional',
         'bounced',
-        'complained'
+        'complained',
+        'spammed'
     ]);
 
     if (!$isOptions) {
@@ -509,6 +510,7 @@ function fluentcrm_subscriber_statuses($isOptions = false)
         'transactional' => __('Transactional', 'fluent-crm'),
         'bounced'       => __('Bounced', 'fluent-crm'),
         'complained'    => __('Complained', 'fluent-crm'),
+        'spammed'       => __('Spammed', 'fluent-crm'),
     ];
 
     foreach ($statuses as $status) {
@@ -533,7 +535,7 @@ function fluentcrm_subscriber_editable_statuses($isOptions = false)
 
     $statuses = fluentcrm_subscriber_statuses();
 
-    $unEditableStatuses = ['bounced', 'complained'];
+    $unEditableStatuses = ['bounced', 'complained', 'spammed'];
 
     $statuses = array_diff($statuses, $unEditableStatuses);
 
@@ -558,7 +560,8 @@ function fluentcrm_subscriber_editable_statuses($isOptions = false)
         'unsubscribed'  => __('Unsubscribed', 'fluent-crm'),
         'transactional' => __('Transactional', 'fluent-crm'),
         'bounced'       => __('Bounced', 'fluent-crm'),
-        'complained'    => __('Complained', 'fluent-crm')
+        'complained'    => __('Complained', 'fluent-crm'),
+        'spammed'       => __('Spammed', 'fluent-crm')
     ];
 
     foreach ($editableStatuses as $status) {
@@ -690,7 +693,8 @@ function fluentcrm_strict_statues()
     return apply_filters('subscriber_strict_statuses', [
         'unsubscribed',
         'bounced',
-        'complained'
+        'complained',
+        'spammed'
     ]);
 }
 
@@ -759,16 +763,19 @@ function fluentcrmCsvMimes()
  */
 function fluentcrmGravatar($email, $name = '')
 {
+    $complianceSettings = \FluentCrm\App\Services\Helper::getComplianceSettings();
+
+    $gravatarEnabled = $complianceSettings['enable_gravatar'] == 'yes' ? true : false;
+    $fallbackEnabled =  $complianceSettings['gravatar_fallback'] == 'yes' ? true : false;
+
+    if (!$gravatarEnabled) {
+        return apply_filters('fluent_crm/default_avatar', FLUENTCRM_PLUGIN_URL . 'assets/images/avatar.png', $email);
+    }
+
     $hash = md5(strtolower(trim($email)));
 
-    /**
-     * Gravatar URL by Email
-     *
-     * @return string $gravatar url of the gravatar image
-     */
-
     $fallback = '';
-    if ($name) {
+    if ($fallbackEnabled && $name) {
         $fallback = '&d=https%3A%2F%2Fui-avatars.com%2Fapi%2F' . urlencode($name) . '/128';
     }
 

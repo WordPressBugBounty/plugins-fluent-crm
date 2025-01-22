@@ -4,7 +4,7 @@ Tags: email marketing, newsletter, crm, email newsletter, subscribers
 Requires at least: 5.0
 Tested up to: 6.7
 Requires PHP: 7.3
-Stable tag: 2.9.31
+Stable tag: 2.9.40
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -259,10 +259,38 @@ You can report any security bugs found in the source code of FluentCRM plugins t
 
 == Changelog ==
 
+= 2.9.40 (Date: January 22, 2025) =
+New: Quick Search in Automation Actions, Benchmarks, Goals
+New: MemberPress Subscriptions Widget
+New: Export/Import Email Campaign
+New: Export/Import Email Campaign Contacts
+New: Brevo (ex Sendinblue) Bounce Handler
+New: Support for Polish Characters in slug (Tags/Lists)
+Improvement: Contact filtering options: Never Clicked/Opened
+Improvement: Quick preview added in email templates
+Improvement: Post Image Type for Latest Post block
+Improvement: Current date in Update Contact Property action in Automation
+Improvement: WooCommerce Product Image Styling (order_items_table)
+Improvement: Back Button for Campaign Archives
+Improvement: Restart section added in ‘Remove From List’ Trigger
+Improvement: Added 'Check All' option contact exporter
+Improvement: More Filters in email campaign archive
+Improvement: Added ‘Select All’ tag/list option while importing contacts
+Improvement: UI Improvements (Automation Label Color)
+Improvement: Smoother One-click Unsubscribe
+Improvement: Coupon systems support for multi-vendor/extensions along with woocommerce
+Improvement: Added Gravatar & Fallback Compliance for Contact Avatar
+Fixed: Spammed/Complained Status Issue in Bounce Handler
+Fixed: Theme colors not displaying in Emails
+Fixed: Pagination for recurring campaign emails
+Fixed: Sync WooCommerce order (trashed order issue)
+
+
 = 2.9.31 (Date: December 27, 2024) =
 New: Added Email Preview in Campaigns
 Improvement: AB Cart item table responsive
-Improvement: Replaced Google fonts with Bunny
+Improvement: User delete option sync between compliance settings and general settings
+Improvement: Replaced google fonts with Bunny
 Fixed: AB Cart Recovered Revenue issue
 Fixed: Campaigns revenue report issue
 Fixed: Latest Post Block random sort issue
@@ -271,7 +299,7 @@ Fixed: Number values in the 'Text' custom field misinterpreted as date issue.
 Fixed: Variable button size not working in block editor
 Fixed: MailChimp Migration import limitations
 Fixed: Theme & default color issue in editor
-Improvement: user delete option sync between compliance settings and general settings
+Other Improvements & Bug Fixes
 
 
 = 2.9.30 (Date: December 09, 2024) =

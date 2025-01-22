@@ -989,16 +989,7 @@ class AdminMenu
         $allowedBlocks = apply_filters('fluent_crm/allowed_block_types', $allowedBlocks);
         $themePref = Helper::getThemePrefScheme();
 
-        $color_palette = current((array)get_theme_support('editor-color-palette'));
-        $theme_json_path = get_theme_file_path('theme.json');
-
-        if (file_exists($theme_json_path)) {
-            $theme_json = json_decode(file_get_contents($theme_json_path), true);
-
-            if (isset($theme_json['settings']['color']['palette'])) {
-                $color_palette = $theme_json['settings']['color']['palette'];
-            }
-        }
+        $color_palette = Helper::getThemeColorPalette();
 
         $settings = array(
             'gradients'                         => [],

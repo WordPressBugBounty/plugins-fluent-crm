@@ -75,6 +75,15 @@ class Helper
             return $emailBody;
         }
 
+        /**
+         * Filter to disable email open tracking in FluentCRM.
+         *
+         * This filter allows you to disable the email open tracking feature in FluentCRM.
+         *
+         * @since 2.0.0
+         *
+         * @param bool Whether to disable email open tracking. Default false.
+         */
         if (apply_filters('fluentcrm_disable_email_open_tracking', false)) {
             return $emailBody;
         }
@@ -128,6 +137,15 @@ class Helper
             ];
         }
 
+        /**
+         * Filter the list of support ticket providers.
+         *
+         * This filter allows you to modify the array of support ticket providers used in FluentCRM.
+         *
+         * @since 2.5.1
+         *
+         * @param array An array of support ticket providers.
+         */
         $supportProviders = apply_filters('fluentcrm-support_tickets_providers', []);
         if ($supportProviders) {
             $sections['subscriber_support_tickets'] = [
@@ -143,11 +161,29 @@ class Helper
             'handler' => 'route'
         ];
 
+        /**
+         * Filter the contact profile sections in FluentCRM.
+         *
+         * This filter allows modification of the contact profile sections array in FluentCRM.
+         *
+         * @since 2.2.0
+         *
+         * @param array $sections An array of profile sections.
+         */
         return apply_filters('fluentcrm_profile_sections', $sections);
     }
 
     public static function getDefaultEmailTemplate()
     {
+        /**
+         * Filter the default email design template.
+         *
+         * This filter allows you to modify the default email design template used by FluentCRM.
+         *
+         * @since 2.7.0
+         *
+         * @param string The default email design template. Default 'simple'.
+         */
         return apply_filters('fluent_crm/default_email_design_template', 'simple');
     }
 
@@ -156,6 +192,32 @@ class Helper
         $subscriberCodes = [
             'key'        => 'contact',
             'title'      => __('Contact', 'fluent-crm'),
+            /**
+             * Filter the smartcodes available for FluentCRM contacts.
+             *
+             * This filter allows modification of the smartcodes that can be used for FluentCRM contacts.
+             *
+             * @since 1.0.0
+             *
+             * @param array $smartcodes An associative array of smartcodes and their descriptions.
+             *     Default smartcodes:
+             *     - '{{contact.full_name}}'      => 'Full Name'
+             *     - '{{contact.prefix}}'         => 'Name Prefix'
+             *     - '{{contact.first_name}}'     => 'First Name'
+             *     - '{{contact.last_name}}'      => 'Last Name'
+             *     - '{{contact.email}}'          => 'Contact Email'
+             *     - '{{contact.id}}'             => 'Contact ID'
+             *     - '{{contact.user_id}}'        => 'User ID'
+             *     - '{{contact.address_line_1}}' => 'Address Line 1'
+             *     - '{{contact.address_line_2}}' => 'Address Line 2'
+             *     - '{{contact.city}}'           => 'City'
+             *     - '{{contact.state}}'          => 'State'
+             *     - '{{contact.postal_code}}'    => 'Postal Code'
+             *     - '{{contact.country}}'        => 'Country'
+             *     - '{{contact.phone}}'          => 'Phone Number'
+             *     - '{{contact.status}}'         => 'Status'
+             *     - '{{contact.date_of_birth}}'  => 'Date of Birth'
+             */
             'shortcodes' => apply_filters('fluentcrm_contact_smartcodes', [
                 '{{contact.full_name}}'      => __('Full Name', 'fluent-crm'),
                 '{{contact.prefix}}'         => __('Name Prefix', 'fluent-crm'),
@@ -201,6 +263,27 @@ class Helper
         $smartCodes[] = [
             'key'        => 'general',
             'title'      => __('General', 'fluent-crm'),
+            /**
+             * Filter to modify the general smartcodes used in FluentCRM.
+             *
+             * @since 2.7.0
+             *
+             * @param array $shortcodes An associative array of smartcodes and their descriptions.
+             * 
+             *        Default smartcodes:
+             *        - '{{crm.business_name}}' => 'Business Name'
+             *        - '{{crm.business_address}}' => 'Business Address'
+             *        - '{{wp.admin_email}}' => 'Admin Email'
+             *        - '##wp.url##' => 'Site URL'
+             *        - '{{other.date.+2 days}}' => 'Dynamic Date (ex: +2 days from now)'
+             *        - '{{other.date_format.D, d M, Y}}' => 'Custom Date Format (Any PHP Date Format)'
+             *        - '{{other.latest_post.title}}' => 'Latest Post Title (Published)'
+             *        - '##crm.unsubscribe_url##' => 'Unsubscribe URL'
+             *        - '##crm.manage_subscription_url##' => 'Manage Subscription URL'
+             *        - '##web_preview_url##' => 'View On Browser URL'
+             *        - '{{crm.unsubscribe_html|Unsubscribe}}' => 'Unsubscribe Hyperlink HTML'
+             *        - '{{crm.manage_subscription_html|Manage Preference}}' => 'Manage Subscription Hyperlink HTML'
+             */
             'shortcodes' => apply_filters('fluent_crm/general_smartcodes', [
                 '{{crm.business_name}}'                              => __('Business Name', 'fluent-crm'),
                 '{{crm.business_address}}'                           => __('Business Address', 'fluent-crm'),
@@ -217,11 +300,29 @@ class Helper
             ])
         ];
 
+        /**
+         * Filter the smart code groups.
+         *
+         * This filter allows modification of the smart code groups array.
+         *
+         * @since 2.7.0
+         *
+         * @param array $smartCodes An array of smart code groups.
+         */
         return apply_filters('fluent_crm/smartcode_groups', $smartCodes);
     }
 
     public static function getExtendedSmartCodes()
     {
+        /**
+         * Filter the extended smart codes for FluentCRM.
+         *
+         * This filter allows you to modify the array of extended smart codes used in FluentCRM.
+         *
+         * @since 2.7.0
+         *
+         * @param array An array of extended smart codes.
+         */
         return array_values(apply_filters('fluent_crm/extended_smart_codes', []));
     }
 
@@ -297,6 +398,55 @@ class Helper
         $plainConfig = $defaultDesignConfig;
         $plainConfig['body_bg_color'] = '#FFFFFF';
 
+        /**
+         * Filter the email design templates available in FluentCRM.
+         *
+         * @since 2.6.51
+         *
+         * @param array {
+         *     An array of email design templates.
+         *
+         *     @type array $simple {
+         *         @type string $id            The template ID.
+         *         @type string $label         The template label.
+         *         @type string $image         The URL to the template image.
+         *         @type array  $config        The configuration array for the template.
+         *         @type bool   $use_gutenberg Whether to use Gutenberg editor.
+         *     }
+         *     @type array $plain {
+         *         @type string $id            The template ID.
+         *         @type string $label         The template label.
+         *         @type string $image         The URL to the template image.
+         *         @type array  $config        The configuration array for the template.
+         *         @type bool   $use_gutenberg Whether to use Gutenberg editor.
+         *     }
+         *     @type array $classic {
+         *         @type string $id            The template ID.
+         *         @type string $label         The template label.
+         *         @type string $image         The URL to the template image.
+         *         @type array  $config        The configuration array for the template.
+         *         @type bool   $use_gutenberg Whether to use Gutenberg editor.
+         *     }
+         *     @type array $raw_classic {
+         *         @type string $id            The template ID.
+         *         @type string $label         The template label.
+         *         @type string $image         The URL to the template image.
+         *         @type array  $config        The configuration array for the template.
+         *         @type bool   $use_gutenberg Whether to use Gutenberg editor.
+         *         @type string $template_type The type of the template.
+         *         @type string $template_info Additional information about the template.
+         *     }
+         *     @type array $raw_html {
+         *         @type string $id            The template ID.
+         *         @type string $label         The template label.
+         *         @type string $image         The URL to the template image.
+         *         @type array  $config        The configuration array for the template.
+         *         @type bool   $use_gutenberg Whether to use Gutenberg editor.
+         *         @type string $template_type The type of the template.
+         *         @type string $template_info Additional information about the template.
+         *     }
+         * }
+         */
         $templates = apply_filters('fluent_crm/email_design_templates', [
             'simple'      => [
                 'id'            => 'simple',
@@ -375,15 +525,42 @@ class Helper
             'fluentcampaign'       => defined('FLUENTCAMPAIGN_FRAMEWORK_VERSION'),
             'company_module'       => self::isCompanyEnabled(),
             'event_tracking'       => self::isExperimentalEnabled('event_tracking'),
+            /**
+             * Filter to disable email open tracking in FluentCRM.
+             *
+             * This filter allows to disable email open tracking globally.
+             *
+             * @since 2.8.0
+             * 
+             * @param bool  Whether to disable email open tracking. Default is false.
+             * @return bool Filtered value to enable or disable email open tracking.
+             */
             'email_open_tracking'  => !apply_filters('fluentcrm_disable_email_open_tracking', false),
+            /**
+             * Filter to enable or disable email click tracking.
+             *
+             * This filter allows you to control whether email click tracking is enabled or disabled.
+             *
+             * @since 2.8.0
+             *
+             * @param bool Whether to enable email click tracking. Default true.
+             */
             'email_click_tracking' => apply_filters('fluent_crm/track_click', true),
         ];
     }
 
     public static function getContactPrefixes($withKeyed = false)
     {
-        /*
-         * deprecated, please use fluent_crm/contact_name_prefixes instead
+        /**
+         * Filter the contact name prefixes.
+         *
+         * This filter is deprecated. Please use fluent_crm/contact_name_prefixes instead.
+         *
+         * @since 2.5.5
+         *
+         * @deprecated 2.7.0 Use fluent_crm/contact_name_prefixes instead.
+         * 
+         * @param array An array of contact name prefixes.
          */
         $prefixes = apply_filters('fluentcrm_contact_name_prefixes', [
             'Mr',
@@ -391,6 +568,13 @@ class Helper
             'Ms'
         ]);
 
+        /**
+         * Filter the contact name prefixes.
+         *
+         * @since 2.7.0
+         * 
+         * @param array $prefixes An array of contact name prefixes.
+         */
         $prefixes = apply_filters('fluent_crm/contact_name_prefixes', $prefixes);
 
         if ($withKeyed) {
@@ -467,6 +651,15 @@ class Helper
             ];
         }
 
+        /**
+         * Filter the list of valid purchase history providers.
+         *
+         * This filter allows modification of the valid purchase history providers used in FluentCRM.
+         *
+         * @since 2.7.0
+         *
+         * @param array $validProviders An array of valid purchase history providers.
+         */
         return apply_filters('fluent_crm/purchase_history_providers', $validProviders);
     }
 
@@ -560,6 +753,20 @@ class Helper
                 ]
             ];
 
+            /**
+             * Filter the theme preferences for FluentCRM.
+             *
+             * This filter allows modification of the theme preferences, including colors and font sizes.
+             *
+             * @since 2.6.51
+             *
+             * @param array {
+             *     The theme preferences.
+             *
+             *     @type array $colors     The color palette.
+             *     @type array $font_sizes The font sizes.
+             * }
+             */
             $pref = apply_filters('fluent_crm/theme_pref', [
                 'colors'     => (array)$color_palette,
                 'font_sizes' => (array)$font_sizes
@@ -583,6 +790,15 @@ class Helper
             '#FFD9E3'
         ];
 
+        /**
+         * Filter the funnel label colors.
+         *
+         * This filter allows modification of the funnel label colors.
+         *
+         * @since 2.9.30
+         *
+         * @param array $colors An array of colors for the funnel labels.
+         */
         return apply_filters('fluent_crm/funnel_label_color', $colors);
     }
 
@@ -600,8 +816,51 @@ class Helper
                 return $color['color'];
             }
         }
-        return '';
+
+        $color_palette = self::getThemeColorPalette();
+        return self::getColorBySlug($color_palette, $colorName);
     }
+
+    public static function getColorBySlug($color_palette, $slug) {
+        foreach ($color_palette as $color) {
+            if (isset($color['slug']) && $color['slug'] === $slug) {
+                return $color['color'];
+            }
+        }
+        return null;
+    }
+
+    public static function getThemeColorPalette()
+    {
+        $color_palette = current((array)get_theme_support('editor-color-palette'));
+        $theme_json_path = get_theme_file_path('theme.json');
+
+        if (file_exists($theme_json_path)) {
+            $theme_json = json_decode(file_get_contents($theme_json_path), true);
+
+            if (isset($theme_json['settings']['color']['palette'])) {
+                $color_palette = $theme_json['settings']['color']['palette'];
+            }
+        }
+        return $color_palette;
+    }
+
+    public static function getThemeFontSizes()
+    {
+        $font_sizes = current((array) get_theme_support('editor-font-sizes'));
+        $theme_json_path = get_theme_file_path('theme.json');
+
+        if (file_exists($theme_json_path)) {
+            $theme_json = json_decode(file_get_contents($theme_json_path), true);
+
+            if (isset($theme_json['settings']['typography']['fontSizes'])) {
+                $font_sizes = $theme_json['settings']['typography']['fontSizes'];
+            }
+        }
+
+        return $font_sizes;
+    }
+
 
     public static function generateThemePrefCss()
     {
@@ -629,6 +888,27 @@ class Helper
                     $slug = self::kebabCase($size['slug']);
                     $css .= '.fc_email_body .has-' . $slug . '-font-size  { font-size: ' . $size['size'] . 'px !important;} ';
                 }
+            }
+        }
+
+        // Generate CSS for theme color palette
+        $themeColors = self::getThemeColorPalette();
+        if (!empty($themeColors)) {
+            foreach ($themeColors as $themeColor) {
+                $color = $themeColor['color'];
+                $slug = $themeColor['slug'];
+                $css .= ".fc_email_body .has-{$slug}-background-color { background-color: {$color};}";
+                $css .= ".fc_email_body .has-{$slug}-color { color: {$color};}";
+            }
+        }
+
+        // Generate CSS for theme font sizes
+        $themeFontSizes = self::getThemeFontSizes();
+        if (!empty($themeFontSizes)) {
+            foreach ($themeFontSizes as $themeFontSize) {
+                $size = $themeFontSize['size'];
+                $slug = $themeFontSize['slug'];
+                $css .= ".fc_email_body .has-{$slug}-font-size { font-size: {$size} !important;}";
             }
         }
 
@@ -784,6 +1064,16 @@ class Helper
             $subscriber['phone'] = $phone;
         }
 
+        /**
+         * Filter the subscriber data before it is processed.
+         *
+         * This filter allows you to modify the subscriber data before it is processed.
+         *
+         * @since 2.5.3
+         *
+         * @param array  $subscriber The subscriber data.
+         * @param object $user The WordPress user object.
+         */
         $subscriber = apply_filters('fluentcrm_user_map_data', $subscriber, $user);
 
         $fillables = (new Subscriber)->getFillable();
@@ -856,6 +1146,16 @@ class Helper
          */
 
         $result = apply_filters_deprecated('fluencrm_disable_check_compliance_string', [false, $text], '2.8.33', 'fluent_crm/disable_check_compliance_string');
+        /**
+         * Filters the compliance check string result.
+         *
+         * This filter allows you to modify the result of the compliance check string.
+         *
+         * @since 2.8.33
+         *
+         * @param mixed  $result The result of the compliance check string.
+         * @param string $text   The text being checked for compliance.
+         */
         $result = apply_filters('fluent_crm/disable_check_compliance_string', $result, $text);
 
         if ($result) {
@@ -885,6 +1185,17 @@ class Helper
         if ($disabled) {
             return;
         }
+        /**
+         * Filter to disable emoji conversion to images in FluentCRM.
+         *
+         * This filter allows you to disable the conversion of emojis to images.
+         * By default, this filter is set to true, meaning the conversion is enabled.
+         * You can use this filter to return false if you want to disable the conversion.
+         *
+         * @since 2.7.0
+         *
+         * @param bool Whether to disable emoji conversion to images. Default true.
+         */
         if (apply_filters('fluent_crm/disable_emoji_to_image', true)) {
             remove_filter('wp_mail', 'wp_staticize_emoji_for_email');
         }
@@ -1505,6 +1816,15 @@ class Helper
             }
         }
 
+        /**
+         * Filter the advanced filter options for FluentCRM.
+         *
+         * This filter allows modification of the advanced filter options used in FluentCRM.
+         *
+         * @since 2.5.1
+         *
+         * @param array $groups The current filter options.
+         */
         $groups = apply_filters('fluentcrm_advanced_filter_options', $groups);
 
         return array_values($groups);
@@ -1516,7 +1836,9 @@ class Helper
             'anonymize_ip'           => 'no',
             'delete_contact_on_user' => 'no',
             'personal_data_export'   => 'yes',
-            'one_click_unsubscribe'  => 'no'
+            'one_click_unsubscribe'  => 'no',
+            'enable_gravatar'        => 'no',
+            'gravatar_fallback'      => 'no',
         ];
 
         $settings = get_option('_fluentcrm_compliance_settings', []);
@@ -1548,6 +1870,8 @@ class Helper
             'campaign_group_by_month'  => 'no',
             'campaign_search'          => '',
             'campaign_max_number'      => 50,
+            'campaign_ids'             => [],
+            'campaign_status'          => 'archived',
             'classic_date_time'        => 'no',
             'full_navigation'          => 'no',
             'company_module'           => 'no',
@@ -1644,6 +1968,15 @@ class Helper
             $tags = array_merge($tags, $svg_args);
         }
 
+        /**
+         * Filter the allowed HTML tags.
+         *
+         * This filter allows modification of the HTML tags that are allowed.
+         *
+         * @since 2.7.0
+         *
+         * @param array $tags An array of allowed HTML tags.
+         */
         $tags = apply_filters('fluent_crm/allowed_html_tags', $tags);
 
         return wp_kses($html, $tags);
@@ -1656,13 +1989,16 @@ class Helper
 
     public static function getEmailFooterContent($campaign = null)
     {
-        if ($campaign && Arr::get($campaign->settings, 'footer_settings.custom_footer') == 'yes' && Arr::get($campaign->settings, 'footer_settings.footer_content')) {
+        if ($campaign && isset($campaign->settings)) {
+            $customFooter = Arr::get($campaign->settings, 'footer_settings.custom_footer');
             $emailFooter = Arr::get($campaign->settings, 'footer_settings.footer_content');
-        } else {
-            $emailFooter = Arr::get(self::getGlobalEmailSettings(), 'email_footer', '');
+
+            if ($customFooter === 'yes' && $emailFooter) {
+                return $emailFooter;
+            }
         }
 
-        return $emailFooter;
+        return Arr::get(self::getGlobalEmailSettings(), 'email_footer', '');
     }
 
     public static function isCompanyEnabled()
@@ -1672,6 +2008,15 @@ class Helper
 
     public static function companyCategories()
     {
+        /**
+         * Filter the list of company categories.
+         *
+         * This filter allows modification of the company categories list.
+         *
+         * @since 2.8.0
+         *
+         * @param array An array of company categories.
+         */
         return apply_filters('fluent_crm/company_categories', [
             'Accounting',
             'Airlines/Aviation',
@@ -1825,6 +2170,15 @@ class Helper
 
     public static function companyTypes()
     {
+        /**
+         * Filter the list of company types.
+         *
+         * This filter allows modification of the company types array.
+         *
+         * @since 2.8.0
+         *
+         * @param array An array of company types.
+         */
         return apply_filters('fluent_crm/company_types', [
             'Prospect',
             'Partner',
@@ -1849,6 +2203,15 @@ class Helper
             ],
         ];
 
+        /**
+         * Filter the company profile sections.
+         *
+         * This filter allows modification of the company profile sections.
+         *
+         * @since 2.8.0
+         *
+         * @param array The array of company profile sections.
+         */
         return apply_filters('fluent_crm/company_profile_sections', $sections);
     }
 
@@ -1914,6 +2277,15 @@ class Helper
             ),
         );
 
+        /**
+         * Filter the contact note fields.
+         *
+         * This filter allows modification of the contact note fields.
+         *
+         * @since 2.8.40
+         *
+         * @param array $fields The contact note fields.
+         */
         return apply_filters('fluent_crm/contact_note_fields', $fields);
     }
 

@@ -1127,6 +1127,7 @@ class TransStrings
             'Scheduled on'                                                                           => __('Scheduled on', 'fluent-crm'),
             'Scheduling Settings'                                                                    => __('Scheduling Settings', 'fluent-crm'),
             'Search'                                                                                 => __('Search', 'fluent-crm'),
+            'Select All'                                                                             => __('Select All', 'fluent-crm'),
             'Search Companies'                                                                       => __('Search Companies', 'fluent-crm'),
             'Search Results for:'                                                                    => __('Search Results for:', 'fluent-crm'),
             'Search Type and Enter...'                                                               => __('Search Type and Enter...', 'fluent-crm'),
@@ -1708,8 +1709,11 @@ class TransStrings
             'Pause/Run'                                                                              => __('Pause/Run', 'fluent-crm'),
             'Export Campaign'                                                                        => __('Export Campaign', 'fluent-crm'),
             'Recurring_Campaign_Export_Alert'                                                        => __('Recurring Campaign export is only available on pro version of FluentCRM', 'fluent-crm'),
+            'Campaign_Export_Alert'                                                        => __('Campaign export is only available on pro version of FluentCRM', 'fluent-crm'),
             'Import_Recurring_Campaign'                                                              => __('Import your exported recurring email campaigns JSON file here. Please upload your JSON file.', 'fluent-crm'),
+            'Import_Email_Campaign'                                                              => __('Import your exported email campaigns JSON file here. Please upload your JSON file.', 'fluent-crm'),
             'Not_Import_Recurring_Campaigns_Alert'                                                   => __('Do not import recurring campaigns from untrusted sources.', 'fluent-crm'),
+            'Not_Import_Email_Campaigns_Alert'                                                   => __('Do not import email campaigns from untrusted sources.', 'fluent-crm'),
             'Tax(es)'                                                                                => __('Tax(es)', 'fluent-crm'),
             'Order Comments'                                                                         => __('Order Comments', 'fluent-crm'),
             'Recovery URL'                                                                           => __('Recovery URL', 'fluent-crm'),
@@ -1748,6 +1752,17 @@ class TransStrings
             'Order Status'                                                                          => __('Order Status', 'fluent-crm'),
             'Time'                                                                                  => __('Time', 'fluent-crm'),
             'Auto Login'                                                                            => __('Auto Login', 'fluent-crm'),
+            'Exporting_archived_campaign_Emails_alert'                                              => __('Exporting archived campaign emails is only available in the Pro version of FluentCRM', 'fluent-crm'),
+            'Never Opened'                                                                          => __('Never Opened', 'fluent-crm'),
+            'Never Clicked'                                                                         => __('Never Clicked', 'fluent-crm'),
+            'Share Newsletter via URL'                                                              => __('Share Newsletter via URL', 'fluent-crm'),
+            'Share_Newsletter_Desc'                                                                 => __('Share this URL with anyone to view this newsletter online.', 'fluent-crm'),
+            'Copy'                                                                                  => __('Copy', 'fluent-crm'),
+            'Search blocks, e.g., email, apply tags, etc.'                                          => __('Search blocks, e.g., email, apply tags, etc.', 'fluent-crm'),
+            'No Blocks Found'                                                                       => __('No Blocks Found', 'fluent-crm'),
+            'Leave it blank to display all campaigns'                                               => __('Leave it blank to display all campaigns', 'fluent-crm'),
+            'Select Campaigns'                                                                      => __('Select Campaigns', 'fluent-crm'),
+
         ];
     }
 }

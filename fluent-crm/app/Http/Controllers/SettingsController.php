@@ -3,6 +3,7 @@
 namespace FluentCrm\App\Http\Controllers;
 
 use FluentCrm\App\Hooks\Handlers\ActivationHandler;
+use FluentCrm\App\Models\Campaign;
 use FluentCrm\App\Models\CampaignEmail;
 use FluentCrm\App\Models\CampaignUrlMetric;
 use FluentCrm\App\Models\SystemLog;
@@ -379,7 +380,14 @@ class SettingsController extends Controller
                 'doc_url' => 'https://fluentcrm.com/docs/bounce-handling-with-smtp2go/',
                 'input_title' => 'SMTP2Go Bounce Handler Webhook URL',
                 'input_info' => 'Please paste this URL into your SMTP2Go\'s Webhook settings to enable Bounce Handling with FluentCRM'
-            ]
+            ],
+            'brevo' => [
+                'label'       => __('Brevo (ex Sendinblue)', 'fluent-crm'),
+                'webhook_url' => get_rest_url(null, 'fluent-crm/v2/public/bounce_handler/brevo/handle/' . $securityCode),
+                'doc_url'     => 'https://fluentcrm.com/docs/bounce-handling-with-brevo/',
+                'input_title' => __('Brevo Bounce Handler Webhook URL', 'fluent-crm'),
+                'input_info'  => __('Please paste this URL into your Brevo\'s Webhook settings to enable Bounce Handling with FluentCRM', 'fluent-crm')
+            ],
         ];
 
         $data = [
@@ -571,7 +579,7 @@ class SettingsController extends Controller
 
         if (in_array('email_open', $selectedLogs)) {
             $dataCounters[] = [
-                'title' => __('Email clicks', 'fluent-crm'),
+                'title' => __('Email Opens', 'fluent-crm'),
                 'count' => CampaignUrlMetric::where('type', 'open')
                     ->where('created_at', '<', $refDate)
                     ->count()
@@ -963,7 +971,11 @@ class SettingsController extends Controller
         $data = Arr::only($request->all(), array_keys(Helper::getExperimentalSettings()));
 
         foreach ($data as $key => $datum) {
-            $data[$key] = sanitize_text_field($datum);
+            if ($key === 'campaign_ids' && is_array($datum)) {
+                $data[$key] = array_map('intval', $datum);
+            } else {
+                $data[$key] = sanitize_text_field($datum);
+            }
         }
 
         if (Arr::get($data, 'company_module') == 'yes') {
@@ -980,6 +992,15 @@ class SettingsController extends Controller
 
         return [
             'message' => __('Settings has been updated', 'fluent-crm')
+        ];
+    }
+
+    public function getCampaigns(Request $request)
+    {
+        $campaigns = Campaign::orderBy('id', 'DESC')->get();
+
+        return [
+            'campaigns' => $campaigns
         ];
     }
 

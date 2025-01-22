@@ -65,6 +65,10 @@ class FunnelProcessor
 
     public function startFunnelSequence($funnel, $subscriberData, $funnelSubArgs = [], $subscriber = false)
     {
+        if (isset($subscriberData['email'])) {
+            $subscriber = Subscriber::where('email', $subscriberData['email'])->first();
+        }
+
         if (!$subscriber) {
             // it's new so let's create new subscriber
             $subscriber = FunnelHelper::createOrUpdateContact($subscriberData);
