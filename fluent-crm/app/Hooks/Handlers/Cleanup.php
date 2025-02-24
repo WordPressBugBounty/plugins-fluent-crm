@@ -329,12 +329,14 @@ class Cleanup
                 ->where('object_type', 'option')
                 ->first();
 
-            $settings = $option->value;
+            if ($option) {
+                $settings = $option->value;
 
-            if ($settings['delete_contact_on_user_delete'] != $value) {
-                $settings['delete_contact_on_user_delete'] = $value;
-                $option->value = $settings;
-                $option->save();
+                if ($settings['delete_contact_on_user_delete'] != $value) {
+                    $settings['delete_contact_on_user_delete'] = $value;
+                    $option->value = $settings;
+                    $option->save();
+                }
             }
         } else {
             $complianceSettings = get_option('_fluentcrm_compliance_settings');

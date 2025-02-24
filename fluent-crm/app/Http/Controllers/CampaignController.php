@@ -141,6 +141,9 @@ class CampaignController extends Controller
         } else if ($filterType == 'unopened') {
             $emailsQuery = $emailsQuery->where('is_open', '==', 0)
                 ->orderBy('is_open', 'DESC');
+        } else if ($filterType == 'failed') {
+            $emailsQuery = $emailsQuery->where('status', 'failed')
+                ->orderBy('id', 'DESC');
         }
 
         $emails = $emailsQuery->paginate();
@@ -575,6 +578,8 @@ class CampaignController extends Controller
         }
 
         $campaign = Campaign::findOrFail($campaignId);
+
+        fluentcrm_update_campaign_meta($campaign->id, '_campaign_sent_by', get_current_user_id());
 
         if ($scheduleAt) {
             do_action('fluent_crm/campaign_scheduled', $campaign, $campaign->scheduled_at);
@@ -1209,6 +1214,10 @@ class CampaignController extends Controller
             ->groupBy('status')
             ->get();
 
+        //attaching who sent the campaign
+        $CampaignSentBy = $this->getCampaignSentData($campaign->id);
+        $campaign->sent_by = $CampaignSentBy;
+
         return $this->sendSuccess([
             'current_timestamp' => fluentCrmTimestamp(),
             'stat'              => $stat,
@@ -1438,5 +1447,15 @@ class CampaignController extends Controller
             'message' => __('Labels has been updated', 'fluent-crm')
         ]);
 
+    }
+
+    private function getCampaignSentData($campaignId)
+    {
+        $campaignSentById = fluentcrm_get_campaign_meta($campaignId, '_campaign_sent_by', true);
+        $user = get_userdata($campaignSentById);
+        if($user) {
+            return $user->display_name . ' (' . $user->user_email . ')';
+        }
+        return false;
     }
 }

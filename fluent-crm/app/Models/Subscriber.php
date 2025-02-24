@@ -1506,7 +1506,7 @@ class Subscriber extends Model
 
         if (in_array($operator, $exactOperators)) {
             if ($operator == '>' || $operator == '<') {
-                $filter['value'] = $filter['value'];
+                $filter['value'] = (float)$filter['value'];
             } else {
                 $filter['value'] = sanitize_text_field($filter['value']);
             }

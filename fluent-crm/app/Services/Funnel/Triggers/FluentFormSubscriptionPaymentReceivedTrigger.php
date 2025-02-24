@@ -1,6 +1,6 @@
 <?php
-
 namespace FluentCrm\App\Services\Funnel\Triggers;
+
 
 use FluentCrm\App\Services\Funnel\BaseTrigger;
 use FluentCrm\App\Services\Funnel\FunnelHelper;
@@ -9,7 +9,7 @@ use FluentCrm\Framework\Support\Arr;
 use FluentForm\App\Modules\Form\FormFieldsParser;
 use FluentForm\App\Services\FormBuilder\ShortCodeParser;
 
-class FluentFormSubmissionTrigger extends BaseTrigger
+class FluentFormSubscriptionPaymentReceivedTrigger extends BaseTrigger
 {
     public function __construct()
     {
@@ -17,10 +17,9 @@ class FluentFormSubmissionTrigger extends BaseTrigger
             return;
         }
 
-
-        $this->actionArgNum = 3;
-        $this->triggerName = 'fluentform_submission_inserted';
-        $this->priority = 25;
+        $this->actionArgNum = 2;
+        $this->triggerName = 'fluentform/subscription_payment_active';
+        $this->priority = 20;
         parent::__construct();
     }
 
@@ -28,8 +27,8 @@ class FluentFormSubmissionTrigger extends BaseTrigger
     {
         return [
             'category'    => __('FluentForms', 'fluent-crm'),
-            'label'       => __('New Form Submission (Fluent Forms)', 'fluent-crm'),
-            'description' => __('This Funnel will be initiated when a new form submission has been submitted', 'fluent-crm'),
+            'label'       => __('Subscription Payment Received (Fluent Forms)', 'fluent-crm'),
+            'description' => __('This Funnel will be initiated when a subscription payment is successfully received through Fluent Forms.', 'fluent-crm'),
             'icon'        => 'fc-icon-fluentforms',
         ];
     }
@@ -56,22 +55,13 @@ class FluentFormSubmissionTrigger extends BaseTrigger
     public function getSettingsFields($funnel)
     {
         $valueOptions = $this->getValueOptions($funnel);
-
-        $formId = Arr::get($funnel->settings, 'form_id');
-
-        $subtitle = __('This Funnel will be initiated when a new form submission has been submitted.', 'fluent-crm');
-
-        if ($formId) {
-            $subtitle .= ' Use shortcode <b> [fluentform id="' . $formId . '"] </b> to show the form in your WordPress page/posts. <a target="_blank" href="' . admin_url('admin.php?page=fluent_forms&route=editor&form_id=' . $formId) . '">Edit The Form</a>';
-        }
-
         $secondaryFields = apply_filters('fluent_crm/fluentform_other_map_fields',
             FunnelHelper::getSecondaryContactFieldMaps()
         );
 
         return [
-            'title'     => __('New Fluent Forms Submission Funnel', 'fluent-crm'),
-            'sub_title' => $subtitle,
+            'title'     => __('Subscription Payment Received', 'fluent-crm'),
+            'sub_title' => __('This Funnel will be initiated when a subscription payment is successfully received through Fluent Forms.', 'fluent-crm'),
             'fields'    => [
                 'form_id'                  => [
                     'type'    => 'reload_field_selection',
@@ -125,14 +115,6 @@ class FluentFormSubmissionTrigger extends BaseTrigger
         ];
     }
 
-    protected function getForms($funnel)
-    {
-        return fluentCrmDb()->table('fluentform_forms')
-            ->select('id', 'title')
-            ->orderBy('id', 'DESC')
-            ->get();
-    }
-
     protected function getValueOptions($funnel)
     {
         $formId = Arr::get($funnel->settings, 'form_id');
@@ -164,6 +146,14 @@ class FluentFormSubmissionTrigger extends BaseTrigger
         return $formattedInputs;
     }
 
+    protected function getForms($funnel)
+    {
+        return fluentCrmDb()->table('fluentform_forms')
+            ->select('id', 'title')
+            ->orderBy('id', 'DESC')
+            ->get();
+    }
+
     public function getFunnelConditionDefaults($funnel)
     {
         return [
@@ -183,41 +173,22 @@ class FluentFormSubmissionTrigger extends BaseTrigger
             ],
         ];
     }
-
     public function handle($funnel, $originalArgs)
     {
-        $insertId = $originalArgs[0];
-        $formData = $originalArgs[1];
-        $form = $originalArgs[2];
+        [$submission, $formResponse] = $originalArgs;
+        $formData = $formResponse->response;
 
         $processedValues = $funnel->settings;
+        $insertId = $submission->submission_id;
 
-        if (Arr::get($processedValues, 'form_id') != $form->id) {
+        if (Arr::get($processedValues, 'form_id') != $formResponse->form_id) {
             return; // not our form
         }
 
-        $processedValues['primary_fields']['ip'] = '{submission.ip}';
-
         $processedValues = ShortCodeParser::parse($processedValues, $insertId, $formData);
 
-        if (!is_email(Arr::get($processedValues, 'primary_fields.email'))) {
-            return;
-        }
-
         $subscriberData = Arr::get($processedValues, 'primary_fields', []);
-
-        $subscriberData['custom_values'] = [];
-
-        foreach (Arr::get($processedValues, 'other_fields', []) as $otherField) {
-            if (!empty($otherField['field_key']) && !empty($otherField['field_value'])) {
-                $key = $otherField['field_key'];
-                if (strpos($key, '.')) {
-                    $subscriberData['custom_values'][str_replace('custom.', '', $key)] = $otherField['field_value'];
-                } else {
-                    $subscriberData[$key] = $otherField['field_value'];
-                }
-            }
-        }
+        $subscriberData['custom_values'] = $this->processOtherFields(Arr::get($processedValues, 'other_fields', []));
 
         $willProcess = $this->isProcessable($funnel, $subscriberData);
 
@@ -225,29 +196,28 @@ class FluentFormSubmissionTrigger extends BaseTrigger
         if (!$willProcess) {
             return;
         }
-
         $subscriberData['status'] = $processedValues['subscription_status'];
-
-        $entry = fluentFormApi('submissions')->find($insertId);
-
-        if ($entry && $entry->status == 'confirmed') {
-            $subscriberData['status'] = 'subscribed';
-        }
-
-        if (!empty($subscriberData['country'])) {
-            $country = FunnelHelper::getCountryShortName($subscriberData['country']);
-            if ($country) {
-                $subscriberData['country'] = $country;
-            } else {
-                unset($subscriberData['country']);
-            }
-        }
 
         (new FunnelProcessor())->startFunnelSequence($funnel, $subscriberData, [
             'source_trigger_name' => $this->triggerName,
             'source_ref_id'       => $insertId,
         ]);
+    }
 
+    private function processOtherFields(array $otherFields)
+    {
+        $customValues = [];
+        foreach ($otherFields as $otherField) {
+            if (!empty($otherField['field_key']) && !empty($otherField['field_value'])) {
+                $key = $otherField['field_key'];
+                if (strpos($key, '.')) {
+                    $customValues[str_replace('custom.', '', $key)] = $otherField['field_value'];
+                } else {
+                    $customValues[$key] = $otherField['field_value'];
+                }
+            }
+        }
+        return $customValues;
     }
 
     private function isProcessable($funnel, $subscriberData)
@@ -268,4 +238,5 @@ class FluentFormSubmissionTrigger extends BaseTrigger
 
         return true;
     }
+
 }

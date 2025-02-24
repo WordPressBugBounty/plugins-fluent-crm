@@ -1762,7 +1762,14 @@ class TransStrings
             'No Blocks Found'                                                                       => __('No Blocks Found', 'fluent-crm'),
             'Leave it blank to display all campaigns'                                               => __('Leave it blank to display all campaigns', 'fluent-crm'),
             'Select Campaigns'                                                                      => __('Select Campaigns', 'fluent-crm'),
-
+            'Update Custom Fields'                                                                  => __('Update Custom Fields', 'fluent-crm'),
+            'Select Field'                                                                          => __('Select Field', 'fluent-crm'),
+            'Flexible Contact Behavior Analytic'                                                    => __('Flexible Contact Behavior Analytic', 'fluent-crm'),
+            'Frontend Showcase with Shortcode'                                                      => __('Frontend Showcase with Shortcode', 'fluent-crm'),
+            'Business Contact Management'                                                           => __('Business Contact Management', 'fluent-crm'),
+            'Advanced_Feature_And_Integrations_Desc'                                                => __('Enable/Disable FluentCrm\'s Advanced features or integrations.', 'fluent-crm'),
+            'Plugins that will extend your FluentCrm Functionalities'                               => __('Plugins that will extend your FluentCrm Functionalities', 'fluent-crm'),
+            'Sent By'                                                                               => __('Sent By', 'fluent-crm'),
         ];
     }
 }

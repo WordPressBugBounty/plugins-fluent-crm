@@ -125,7 +125,7 @@ class Bootstrap extends IntegrationManagerController
                 'placeholder' => __('Select FluentCRM List', 'fluent-crm'),
                 'tips'        => __('Select the FluentCRM List you would like to add your contacts to.', 'fluent-crm'),
                 'component'   => 'select',
-                'required'    => true,
+                'required'    => false,
                 'options'     => $this->getLists(),
             ],
             [

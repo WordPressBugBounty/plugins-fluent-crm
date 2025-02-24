@@ -687,7 +687,8 @@ class AdminMenu
                 'restrictcontentpro'   => 'fc-icon-restric_content',
                 'tutorlms'             => 'fc-icon-tutorlms',
                 'wishlistmember'       => 'fc-icon-wishlist',
-                'surecart'             => 'el-icon-shopping-cart-2'
+                'surecart'             => 'el-icon-shopping-cart-2',
+                'fluentforms'          => 'fc-icon-fluentforms'
             ]),
             'advanced_filter_options'             => Helper::getAdvancedFilterOptions(),
             /**

@@ -23,6 +23,8 @@ use FluentCrm\App\Services\Funnel\FunnelHelper;
 use FluentCrm\App\Services\Funnel\FunnelProcessor;
 use FluentCrm\App\Services\Funnel\SequencePoints;
 use FluentCrm\App\Services\Funnel\Triggers\FluentFormSubmissionTrigger;
+use FluentCrm\App\Services\Funnel\Triggers\FluentFormSubscriptionCancelledTrigger;
+use FluentCrm\App\Services\Funnel\Triggers\FluentFormSubscriptionPaymentReceivedTrigger;
 use FluentCrm\App\Services\Funnel\Triggers\UserRegistrationTrigger;
 use FluentCrm\App\Services\Helper;
 use FluentCrm\App\Services\PermissionManager;
@@ -171,6 +173,10 @@ class FunnelHandler
     {
         new UserRegistrationTrigger();
         new FluentFormSubmissionTrigger();
+        if (defined('FLUENTFORMPRO'))  {
+            new FluentFormSubscriptionCancelledTrigger();
+            new FluentFormSubscriptionPaymentReceivedTrigger();
+        }
     }
 
     private function initBlockActions()

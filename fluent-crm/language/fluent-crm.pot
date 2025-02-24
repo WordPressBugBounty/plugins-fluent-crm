@@ -3,7 +3,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: FluentCRM - Marketing Automation For WordPress\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-01-20 12:39+0000\n"
+"POT-Creation-Date: 2025-02-24 06:56+0000\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: \n"
@@ -82,19 +82,19 @@ msgid_plural "%1$s for %2$s items"
 msgstr[0] ""
 msgstr[1] ""
 
-#: app/Http/Controllers/SubscriberController.php:1279
+#: app/Http/Controllers/SubscriberController.php:1280
 msgid "%d subscribers has been attached to the selected automation funnel"
 msgstr ""
 
-#: app/Http/Controllers/SubscriberController.php:1158
+#: app/Http/Controllers/SubscriberController.php:1159
 msgid "%d subscribers has been attached to the selected company"
 msgstr ""
 
-#: app/Http/Controllers/SubscriberController.php:1111
+#: app/Http/Controllers/SubscriberController.php:1112
 msgid "%d subscribers has been attached to the selected email sequence"
 msgstr ""
 
-#: app/Http/Controllers/SubscriberController.php:1205
+#: app/Http/Controllers/SubscriberController.php:1206
 msgid "%d subscribers has been detached from the selected company"
 msgstr ""
 
@@ -107,7 +107,7 @@ msgid ""
 "(Optional) The selected tags will be removed from the contact (if exist)"
 msgstr ""
 
-#: app/Http/Controllers/CampaignController.php:810
+#: app/Http/Controllers/CampaignController.php:815
 msgid ", The dynamic tags may not replaced in test email"
 msgstr ""
 
@@ -123,18 +123,18 @@ msgstr ""
 msgid "[Copy] "
 msgstr ""
 
-#: app/Http/Controllers/CampaignController.php:1339
+#: app/Http/Controllers/CampaignController.php:1348
 #: app/Http/Controllers/TemplateController.php:183
 msgid "[Duplicate] "
 msgstr ""
 
-#: app/Services/Funnel/BaseBenchMark.php:78
+#: app/Services/Funnel/BaseBenchMark.php:89
 msgid ""
 "[Essential Point] Select IF this step is required for processing further "
 "actions"
 msgstr ""
 
-#: app/Services/Funnel/BaseBenchMark.php:74
+#: app/Services/Funnel/BaseBenchMark.php:85
 msgid "[Optional Point] This is an optional trigger point"
 msgstr ""
 
@@ -222,7 +222,7 @@ msgid "Add this contact to the selected Tags"
 msgstr ""
 
 #: app/Hooks/Handlers/AdminMenu.php:204 app/Hooks/Handlers/AdminMenu.php:205
-#: app/Hooks/Handlers/AdminMenu.php:1469 app/Hooks/Handlers/AdminMenu.php:1470
+#: app/Hooks/Handlers/AdminMenu.php:1470 app/Hooks/Handlers/AdminMenu.php:1471
 msgid "Addons"
 msgstr ""
 
@@ -297,7 +297,7 @@ msgstr ""
 msgid "All Contacts"
 msgstr ""
 
-#: app/Http/Controllers/SubscriberController.php:1037
+#: app/Http/Controllers/SubscriberController.php:1038
 msgid "All contacts has been processed"
 msgstr ""
 
@@ -328,6 +328,12 @@ msgstr ""
 
 #: app/Hooks/Handlers/CountryNames.php:41
 msgid "American Samoa"
+msgstr ""
+
+#: app/Services/Funnel/Triggers/FluentFormSubscriptionCancelledTrigger.php:66
+msgid ""
+"An automated double-opt-in email will be sent if the contact is new or not "
+"already subscribed."
 msgstr ""
 
 #: app/Services/Funnel/Triggers/UserRegistrationTrigger.php:51
@@ -492,7 +498,7 @@ msgstr ""
 
 #: app/Hooks/CLI/Commands.php:38 app/Hooks/Handlers/AdminMenu.php:172
 #: app/Hooks/Handlers/AdminMenu.php:173 app/Hooks/Handlers/AdminMenu.php:405
-#: app/Hooks/Handlers/AdminMenu.php:1448 app/Hooks/Handlers/AdminMenu.php:1449
+#: app/Hooks/Handlers/AdminMenu.php:1449 app/Hooks/Handlers/AdminMenu.php:1450
 msgid "Automations"
 msgstr ""
 
@@ -543,7 +549,7 @@ msgstr ""
 msgid "Belize"
 msgstr ""
 
-#: app/Services/Funnel/BaseBenchMark.php:69
+#: app/Services/Funnel/BaseBenchMark.php:80
 msgid "Benchmark type"
 msgstr ""
 
@@ -659,27 +665,27 @@ msgstr ""
 msgid "Campaign Email -"
 msgstr ""
 
-#: app/Http/Controllers/CampaignController.php:1367
+#: app/Http/Controllers/CampaignController.php:1376
 msgid "Campaign has been successfully duplicated"
 msgstr ""
 
-#: app/Http/Controllers/CampaignController.php:1278
+#: app/Http/Controllers/CampaignController.php:1287
 msgid "Campaign has been successfully marked as paused"
 msgstr ""
 
-#: app/Http/Controllers/CampaignController.php:1304
+#: app/Http/Controllers/CampaignController.php:1313
 msgid "Campaign has been successfully resumed"
 msgstr ""
 
-#: app/Http/Controllers/CampaignController.php:1408
+#: app/Http/Controllers/CampaignController.php:1417
 msgid "Campaign has been successfully un-scheduled"
 msgstr ""
 
-#: app/Http/Controllers/CampaignController.php:1330
+#: app/Http/Controllers/CampaignController.php:1339
 msgid "Campaign has been updated"
 msgstr ""
 
-#: app/Http/Controllers/CampaignController.php:473
+#: app/Http/Controllers/CampaignController.php:476
 msgid "Campaign status is not in draft status. Please reload the page"
 msgstr ""
 
@@ -768,7 +774,7 @@ msgid "Colombia"
 msgstr ""
 
 #: app/Http/Controllers/CompanyController.php:288
-#: app/Http/Controllers/SubscriberController.php:198
+#: app/Http/Controllers/SubscriberController.php:199
 msgid "Column is not valid"
 msgstr ""
 
@@ -929,7 +935,7 @@ msgstr ""
 msgid "contact added in any of the selected Tags"
 msgstr ""
 
-#: app/Http/Controllers/SubscriberController.php:861
+#: app/Http/Controllers/SubscriberController.php:862
 msgid "Contact Already Subscribed"
 msgstr ""
 
@@ -944,6 +950,7 @@ msgid "Contact Email"
 msgstr ""
 
 #: app/Services/Funnel/Triggers/FluentFormSubmissionTrigger.php:85
+#: app/Services/Funnel/Triggers/FluentFormSubscriptionPaymentReceivedTrigger.php:75
 msgid "Contact Field (CRM)"
 msgstr ""
 
@@ -951,7 +958,7 @@ msgstr ""
 msgid "Contact has been created in FluentCRM. Contact ID: "
 msgstr ""
 
-#: app/Http/Controllers/SubscriberController.php:370
+#: app/Http/Controllers/SubscriberController.php:371
 msgid "contact has been successfully updated."
 msgstr ""
 
@@ -975,7 +982,7 @@ msgstr ""
 msgid "Contact Segment"
 msgstr ""
 
-#: app/Services/Stats.php:82
+#: app/Services/Stats.php:91
 msgid "Contact Segments"
 msgstr ""
 
@@ -991,7 +998,7 @@ msgstr ""
 msgid "Contact Tags/List/Companies/Segment Delete"
 msgstr ""
 
-#: app/Http/Controllers/SubscriberController.php:1302
+#: app/Http/Controllers/SubscriberController.php:1303
 msgid "Contact Type has been updated for the selected subscribers"
 msgstr ""
 
@@ -1001,7 +1008,7 @@ msgstr ""
 
 #: app/Services/Helper.php:2196 app/Hooks/Handlers/AdminMenu.php:81
 #: app/Hooks/Handlers/AdminMenu.php:82 app/Hooks/Handlers/AdminMenu.php:303
-#: app/Hooks/Handlers/AdminMenu.php:1401 app/Hooks/Handlers/AdminMenu.php:1402
+#: app/Hooks/Handlers/AdminMenu.php:1402 app/Hooks/Handlers/AdminMenu.php:1403
 msgid "Contacts"
 msgstr ""
 
@@ -1009,7 +1016,7 @@ msgstr ""
 msgid "Contacts Add/Update/Import"
 msgstr ""
 
-#: app/Services/Funnel/BaseBenchMark.php:89
+#: app/Services/Funnel/BaseBenchMark.php:100
 msgid ""
 "Contacts can enter directly to this sequence point. If you enable this then "
 "any contact meet with goal will enter in this goal point."
@@ -1054,19 +1061,19 @@ msgstr ""
 msgid "country"
 msgstr ""
 
-#: app/Services/Stats.php:145
+#: app/Services/Stats.php:163
 msgid "Create a Campaign"
 msgstr ""
 
-#: app/Services/Stats.php:159
+#: app/Services/Stats.php:177
 msgid "Create a Form"
 msgstr ""
 
-#: app/Services/Stats.php:131
+#: app/Services/Stats.php:149
 msgid "Create a Tag"
 msgstr ""
 
-#: app/Services/Stats.php:152
+#: app/Services/Stats.php:170
 msgid "Create an Automation"
 msgstr ""
 
@@ -1082,7 +1089,6 @@ msgstr ""
 msgid "Created At"
 msgstr ""
 
-#: app/Services/Funnel/Triggers/FluentFormSubmissionTrigger.php:30
 #: app/Services/Funnel/Actions/ApplyCompanyAction.php:21
 #: app/Services/Funnel/Actions/DetachTagAction.php:21
 #: app/Services/Funnel/Actions/DetachListAction.php:21
@@ -1133,16 +1139,20 @@ msgstr ""
 msgid "Custom Email Addresses"
 msgstr ""
 
-#: app/Http/Controllers/SubscriberController.php:914
+#: app/Http/Controllers/SubscriberController.php:915
 msgid "Custom Email has been successfully sent"
 msgstr ""
 
-#: app/Http/Controllers/SubscriberController.php:875
+#: app/Http/Controllers/SubscriberController.php:876
 msgid "Custom Email to Contact"
 msgstr ""
 
 #: app/Services/Helper.php:258 app/Services/Helper.php:1536
 msgid "Custom Fields"
+msgstr ""
+
+#: app/Http/Controllers/SubscriberController.php:1344
+msgid "Custom Fields has been updated for the selected subscribers"
 msgstr ""
 
 #: app/Models/CustomContactField.php:248
@@ -1178,8 +1188,8 @@ msgid "Czechia (Czech Republic)"
 msgstr ""
 
 #: app/Hooks/Handlers/AdminMenu.php:72 app/Hooks/Handlers/AdminMenu.php:73
-#: app/Hooks/Handlers/AdminMenu.php:295 app/Hooks/Handlers/AdminMenu.php:1394
-#: app/Hooks/Handlers/AdminMenu.php:1395
+#: app/Hooks/Handlers/AdminMenu.php:295 app/Hooks/Handlers/AdminMenu.php:1395
+#: app/Hooks/Handlers/AdminMenu.php:1396
 msgid "Dashboard"
 msgstr ""
 
@@ -1256,7 +1266,7 @@ msgstr ""
 msgid "Docs & FAQs"
 msgstr ""
 
-#: app/Services/Stats.php:97
+#: app/Services/Stats.php:106
 msgid "Documentations"
 msgstr ""
 
@@ -1277,11 +1287,11 @@ msgstr ""
 msgid "Double Opt-in settings has been updated"
 msgstr ""
 
-#: app/Http/Controllers/SubscriberController.php:868
+#: app/Http/Controllers/SubscriberController.php:869
 msgid "Double OptIn email has been sent"
 msgstr ""
 
-#: app/Http/Controllers/SubscriberController.php:1068
+#: app/Http/Controllers/SubscriberController.php:1069
 msgid "Double optin sent to selected contacts"
 msgstr ""
 
@@ -1408,7 +1418,7 @@ msgstr ""
 msgid "Email Preference"
 msgstr ""
 
-#: app/Http/Controllers/CampaignController.php:549
+#: app/Http/Controllers/CampaignController.php:552
 msgid "Email Sending will be started soon"
 msgstr ""
 
@@ -1424,7 +1434,7 @@ msgstr ""
 msgid "Email Sequence Activity -"
 msgstr ""
 
-#: app/Services/Stats.php:92 app/Hooks/Handlers/AdminMenu.php:141
+#: app/Services/Stats.php:101 app/Hooks/Handlers/AdminMenu.php:141
 #: app/Hooks/Handlers/AdminMenu.php:142 app/Hooks/Handlers/AdminMenu.php:373
 msgid "Email Sequences"
 msgstr ""
@@ -1447,7 +1457,7 @@ msgid "Email Templates Manage"
 msgstr ""
 
 #: app/Services/Helper.php:119 app/Hooks/Handlers/AdminMenu.php:353
-#: app/Hooks/Handlers/AdminMenu.php:1408 app/Hooks/Handlers/AdminMenu.php:1409
+#: app/Hooks/Handlers/AdminMenu.php:1409 app/Hooks/Handlers/AdminMenu.php:1410
 msgid "Emails"
 msgstr ""
 
@@ -1569,7 +1579,7 @@ msgstr ""
 msgid "Ethiopia"
 msgstr ""
 
-#: app/Http/Controllers/SubscriberController.php:1597
+#: app/Http/Controllers/SubscriberController.php:1639
 msgid "Event has been tracked"
 msgstr ""
 
@@ -1585,7 +1595,7 @@ msgstr ""
 msgid "Event Title"
 msgstr ""
 
-#: app/Http/Controllers/SubscriberController.php:1562
+#: app/Http/Controllers/SubscriberController.php:1604
 msgid "Event Tracker is not enabled"
 msgstr ""
 
@@ -1753,12 +1763,18 @@ msgstr ""
 msgid "FluentCRM Lists"
 msgstr ""
 
-#: app/Services/ExternalIntegrations/FluentForm/FluentFormInit.php:53
+#: app/Services/ExternalIntegrations/FluentForm/FluentFormInit.php:57
 msgid "FluentCRM Profile"
 msgstr ""
 
 #: app/Services/ExternalIntegrations/BricksBuilderIntegration.php:47
 msgid "FluentCRM Tags"
+msgstr ""
+
+#: app/Services/Funnel/Triggers/FluentFormSubmissionTrigger.php:30
+#: app/Services/Funnel/Triggers/FluentFormSubscriptionPaymentReceivedTrigger.php:29
+#: app/Services/Funnel/Triggers/FluentFormSubscriptionCancelledTrigger.php:28
+msgid "FluentForms"
 msgstr ""
 
 #: app/Http/Controllers/SetupController.php:170
@@ -1772,6 +1788,7 @@ msgstr ""
 #: app/Services/ExternalIntegrations/FluentForm/Bootstrap.php:138
 #: app/Services/ExternalIntegrations/FluentForm/Bootstrap.php:168
 #: app/Services/Funnel/Triggers/FluentFormSubmissionTrigger.php:86
+#: app/Services/Funnel/Triggers/FluentFormSubscriptionPaymentReceivedTrigger.php:76
 msgid "Form Field"
 msgstr ""
 
@@ -1788,8 +1805,8 @@ msgid "Form Submissions (Fluent Forms)"
 msgstr ""
 
 #: app/Hooks/Handlers/AdminMenu.php:161 app/Hooks/Handlers/AdminMenu.php:162
-#: app/Hooks/Handlers/AdminMenu.php:397 app/Hooks/Handlers/AdminMenu.php:1441
-#: app/Hooks/Handlers/AdminMenu.php:1442
+#: app/Hooks/Handlers/AdminMenu.php:397 app/Hooks/Handlers/AdminMenu.php:1442
+#: app/Hooks/Handlers/AdminMenu.php:1443
 msgid "Forms"
 msgstr ""
 
@@ -1821,7 +1838,7 @@ msgctxt "full name"
 msgid "%1$s %2$s"
 msgstr ""
 
-#: app/Hooks/Handlers/AdminMenu.php:933
+#: app/Hooks/Handlers/AdminMenu.php:934
 msgid "Full Size"
 msgstr ""
 
@@ -1957,7 +1974,7 @@ msgstr ""
 msgid "Haiti"
 msgstr ""
 
-#: app/Http/Controllers/SubscriberController.php:968
+#: app/Http/Controllers/SubscriberController.php:969
 msgid "Handled could not be found."
 msgstr ""
 
@@ -1966,7 +1983,7 @@ msgid "Heard Island and McDonald Islands"
 msgstr ""
 
 #: app/Hooks/Handlers/AdminMenu.php:226 app/Hooks/Handlers/AdminMenu.php:227
-#: app/Hooks/Handlers/AdminMenu.php:1476 app/Hooks/Handlers/AdminMenu.php:1477
+#: app/Hooks/Handlers/AdminMenu.php:1477 app/Hooks/Handlers/AdminMenu.php:1478
 msgid "Help"
 msgstr ""
 
@@ -2004,7 +2021,7 @@ msgid "Iceland"
 msgstr ""
 
 #: app/Http/Controllers/CampaignAnalyticsController.php:111
-#: app/Http/Controllers/SubscriberController.php:833
+#: app/Http/Controllers/SubscriberController.php:834
 msgid "ID"
 msgstr ""
 
@@ -2042,12 +2059,20 @@ msgid ""
 msgstr ""
 
 #: app/Services/Funnel/Triggers/FluentFormSubmissionTrigger.php:181
+#: app/Services/Funnel/Triggers/FluentFormSubscriptionPaymentReceivedTrigger.php:171
 msgid ""
 "If you enable this then this will run only once per customer otherwise, It "
 "will delete the existing automation flow and start new"
 msgstr ""
 
-#: app/Services/Funnel/BaseBenchMark.php:81
+#: app/Services/Funnel/Triggers/FluentFormSubscriptionCancelledTrigger.php:105
+msgid ""
+"If you enable, then it will restart the automation for a contact if the "
+"contact already in the automation. Otherwise, It will just skip if already "
+"exist"
+msgstr ""
+
+#: app/Services/Funnel/BaseBenchMark.php:92
 msgid ""
 "If you select [Optional Point] it will work as an Optional Trigger otherwise,"
 " it will wait for full-fill this action"
@@ -2061,7 +2086,7 @@ msgid ""
 "feature"
 msgstr ""
 
-#: app/Services/Stats.php:138
+#: app/Services/Stats.php:156
 msgid "Import Contacts"
 msgstr ""
 
@@ -2167,26 +2192,26 @@ msgstr ""
 msgid "Invalid Action"
 msgstr ""
 
-#: app/Http/Controllers/SubscriberController.php:994
+#: app/Http/Controllers/SubscriberController.php:995
 msgid "Invalid Advanced Filters"
 msgstr ""
 
-#: app/Http/Controllers/SubscriberController.php:1243
+#: app/Http/Controllers/SubscriberController.php:1244
 msgid "Invalid Automation Funnel ID"
 msgstr ""
 
 #: app/Http/Controllers/FunnelController.php:620
-#: app/Http/Controllers/CampaignController.php:1051
+#: app/Http/Controllers/CampaignController.php:1056
 #: app/Http/Controllers/TemplateController.php:317
 msgid "invalid bulk action"
 msgstr ""
 
-#: app/Http/Controllers/SubscriberController.php:1119
-#: app/Http/Controllers/SubscriberController.php:1166
+#: app/Http/Controllers/SubscriberController.php:1120
+#: app/Http/Controllers/SubscriberController.php:1167
 msgid "Invalid Company ID"
 msgstr ""
 
-#: app/Hooks/Handlers/FunnelHandler.php:353
+#: app/Hooks/Handlers/FunnelHandler.php:359
 msgid "Invalid Data"
 msgstr ""
 
@@ -2194,11 +2219,11 @@ msgstr ""
 msgid "Invalid Data or Security Code"
 msgstr ""
 
-#: app/Http/Controllers/SubscriberController.php:1081
+#: app/Http/Controllers/SubscriberController.php:1082
 msgid "Invalid Email Sequence ID"
 msgstr ""
 
-#: app/Http/Controllers/CampaignController.php:528
+#: app/Http/Controllers/CampaignController.php:531
 msgid "Invalid schedule date"
 msgstr ""
 
@@ -2291,6 +2316,10 @@ msgstr ""
 msgid "keep blank for current time"
 msgstr ""
 
+#: app/Services/Funnel/Triggers/FluentFormSubscriptionCancelledTrigger.php:99
+msgid "Keep it blank to run for any form"
+msgstr ""
+
 #: app/Hooks/Handlers/CountryNames.php:485
 msgid "Kenya"
 msgstr ""
@@ -2323,12 +2352,12 @@ msgid "Label not found"
 msgstr ""
 
 #: app/Http/Controllers/FunnelController.php:615
-#: app/Http/Controllers/CampaignController.php:1031
+#: app/Http/Controllers/CampaignController.php:1036
 msgid "Labels has been applied successfully"
 msgstr ""
 
 #: app/Http/Controllers/FunnelController.php:1401
-#: app/Http/Controllers/CampaignController.php:1438
+#: app/Http/Controllers/CampaignController.php:1447
 msgid "Labels has been updated"
 msgstr ""
 
@@ -2341,7 +2370,7 @@ msgstr ""
 msgid "Laos"
 msgstr ""
 
-#: app/Services/Helper.php:743 app/Hooks/Handlers/AdminMenu.php:932
+#: app/Services/Helper.php:743 app/Hooks/Handlers/AdminMenu.php:933
 msgid "Large"
 msgstr ""
 
@@ -2585,10 +2614,12 @@ msgid "Manage your dynamic contact segments"
 msgstr ""
 
 #: app/Services/Funnel/Triggers/FluentFormSubmissionTrigger.php:90
+#: app/Services/Funnel/Triggers/FluentFormSubscriptionPaymentReceivedTrigger.php:80
 msgid "Map Other Data"
 msgstr ""
 
 #: app/Services/Funnel/Triggers/FluentFormSubmissionTrigger.php:82
+#: app/Services/Funnel/Triggers/FluentFormSubscriptionPaymentReceivedTrigger.php:72
 msgid "Map Primary Data"
 msgstr ""
 
@@ -2620,7 +2651,7 @@ msgstr ""
 msgid "Mayotte"
 msgstr ""
 
-#: app/Services/Helper.php:737 app/Hooks/Handlers/AdminMenu.php:931
+#: app/Services/Helper.php:737 app/Hooks/Handlers/AdminMenu.php:932
 msgid "Medium"
 msgstr ""
 
@@ -2788,29 +2819,29 @@ msgid ""
 "with subscribed status."
 msgstr ""
 
-#: app/Http/Controllers/CampaignController.php:691
+#: app/Http/Controllers/CampaignController.php:696
 msgid ""
 "No subscriber found to send test. Please add atleast one contact as "
 "subscribed status"
 msgstr ""
 
-#: app/Http/Controllers/SubscriberController.php:1099
-#: app/Http/Controllers/SubscriberController.php:1137
-#: app/Http/Controllers/SubscriberController.php:1184
-#: app/Http/Controllers/SubscriberController.php:1261
+#: app/Http/Controllers/SubscriberController.php:1100
+#: app/Http/Controllers/SubscriberController.php:1138
+#: app/Http/Controllers/SubscriberController.php:1185
+#: app/Http/Controllers/SubscriberController.php:1262
 msgid "No valid active subscribers found for this chunk"
 msgstr ""
 
-#: app/Http/Controllers/SubscriberController.php:1142
-#: app/Http/Controllers/SubscriberController.php:1189
+#: app/Http/Controllers/SubscriberController.php:1143
+#: app/Http/Controllers/SubscriberController.php:1190
 msgid "No valid active subscribers found for this company"
 msgstr ""
 
-#: app/Http/Controllers/SubscriberController.php:1266
+#: app/Http/Controllers/SubscriberController.php:1267
 msgid "No valid active subscribers found for this funnel"
 msgstr ""
 
-#: app/Http/Controllers/SubscriberController.php:1103
+#: app/Http/Controllers/SubscriberController.php:1104
 msgid "No valid active subscribers found for this sequence"
 msgstr ""
 
@@ -2847,17 +2878,17 @@ msgstr ""
 msgid "Note has been successfully added"
 msgstr ""
 
-#: app/Http/Controllers/SubscriberController.php:700
+#: app/Http/Controllers/SubscriberController.php:701
 msgid "Note successfully added"
 msgstr ""
 
 #: app/Http/Controllers/CompanyController.php:709
-#: app/Http/Controllers/SubscriberController.php:770
+#: app/Http/Controllers/SubscriberController.php:771
 msgid "Note successfully deleted"
 msgstr ""
 
 #: app/Http/Controllers/CompanyController.php:690
-#: app/Http/Controllers/SubscriberController.php:751
+#: app/Http/Controllers/SubscriberController.php:752
 msgid "Note successfully updated"
 msgstr ""
 
@@ -2980,6 +3011,7 @@ msgstr ""
 
 #: app/Functions/helpers.php:508 app/Functions/helpers.php:559
 #: app/Services/Helper.php:1673
+#: app/Services/Funnel/Triggers/FluentFormSubscriptionCancelledTrigger.php:58
 msgid "Pending"
 msgstr ""
 
@@ -3106,16 +3138,20 @@ msgid ""
 "Bounce Handling with FluentCRM"
 msgstr ""
 
+#: app/Http/Controllers/SubscriberController.php:1313
+msgid "Please provide a valid custom field key"
+msgstr ""
+
 #: app/Hooks/Handlers/ExternalPages.php:434
 #: app/Hooks/Handlers/ExternalPages.php:488
 msgid "Please provide a valid email address"
 msgstr ""
 
-#: app/Http/Controllers/SubscriberController.php:1351
+#: app/Http/Controllers/SubscriberController.php:1393
 msgid "Please provide bulk options"
 msgstr ""
 
-#: app/Http/Controllers/CampaignController.php:1011
+#: app/Http/Controllers/CampaignController.php:1016
 msgid "Please provide campaign IDs"
 msgstr ""
 
@@ -3140,7 +3176,7 @@ msgid "Please provide label slug"
 msgstr ""
 
 #: app/Http/Controllers/FunnelController.php:604
-#: app/Http/Controllers/CampaignController.php:1020
+#: app/Http/Controllers/CampaignController.php:1025
 msgid "Please provide labels"
 msgstr ""
 
@@ -3151,7 +3187,7 @@ msgstr ""
 #: app/Http/Controllers/FunnelController.php:553
 #: app/Http/Controllers/CompanyController.php:380
 #: app/Http/Controllers/TemplateController.php:287
-#: app/Http/Controllers/SubscriberController.php:1212
+#: app/Http/Controllers/SubscriberController.php:1213
 msgid "Please select status"
 msgstr ""
 
@@ -3236,8 +3272,8 @@ msgstr ""
 msgid "Provide Email Body for the double-optin"
 msgstr ""
 
-#: app/Http/Controllers/SubscriberController.php:314
-#: app/Http/Controllers/SubscriberController.php:395
+#: app/Http/Controllers/SubscriberController.php:315
+#: app/Http/Controllers/SubscriberController.php:396
 msgid "Provided email already assigned to another subscriber."
 msgstr ""
 
@@ -3289,11 +3325,11 @@ msgstr ""
 msgid "Raw HTML"
 msgstr ""
 
-#: app/Http/Controllers/CampaignController.php:292
+#: app/Http/Controllers/CampaignController.php:295
 msgid "Recipient settings has been updated"
 msgstr ""
 
-#: app/Services/Stats.php:87 app/Hooks/Handlers/AdminMenu.php:132
+#: app/Services/Stats.php:96 app/Hooks/Handlers/AdminMenu.php:132
 #: app/Hooks/Handlers/AdminMenu.php:133 app/Hooks/Handlers/AdminMenu.php:367
 msgid "Recurring Campaigns"
 msgstr ""
@@ -3360,8 +3396,8 @@ msgid "Removed from funnel successfully"
 msgstr ""
 
 #: app/Hooks/Handlers/AdminMenu.php:195 app/Hooks/Handlers/AdminMenu.php:196
-#: app/Hooks/Handlers/AdminMenu.php:425 app/Hooks/Handlers/AdminMenu.php:1455
-#: app/Hooks/Handlers/AdminMenu.php:1456
+#: app/Hooks/Handlers/AdminMenu.php:425 app/Hooks/Handlers/AdminMenu.php:1456
+#: app/Hooks/Handlers/AdminMenu.php:1457
 msgid "Reports"
 msgstr ""
 
@@ -3371,6 +3407,12 @@ msgstr ""
 
 #: app/views/external/unsubscribe_request_form.php:13
 msgid "Request Unsubscribe"
+msgstr ""
+
+#: app/Services/Funnel/Triggers/FluentFormSubscriptionCancelledTrigger.php:104
+msgid ""
+"Restart the Automation Multiple times for a contact for this event. (Only "
+"enable if you want to restart automation for the same contact)"
 msgstr ""
 
 #: app/Http/Controllers/ImporterController.php:337
@@ -3407,6 +3449,7 @@ msgid ""
 msgstr ""
 
 #: app/Services/Funnel/Triggers/FluentFormSubmissionTrigger.php:180
+#: app/Services/Funnel/Triggers/FluentFormSubscriptionPaymentReceivedTrigger.php:170
 msgid ""
 "Run this automation only once per contact. If unchecked then it will over-"
 "write existing flow"
@@ -3544,6 +3587,8 @@ msgstr ""
 
 #: app/Services/Funnel/Triggers/FluentFormSubmissionTrigger.php:93
 #: app/Services/Funnel/Triggers/FluentFormSubmissionTrigger.php:95
+#: app/Services/Funnel/Triggers/FluentFormSubscriptionPaymentReceivedTrigger.php:83
+#: app/Services/Funnel/Triggers/FluentFormSubscriptionPaymentReceivedTrigger.php:85
 msgid "Select Contact Property"
 msgstr ""
 
@@ -3568,10 +3613,12 @@ msgid "Select FluentCRM List"
 msgstr ""
 
 #: app/Services/Funnel/Triggers/FluentFormSubmissionTrigger.php:94
+#: app/Services/Funnel/Triggers/FluentFormSubscriptionPaymentReceivedTrigger.php:84
 msgid "Select Form Field"
 msgstr ""
 
 #: app/Services/Funnel/Triggers/FluentFormSubmissionTrigger.php:96
+#: app/Services/Funnel/Triggers/FluentFormSubscriptionPaymentReceivedTrigger.php:86
 msgid "Select Form Property"
 msgstr ""
 
@@ -3599,7 +3646,9 @@ msgid "Select Roles"
 msgstr ""
 
 #: app/Services/Funnel/Triggers/FluentFormSubmissionTrigger.php:113
+#: app/Services/Funnel/Triggers/FluentFormSubscriptionPaymentReceivedTrigger.php:103
 #: app/Services/Funnel/Triggers/UserRegistrationTrigger.php:47
+#: app/Services/Funnel/Triggers/FluentFormSubscriptionCancelledTrigger.php:62
 msgid "Select Status"
 msgstr ""
 
@@ -3684,19 +3733,20 @@ msgid "Select which tag will be added to the contact"
 msgstr ""
 
 #: app/Services/Funnel/Triggers/FluentFormSubmissionTrigger.php:78
+#: app/Services/Funnel/Triggers/FluentFormSubscriptionPaymentReceivedTrigger.php:68
 msgid "Select your form"
 msgstr ""
 
-#: app/Http/Controllers/SubscriberController.php:1315
+#: app/Http/Controllers/SubscriberController.php:1357
 msgid "Selected Action is not valid"
 msgstr ""
 
 #: app/Http/Controllers/CompanyController.php:441
-#: app/Http/Controllers/SubscriberController.php:1366
+#: app/Http/Controllers/SubscriberController.php:1408
 msgid "Selected bulk action has been successfully completed"
 msgstr ""
 
-#: app/Http/Controllers/CampaignController.php:1046
+#: app/Http/Controllers/CampaignController.php:1051
 msgid "Selected Campaigns has been deleted permanently"
 msgstr ""
 
@@ -3708,7 +3758,7 @@ msgstr ""
 msgid "Selected Companies has been deleted permanently"
 msgstr ""
 
-#: app/Http/Controllers/SubscriberController.php:1061
+#: app/Http/Controllers/SubscriberController.php:1062
 msgid "Selected Contacts has been deleted permanently"
 msgstr ""
 
@@ -3716,12 +3766,12 @@ msgstr ""
 msgid "Selected CRON Event successfully ran"
 msgstr ""
 
-#: app/Http/Controllers/CampaignController.php:461
+#: app/Http/Controllers/CampaignController.php:464
 msgid "Selected emails are deleted"
 msgstr ""
 
 #: app/Http/Controllers/ReportingController.php:90
-#: app/Http/Controllers/SubscriberController.php:627
+#: app/Http/Controllers/SubscriberController.php:628
 msgid "Selected emails has been deleted"
 msgstr ""
 
@@ -3733,11 +3783,11 @@ msgstr ""
 msgid "Selected Lists has been removed permanently"
 msgstr ""
 
-#: app/Http/Controllers/SubscriberController.php:242
+#: app/Http/Controllers/SubscriberController.php:243
 msgid "Selected Subscriber has been deleted successfully"
 msgstr ""
 
-#: app/Http/Controllers/SubscriberController.php:258
+#: app/Http/Controllers/SubscriberController.php:259
 msgid "Selected Subscribers has been deleted"
 msgstr ""
 
@@ -3806,7 +3856,7 @@ msgid "Senegal"
 msgstr ""
 
 #: app/Http/Controllers/FunnelController.php:347
-#: app/Hooks/Handlers/FunnelHandler.php:241
+#: app/Hooks/Handlers/FunnelHandler.php:247
 msgid "Sequence successfully updated"
 msgstr ""
 
@@ -3832,8 +3882,8 @@ msgid "Set Tag"
 msgstr ""
 
 #: app/Hooks/Handlers/AdminMenu.php:186 app/Hooks/Handlers/AdminMenu.php:187
-#: app/Hooks/Handlers/AdminMenu.php:431 app/Hooks/Handlers/AdminMenu.php:1462
-#: app/Hooks/Handlers/AdminMenu.php:1463
+#: app/Hooks/Handlers/AdminMenu.php:431 app/Hooks/Handlers/AdminMenu.php:1463
+#: app/Hooks/Handlers/AdminMenu.php:1464
 msgid "Settings"
 msgstr ""
 
@@ -3926,7 +3976,7 @@ msgstr ""
 msgid "Something is wrong"
 msgstr ""
 
-#: app/Http/Controllers/SubscriberController.php:377
+#: app/Http/Controllers/SubscriberController.php:378
 msgid "Sorry contact already exist"
 msgstr ""
 
@@ -3950,7 +4000,7 @@ msgstr ""
 msgid "Sorry! No subscriber found in the database"
 msgstr ""
 
-#: app/Http/Controllers/CampaignController.php:246
+#: app/Http/Controllers/CampaignController.php:249
 msgid "Sorry! No subscribers found based on your selection"
 msgstr ""
 
@@ -3973,8 +4023,8 @@ msgstr ""
 msgid "Sorry, No email found based on your data"
 msgstr ""
 
-#: app/Http/Controllers/CampaignController.php:380
-#: app/Http/Controllers/CampaignController.php:408
+#: app/Http/Controllers/CampaignController.php:383
+#: app/Http/Controllers/CampaignController.php:411
 msgid "Sorry, No subscribers found based on your filters"
 msgstr ""
 
@@ -4004,9 +4054,9 @@ msgstr ""
 msgid "Sorry, You do not have permission to delete REST API"
 msgstr ""
 
-#: app/Hooks/Handlers/FunnelHandler.php:228
-#: app/Hooks/Handlers/FunnelHandler.php:284
-#: app/Hooks/Handlers/FunnelHandler.php:342
+#: app/Hooks/Handlers/FunnelHandler.php:234
+#: app/Hooks/Handlers/FunnelHandler.php:290
+#: app/Hooks/Handlers/FunnelHandler.php:348
 msgid "Sorry, You do not have permission to do this action"
 msgstr ""
 
@@ -4086,7 +4136,7 @@ msgstr ""
 msgid "Status has been changed for the selected funnels"
 msgstr ""
 
-#: app/Http/Controllers/SubscriberController.php:1230
+#: app/Http/Controllers/SubscriberController.php:1231
 msgid "Status has been changed for the selected subscribers"
 msgstr ""
 
@@ -4099,7 +4149,7 @@ msgstr ""
 msgid "Status has been updated to %s"
 msgstr ""
 
-#: app/Http/Controllers/CampaignController.php:233
+#: app/Http/Controllers/CampaignController.php:236
 msgid "step saved"
 msgstr ""
 
@@ -4109,6 +4159,7 @@ msgid "Subscribe to newsletter"
 msgstr ""
 
 #: app/Functions/helpers.php:507 app/Functions/helpers.php:558
+#: app/Services/Funnel/Triggers/FluentFormSubscriptionCancelledTrigger.php:54
 msgid "Subscribed"
 msgstr ""
 
@@ -4124,11 +4175,11 @@ msgstr ""
 msgid "Subscriber double opt-in confirmed"
 msgstr ""
 
-#: app/Http/Controllers/SubscriberController.php:107
+#: app/Http/Controllers/SubscriberController.php:108
 msgid "Subscriber not found"
 msgstr ""
 
-#: app/Http/Controllers/SubscriberController.php:487
+#: app/Http/Controllers/SubscriberController.php:488
 msgid "Subscriber successfully updated"
 msgstr ""
 
@@ -4137,7 +4188,7 @@ msgstr ""
 msgid "Subscriber unsubscribed from IP Address: %1s <br />Reason: %2s"
 msgstr ""
 
-#: app/Http/Controllers/SubscriberController.php:889
+#: app/Http/Controllers/SubscriberController.php:890
 msgid "Subscriber's status need to be subscribed."
 msgstr ""
 
@@ -4149,16 +4200,32 @@ msgstr ""
 msgid "Subscribers"
 msgstr ""
 
-#: app/Http/Controllers/SubscriberController.php:1052
+#: app/Http/Controllers/SubscriberController.php:1053
 msgid "Subscribers selection is required"
 msgstr ""
 
-#: app/Http/Controllers/SubscriberController.php:231
+#: app/Http/Controllers/SubscriberController.php:232
 msgid "Subscribers successfully updated"
+msgstr ""
+
+#: app/Services/Funnel/Triggers/FluentFormSubscriptionCancelledTrigger.php:29
+msgid "Subscription Cancelled (Fluent Forms)"
+msgstr ""
+
+#: app/Services/Funnel/Triggers/FluentFormSubscriptionCancelledTrigger.php:45
+msgid "Subscription Cancelled Funnel"
 msgstr ""
 
 #: app/Http/Controllers/FormsController.php:310
 msgid "Subscription Form"
+msgstr ""
+
+#: app/Services/Funnel/Triggers/FluentFormSubscriptionPaymentReceivedTrigger.php:63
+msgid "Subscription Payment Received"
+msgstr ""
+
+#: app/Services/Funnel/Triggers/FluentFormSubscriptionPaymentReceivedTrigger.php:30
+msgid "Subscription Payment Received (Fluent Forms)"
 msgstr ""
 
 #: app/Hooks/CLI/Commands.php:140
@@ -4166,7 +4233,9 @@ msgid "Subscription Payments"
 msgstr ""
 
 #: app/Services/Funnel/Triggers/FluentFormSubmissionTrigger.php:112
+#: app/Services/Funnel/Triggers/FluentFormSubscriptionPaymentReceivedTrigger.php:102
 #: app/Services/Funnel/Triggers/UserRegistrationTrigger.php:46
+#: app/Services/Funnel/Triggers/FluentFormSubscriptionCancelledTrigger.php:61
 msgid "Subscription Status"
 msgstr ""
 
@@ -4179,7 +4248,7 @@ msgstr ""
 msgid "success"
 msgstr ""
 
-#: app/Http/Controllers/SubscriberController.php:357
+#: app/Http/Controllers/SubscriberController.php:358
 msgid "Successfully added the subscriber."
 msgstr ""
 
@@ -4213,7 +4282,7 @@ msgstr ""
 msgid "Successfully saved the tags."
 msgstr ""
 
-#: app/Http/Controllers/SubscriberController.php:295
+#: app/Http/Controllers/SubscriberController.php:296
 msgid "Successfully updated the "
 msgstr ""
 
@@ -4302,6 +4371,10 @@ msgstr ""
 msgid "Tanzania"
 msgstr ""
 
+#: app/Services/Funnel/Triggers/FluentFormSubscriptionCancelledTrigger.php:97
+msgid "Target Forms"
+msgstr ""
+
 #: app/Services/RoleBasedTagging.php:58
 msgid "Target User Role"
 msgstr ""
@@ -4322,7 +4395,7 @@ msgstr ""
 msgid "Template successfully updated"
 msgstr ""
 
-#: app/Http/Controllers/CampaignController.php:810
+#: app/Http/Controllers/CampaignController.php:815
 msgid "Test email successfully sent to "
 msgstr ""
 
@@ -4394,8 +4467,8 @@ msgid ""
 "SendGrid, Mailgun, SES, Sendinblue, PepiPost, Google, Microsoft and more."
 msgstr ""
 
-#: app/Http/Controllers/SubscriberController.php:1073
-#: app/Http/Controllers/SubscriberController.php:1235
+#: app/Http/Controllers/SubscriberController.php:1074
+#: app/Http/Controllers/SubscriberController.php:1236
 msgid "This action requires FluentCRM Pro"
 msgstr ""
 
@@ -4419,6 +4492,20 @@ msgstr ""
 msgid ""
 "This Funnel will be initiated when a new user has been registered in your "
 "site"
+msgstr ""
+
+#: app/Services/Funnel/Triggers/FluentFormSubscriptionCancelledTrigger.php:30
+#: app/Services/Funnel/Triggers/FluentFormSubscriptionCancelledTrigger.php:46
+msgid ""
+"This Funnel will be initiated when a subscription is cancelled via Fluent "
+"Forms."
+msgstr ""
+
+#: app/Services/Funnel/Triggers/FluentFormSubscriptionPaymentReceivedTrigger.php:31
+#: app/Services/Funnel/Triggers/FluentFormSubscriptionPaymentReceivedTrigger.php:64
+msgid ""
+"This Funnel will be initiated when a subscription payment is successfully "
+"received through Fluent Forms."
 msgstr ""
 
 #: app/Http/Controllers/SettingsController.php:156
@@ -4445,7 +4532,7 @@ msgstr ""
 msgid "This will run when selected Tags have been removed from a contact"
 msgstr ""
 
-#: app/Hooks/Handlers/AdminMenu.php:930
+#: app/Hooks/Handlers/AdminMenu.php:931
 msgid "Thumbnail"
 msgstr ""
 
@@ -4682,8 +4769,8 @@ msgstr ""
 
 #: app/Http/Controllers/CompanyController.php:294
 #: app/Http/Controllers/CompanyController.php:298
-#: app/Http/Controllers/SubscriberController.php:204
-#: app/Http/Controllers/SubscriberController.php:208
+#: app/Http/Controllers/SubscriberController.php:205
+#: app/Http/Controllers/SubscriberController.php:209
 msgid "Value is not valid"
 msgstr ""
 
@@ -4703,7 +4790,7 @@ msgstr ""
 msgid "verify_key verification failed"
 msgstr ""
 
-#: app/Services/Stats.php:102
+#: app/Services/Stats.php:111
 msgid "Video Tutorials (Free)"
 msgstr ""
 
@@ -4831,6 +4918,14 @@ msgstr ""
 msgid "White"
 msgstr ""
 
+#: app/Services/ExternalIntegrations/FluentForm/FluentFormInit.php:102
+msgid "Will be billed until cancelled"
+msgstr ""
+
+#: app/Services/ExternalIntegrations/FluentForm/FluentFormInit.php:100
+msgid "Will be cancelled after %d payments. (%d/%d)"
+msgstr ""
+
 #: app/Http/Controllers/ImporterController.php:328
 msgid "Wishlist member"
 msgstr ""
@@ -4925,26 +5020,26 @@ msgid ""
 "Advanced"
 msgstr ""
 
-#: app/Http/Controllers/CampaignController.php:1262
+#: app/Http/Controllers/CampaignController.php:1271
 msgid ""
 "You can only pause a campaign if it is on \"Working\" state, Please reload "
 "this page"
 msgstr ""
 
-#: app/Http/Controllers/CampaignController.php:1289
+#: app/Http/Controllers/CampaignController.php:1298
 msgid ""
 "You can only resume a campaign if it is on \"paused\" state, Please reload "
 "this page"
 msgstr ""
 
-#: app/Http/Controllers/CampaignController.php:1386
-#: app/Http/Controllers/CampaignController.php:1392
+#: app/Http/Controllers/CampaignController.php:1395
+#: app/Http/Controllers/CampaignController.php:1401
 msgid ""
 "You can only un-schedule a campaign if it is on \"scheduled\" state, Please "
 "reload this page"
 msgstr ""
 
-#: app/Http/Controllers/CampaignController.php:544
+#: app/Http/Controllers/CampaignController.php:547
 msgid "Your campaign email has been scheduled"
 msgstr ""
 

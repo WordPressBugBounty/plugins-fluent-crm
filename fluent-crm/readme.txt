@@ -4,7 +4,7 @@ Tags: email marketing, newsletter, crm, email newsletter, subscribers
 Requires at least: 5.0
 Tested up to: 6.7
 Requires PHP: 7.3
-Stable tag: 2.9.40
+Stable tag: 2.9.45
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -258,6 +258,26 @@ You can report any security bugs found in the source code of FluentCRM plugins t
 10. Pro Integrations
 
 == Changelog ==
+
+= 2.9.45 (Date: February 24, 2025) =
+New: Subscription Cancelled Trigger (Fluent Forms)
+New: Subscription Payment Received Trigger (Fluent Forms)
+New: FluentForm Subscriptions Widget in Contact Profile
+New: Update Custom Fields Using Bulk Actions
+New: Filter option for failed emails
+New: Show non-recurring memberships in MemberPress Widget
+New: Woo Subscription Cancelled trigger
+New: Option to sort custom fields
+New: Wishlist Membership Widget in Contact Profile
+Improvement: The slug retains one character even after the title is cleared
+Improvement: Display which user sent the campaign
+Improvement: All tables with adjustable column widths
+Improvement: Redesigned the Addons section with improved UI/UX
+Improvement: Added tooltip for Skipped AB cart status
+Improvement: Added a button to copy the bounce handler URL
+Fixed: Custom numeric field filter issue
+Fixed: WooCommerce Coupon Discount amount not working
+Other Improvements & Bug Fixes
 
 = 2.9.40 (Date: January 22, 2025) =
 New: Quick Search in Automation Actions, Benchmarks, Goals

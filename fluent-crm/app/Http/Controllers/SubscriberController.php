@@ -10,6 +10,7 @@ use FluentCrm\App\Models\CustomEmailCampaign;
 use FluentCrm\App\Models\EventTracker;
 use FluentCrm\App\Models\Funnel;
 use FluentCrm\App\Models\Subscriber;
+use FluentCrm\App\Models\SubscriberMeta;
 use FluentCrm\App\Models\SubscriberNote;
 use FluentCrm\App\Models\SubscriberPivot;
 use FluentCrm\App\Services\AutoSubscribe;
@@ -1300,6 +1301,47 @@ class SubscriberController extends Controller
                 'last_contact_id'    => $lastContactId,
                 'completed_contacts' => count($subscriberIds),
                 'message'            => __('Contact Type has been updated for the selected subscribers', 'fluent-crm')
+            ];
+        } else if ($actionName == 'update_custom_fields') {
+            $customField      = $request->get('custom_field');
+            $customFieldKey   = Arr::get($customField, 'key');
+            $customFieldValue = Arr::get($customField, 'value');
+            $subscribers      = Subscriber::whereIn('id', $subscriberIds)->get();
+
+            if (empty($customFieldKey)) {
+                return $this->sendError([
+                    'message' => __('Please provide a valid custom field key', 'fluent-crm')
+                ]);
+            }
+
+            foreach ($subscribers as $subscriber) {
+                $existField = SubscriberMeta::where('key', $customFieldKey)
+                    ->where('subscriber_id', $subscriber->id)
+                    ->first();
+
+                // check if exists
+                if ($existField) {
+                    if ($existField->value == $customFieldValue) {
+                        continue;
+                    }
+                    $existField->fill(['value' => $customFieldValue])->save();
+                } else {
+                    $customFieldMeta = new SubscriberMeta();
+                    $customFieldMeta->fill([
+                        'subscriber_id' => $subscriber->id,
+                        'object_type'   => 'custom_field',
+                        'key'           => $customFieldKey,
+                        'value'         => $customFieldValue,
+                        'created_by'    => get_current_user_id()
+                    ]);
+                    $customFieldMeta->save();
+                }
+            }
+
+            return [
+                'last_contact_id'    => $lastContactId,
+                'completed_contacts' => count($subscriberIds),
+                'message'            => __('Custom Fields has been updated for the selected subscribers', 'fluent-crm')
             ];
         }
 

@@ -90,7 +90,9 @@ class UrlStores extends Model
                 $num = self::bcDivFallBack($num, $len);
             }
 
-            $string = $chars[$mod] . $string;
+            if (isset($chars[$mod])) {
+                $string = $chars[$mod] . $string;
+            }
         }
 
         return $chars[intval($num)] . $string;

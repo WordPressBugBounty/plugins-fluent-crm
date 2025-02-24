@@ -70,6 +70,15 @@ class Stats
             ];
         }
 
+        /**
+         * Filter the dashboard statistics data.
+         *
+         * This filter allows modification of the dashboard statistics data before it is returned.
+         *
+         * @since 2.7.0
+         *
+         * @param array $data The dashboard statistics data.
+         */
         return apply_filters('fluent_crm/dashboard_stats', $data);
     }
 
@@ -106,6 +115,15 @@ class Stats
             ]
         ];
 
+        /**
+         * Filter the quick links in FluentCRM.
+         *
+         * This filter allows modification of the quick links array in FluentCRM.
+         *
+         * @since 2.7.1
+         *
+         * @param array $quickLinks An array of quick links.
+         */
         return apply_filters('fluent_crm/quick_links', $quickLinks);
     }
 
