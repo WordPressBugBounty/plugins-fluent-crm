@@ -236,7 +236,9 @@ class FunnelProcessor
     {
         update_option('_fc_last_funnel_processor_ran', time(), 'no');
 
-        $jobs = FunnelSubscriber::where('status', 'active')
+        $statuses = apply_filters('fluent_crm/funnel_subscriber_statuses', ['active']);
+
+        $jobs = FunnelSubscriber::whereIn('status', $statuses)
             ->whereHas('funnel', function ($q) {
                 return $q->where('status', 'published');
             })

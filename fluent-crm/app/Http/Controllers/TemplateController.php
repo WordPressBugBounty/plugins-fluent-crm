@@ -372,4 +372,79 @@ class TemplateController extends Controller
             'message' => 'Global style settings has been updated'
         ];
     }
+
+
+    /**
+     * Fetches built-in templates from a WordPress REST API endpoint.
+     *
+     * @return array An array containing information about the templates.
+     */
+    public function getBuiltInTemplates()
+    {
+        $restApi = 'https://fluentcrm.com/wp-json/wp/v2/';
+
+        // Make a GET request to retrieve CRM templates
+        $request = wp_remote_get($restApi.'crm-templates?template_type=email_template', [
+            'sslverify' => false,
+        ]);
+
+        // Check if the request resulted in an error
+        if (is_wp_error($request)) {
+            // Handle error
+            error_log($request->get_error_message());
+            return [];
+        }
+
+        // Decode the JSON response from the request
+        $templateLists = json_decode(wp_remote_retrieve_body($request), true);
+        $formattedTemplates = [];
+
+        foreach ($templateLists as $template) {
+            if (!$template['template_json']) {
+                // Skip if no template json
+                continue;
+            }
+            $mediaURL = '';
+            if ($template['featured_media'] != 0) {
+                $mediaURL = $this->getMediaURL($template['featured_media'], $restApi);
+            }
+            $formattedTemplates[] = [
+                'id'                => $template['id'],
+                'title'             => $template['title']['rendered'],
+                'content'           => $template['template_json'],
+                'short_description' => $template['short_description'],
+                'link'              => $template['link'],
+                'media_url'         => $mediaURL,
+                'status'            => $template['status'],
+            ];
+        }
+
+        // Return a success response with the formatted templates
+        return $this->sendSuccess([
+            'templates' => $formattedTemplates
+        ]);
+    }
+
+
+    /**
+     * Retrieves the full source URL of a media item.
+     *
+     * @param int    $mediaID Media item ID.
+     * @param string $restAPI The base URL of the REST API.
+     *
+     * @return string Full source URL of the media item.
+     */
+    public function getMediaURL($mediaID, $restAPI) {
+        $request = wp_remote_get($restAPI.'media/'.$mediaID);
+
+        // Check for request errors
+        if (is_wp_error($request)) {
+            return '';
+        }
+
+        $image = json_decode($request['body'], true);
+        $img   = Arr::get($image, 'source_url');
+
+        return $img;
+    }
 }

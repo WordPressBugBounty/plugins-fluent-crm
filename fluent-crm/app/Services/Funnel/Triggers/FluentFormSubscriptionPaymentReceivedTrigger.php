@@ -19,14 +19,14 @@ class FluentFormSubscriptionPaymentReceivedTrigger extends BaseTrigger
 
         $this->actionArgNum = 2;
         $this->triggerName = 'fluentform/subscription_payment_active';
-        $this->priority = 20;
+        $this->priority = 25;
         parent::__construct();
     }
 
     public function getTrigger()
     {
         return [
-            'category'    => __('FluentForms', 'fluent-crm'),
+            'category'    => __('Fluent Forms', 'fluent-crm'),
             'label'       => __('Subscription Payment Received (Fluent Forms)', 'fluent-crm'),
             'description' => __('This Funnel will be initiated when a subscription payment is successfully received through Fluent Forms.', 'fluent-crm'),
             'icon'        => 'fc-icon-fluentforms',

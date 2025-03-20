@@ -1015,7 +1015,7 @@ class FunnelController extends Controller
             $categories[] = 'fluent-support';
         }
 
-        if(defined('FLUENT_BOOKING')) {
+        if(defined('FLUENT_BOOKING_VERSION')) {
             $categories[] = 'fluent-booking';
         }
 

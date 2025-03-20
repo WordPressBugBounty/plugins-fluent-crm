@@ -57,9 +57,13 @@ class AdminMenu
             $isAdmin = true;
         }
 
+        $title = __('FluentCRM', 'fluent-crm');
+        if (defined('FLUENTCAMPAIGN')) {
+            $title = __('FluentCRM Pro', 'fluent-crm');
+        }
         add_menu_page(
-            __('FluentCRM', 'fluent-crm'),
-            __('FluentCRM', 'fluent-crm'),
+            $title,
+            $title,
             $dashboardPermission,
             'fluentcrm-admin',
             array($this, 'render'),

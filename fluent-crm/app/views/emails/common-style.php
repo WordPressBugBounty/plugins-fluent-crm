@@ -53,6 +53,12 @@ if(fluentcrm_is_rtl()) {
         padding-left: <?php echo esc_attr($contentPadding); ?>px !important;
         padding-right: <?php echo esc_attr($contentPadding); ?>px !important;
     }
+    .fc_email_body *,
+    .fc_email_body *:after,
+    .fc_email_body *:before,
+    .fc_email_body {
+        box-sizing: border-box;
+    }
 
     #templateFooter .fcTextContent, #templateFooter .fcTextContent p {
         font-size: 12px;

@@ -330,6 +330,7 @@ class Subscriber extends Model
         )
             ->wherePivot('object_type', $class)
             ->withPivot('object_type')
+            ->orderBy('title', 'ASC')
             ->withTimestamps();
     }
 
@@ -502,6 +503,7 @@ class Subscriber extends Model
         )
             ->wherePivot('object_type', $class)
             ->withPivot('object_type')
+            ->orderBy('title', 'ASC')
             ->withTimestamps();
     }
 

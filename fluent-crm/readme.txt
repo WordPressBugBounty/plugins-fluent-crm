@@ -4,7 +4,7 @@ Tags: email marketing, newsletter, crm, email newsletter, subscribers
 Requires at least: 5.0
 Tested up to: 6.7
 Requires PHP: 7.3
-Stable tag: 2.9.45
+Stable tag: 2.9.48
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -258,6 +258,25 @@ You can report any security bugs found in the source code of FluentCRM plugins t
 10. Pro Integrations
 
 == Changelog ==
+
+= 2.9.48 (Date: March 20, 2025) =
+New: Re-apply Option for Completed Sequence
+New: Tags and Lists are now searchable in Dynamic Selection
+New: Selectable Custom Fields now Editable & Sortable
+New: Smartcodes for WooCommerce Subscription Triggers
+Improvement: Added Copy email and phone from contact lists
+Improvement: Tags and lists display in ascending order
+Improvement: LearnPress course finished hook Updated
+Improvement: LatestPostBlock now displays all custom post types
+improvement: Added currency to Shipping and Tax Total
+Improvement: Introduced Filter to manage new bounced email
+Improvement: Tags and subscriber lists now sorted in ascending order
+Improvement: Added operator type selection for taxonomy filters in LatestPost Block
+Fixed: Padding, Margin, and Line-Height issues inside Column block
+Fixed: Dynamic coupon amount issue with existing template
+Fixed: Excerpt length of LatestPostBlock issue
+Fixed: UpdateContactProperty Action float subtraction issue
+Other Improvements & Bug Fixes
 
 = 2.9.45 (Date: February 24, 2025) =
 New: Subscription Cancelled Trigger (Fluent Forms)

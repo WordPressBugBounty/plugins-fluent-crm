@@ -144,6 +144,7 @@ $router->prefix('templates')->withPolicy('TemplatePolicy')->group(function ($rou
     $router->post('do-bulk-action', 'TemplateController@handleBulkAction');
 
     $router->post('set-global-style', 'TemplateController@setGlobalStyle');
+    $router->get('/built-in-templates', 'TemplateController@getBuiltInTemplates');
 
 });
 

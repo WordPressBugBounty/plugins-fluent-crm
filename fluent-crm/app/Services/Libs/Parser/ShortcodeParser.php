@@ -327,6 +327,12 @@ class ShortcodeParser
 
             if ($timestamp && in_array($matchedObject['type'], ['date', 'date_time'])) {
                 $date_format = get_option('date_format');
+
+                if ($matchedObject['type'] === 'date_time') {
+                    $time_format = get_option('time_format');
+                    $date_format .= ' ' . $time_format; // Append time format
+                }
+
                 $formattedValue = date_i18n($date_format, $timestamp);
             }
             return $formattedValue;

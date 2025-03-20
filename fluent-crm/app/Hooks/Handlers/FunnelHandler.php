@@ -174,8 +174,8 @@ class FunnelHandler
         new UserRegistrationTrigger();
         new FluentFormSubmissionTrigger();
         if (defined('FLUENTFORMPRO'))  {
-            new FluentFormSubscriptionCancelledTrigger();
             new FluentFormSubscriptionPaymentReceivedTrigger();
+            new FluentFormSubscriptionCancelledTrigger();
         }
     }
 

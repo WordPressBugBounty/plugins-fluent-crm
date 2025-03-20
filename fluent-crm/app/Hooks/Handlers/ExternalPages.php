@@ -198,19 +198,23 @@ class ExternalPages
                 fluentcrm_update_subscriber_meta($subscriber->id, $key, $data['reason']);
                 do_action('fluentcrm_subscriber_status_to_' . $data['status'], $subscriber, $oldStatus);
             } else {
-                $contactData = Arr::only($data, ['email', 'status']);
-                if (!isset($contactData['created_at'])) {
-                    $contactData['created_at'] = current_time('mysql');
+                $willStore = apply_filters('fluent_crm/bounced_email_store', true);
+
+                if ($willStore) {
+                    $contactData = Arr::only($data, ['email', 'status']);
+                    if (!isset($contactData['created_at'])) {
+                        $contactData['created_at'] = current_time('mysql');
+                    }
+
+                    $key = 'reason';
+
+                    if ($data['status'] == 'unsubscribed') {
+                        $key = 'unsubscribe_reason';
+                    }
+
+                    $contact = Subscriber::store($contactData);
+                    fluentcrm_update_subscriber_meta($contact->id, $key, $data['reason']);
                 }
-
-                $key = 'reason';
-
-                if ($data['status'] == 'unsubscribed') {
-                    $key = 'unsubscribe_reason';
-                }
-
-                $contact = Subscriber::store($contactData);
-                fluentcrm_update_subscriber_meta($contact->id, $key, $data['reason']);
             }
             return true;
         }

@@ -18,14 +18,14 @@ class FluentFormSubscriptionCancelledTrigger extends BaseTrigger
 
         $this->actionArgNum = 3;
         $this->triggerName = 'fluentform/subscription_payment_canceled';
-        $this->priority = 20;
+        $this->priority = 25;
         parent::__construct();
     }
 
     public function getTrigger()
     {
         return [
-            'category'    => __('FluentForms', 'fluent-crm'),
+            'category'    => __('Fluent Forms', 'fluent-crm'),
             'label'       => __('Subscription Cancelled (Fluent Forms)', 'fluent-crm'),
             'description' => __('This Funnel will be initiated when a subscription is cancelled via Fluent Forms.', 'fluent-crm'),
             'icon'        => 'fc-icon-fluentforms',
