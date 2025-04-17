@@ -16,12 +16,20 @@ class CampaignProcessor
         $this->campaignId = $campaignId;
         /*
          * We want to send emails real time if memory limit is more than 500MB and current usage is less than 60%
+         * otherwise, they are scheduled for background processing
          */
         if (fluentCrmGetMemoryLimit() > 510000000 && !fluentCrmIsMemoryExceeded(60)) {
             $this->initialStatus = 'scheduled';
         }
     }
 
+    /*
+     * By Default, this function will process emails in chunks of 30 (customizable) and run for max 30 seconds per processing cycle
+     * Sleep for 200ms between each cycle
+     * @param int $perChunk
+     * @param int $runTime
+     * @return Campaign|false
+     */
     public function processEmails($perChunk = 0, $runTime = 30)
     {
         if ($runTime > 30) {

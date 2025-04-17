@@ -848,6 +848,9 @@ class Helper
                 $color_palette = $theme_json['settings']['color']['palette'];
             }
         }
+        if (!$color_palette) {
+            $color_palette = [];
+        }
 
         return (array)$color_palette;
     }

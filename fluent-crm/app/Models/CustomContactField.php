@@ -232,9 +232,7 @@ class CustomContactField
             }
         }
 
-        return array_filter($values, function ($item) {
-            return $item != null;
-        });
+        return $values;
     }
 
     public function getFieldGroups()

@@ -8,8 +8,10 @@ use FluentCrm\App\Models\FunnelCampaign;
 use FluentCrm\App\Models\FunnelMetric;
 use FluentCrm\App\Models\FunnelSequence;
 use FluentCrm\App\Models\FunnelSubscriber;
+use FluentCrm\App\Models\Label;
 use FluentCrm\App\Models\Meta;
 use FluentCrm\App\Models\Subscriber;
+use FluentCrm\App\Models\TermRelation;
 use FluentCrm\App\Services\Funnel\FunnelHelper;
 use FluentCrm\App\Services\Funnel\ProFunnelItems;
 use FluentCrm\App\Services\Helper;
@@ -577,6 +579,12 @@ class FunnelController extends Controller
 
             foreach ($funnels as $funnel) {
                 $sequences = FunnelSequence::whereIn('funnel_id', $funnelIds)->get();
+
+                $labelIds = TermRelation::where('object_id', $funnel->id)
+                    ->where('object_type', Funnel::class)
+                    ->pluck('term_id');
+                $funnel->detachLabels($labelIds);
+
                 foreach ($sequences as $deletingSequence) {
                     do_action('fluentcrm_funnel_sequence_deleting_' . $deletingSequence->action_name, $deletingSequence, $funnel);
                     $deletingSequence->delete();
@@ -1092,19 +1100,33 @@ class FunnelController extends Controller
 
         $funnel = Funnel::create($newFunnelData);
 
-        $labels = fluentcrm_get_option('funnel_custom_labels');
-
         $funnelLabels = Arr::get($funnelArray, 'labels', []);
         if (isset($funnelLabels) && !empty($funnelLabels)) {
             $newLabels = [];
             foreach ($funnelLabels as $key => $funnelLabel) {
-                if (!array_key_exists($key, $labels)) {
-                    $labels[$key] = $funnelLabel;
+                // Validate required fields
+                if (!isset($funnelLabel['slug'], $funnelLabel['title'])) {
+                    continue; // Skip invalid labels
                 }
-                $newLabels[] = $key;
+
+                $existLabel = Label::where('taxonomy_name', 'global_label')->where('slug', $funnelLabel['slug'])->first();
+                if (!$existLabel) {
+                    $labelData = [
+                        'slug'  => sanitize_text_field($funnelLabel['slug']),
+                        'title' => sanitize_text_field($funnelLabel['title']),
+                    ];
+                    $color = sanitize_hex_color($funnelLabel['color']);
+
+                    $labelData['settings'] = [
+                        'color' => $color
+                    ];
+
+                    $existLabel = Label::create($labelData);
+                }
+
+                $newLabels[] = $existLabel->id;
             }
-            $funnel->applyLabels($newLabels);
-            fluentcrm_update_option('funnel_custom_labels', $labels);
+            $funnel->attachLabels($newLabels);
         }
 
         $sequenceIds = [];

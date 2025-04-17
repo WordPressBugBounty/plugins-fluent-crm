@@ -491,6 +491,10 @@ class AdminMenu
 
         wp_enqueue_script('fluentcrm_global_admin', fluentCrmMix('admin/js/global_admin.js'), array('jquery'), $this->version);
         wp_enqueue_script('fluentcrm_admin_app_boot', fluentCrmMix('admin/js/boot.js'), array('moment'), $this->version);
+
+        // Ensure block editor styles are loaded
+        wp_enqueue_style('wp-block-editor');
+        
         $this->emailBuilderBlockInit();
 
         /**

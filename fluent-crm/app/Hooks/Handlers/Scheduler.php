@@ -57,6 +57,10 @@ class Scheduler
                 $nextCron = as_next_scheduled_action('fluentcrm_scheduled_every_minute_tasks');
                 $willRun = !$nextCron || $nextCron == 1 || ($nextCron - time()) >= 3 || ($nextCron - time()) < -70;
 
+                // $willRun will be true if the next cron is not scheduled or it is scheduled for more than 3 seconds
+                // or it is scheduled for less than -70 seconds (which means it is already passed)
+                // or if the next cron is scheduled for 1 second (which means it is already passed)
+
                 if (!$willRun) {
                     $lastCalled = (int)fluentcrm_get_option('fluentcrm_is_sending_emails_last_called');
                     if ($lastCalled && (time() - $lastCalled) < 52) {
@@ -131,6 +135,7 @@ class Scheduler
 
     public static function process()
     {
+        
         wp_raise_memory_limit('admin');
         $lastScheduler = fluentCrmGetOptionCache('_fcrm_last_scheduler');
 

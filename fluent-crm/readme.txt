@@ -2,9 +2,9 @@
 Contributors: techjewel,adreastrian,heera,wpmanageninja
 Tags: email marketing, newsletter, crm, email newsletter, subscribers
 Requires at least: 5.0
-Tested up to: 6.7
+Tested up to: 6.8
 Requires PHP: 7.3
-Stable tag: 2.9.48
+Stable tag: 2.9.50
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -258,6 +258,24 @@ You can report any security bugs found in the source code of FluentCRM plugins t
 10. Pro Integrations
 
 == Changelog ==
+
+= 2.9.50 (Date: April 17, 2025) =
+New: Shortcode support for multiple email campaign archives
+New: Shortcodes are now searchable
+New: Voxel Integration ( Product purchase history in contact )
+New: IPv6 compatibility Added
+Improvement: WordPress version 6.8 compatible
+Improvement: Toggle for column visibility in automation funnels table
+Improvement: Unsaved changes warning in block editor
+Improvement: More translations string added
+Improvement: Search functionality for System Logs
+Fixed: Global footer displaying incorrectly in email previews
+Fixed: Custom field values couldn't be cleared once set
+Fixed: Custom email footer settings import issue
+Fixed: Encoding issue in Custom Field Text
+Fixed: Label search functionality errors
+Fixed: Fatal error during funnel import process
+Fixed: AB Cart Tag and list not removing after order completion
 
 = 2.9.48 (Date: March 20, 2025) =
 New: Re-apply Option for Completed Sequence
