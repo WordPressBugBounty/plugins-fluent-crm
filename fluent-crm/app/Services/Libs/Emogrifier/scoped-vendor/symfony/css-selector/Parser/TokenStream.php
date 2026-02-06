@@ -100,6 +100,7 @@ class TokenStream
     {
         $next = $this->getNext();
         if (!$next->isIdentifier()) {
+            // phpcs:ignore WordPress.Security.EscapeOutput.ExceptionNotEscaped
             throw SyntaxErrorException::unexpectedToken('identifier', $next);
         }
         return $next->getValue();
@@ -118,6 +119,7 @@ class TokenStream
         if ($next->isDelimiter(['*'])) {
             return null;
         }
+        // phpcs:ignore WordPress.Security.EscapeOutput.ExceptionNotEscaped
         throw SyntaxErrorException::unexpectedToken('identifier or "*"', $next);
     }
     /**

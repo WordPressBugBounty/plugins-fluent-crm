@@ -102,6 +102,9 @@ class Cleanup
 
         FunnelSubscriber::where('subscriber_id', $subscriber->id)
             ->where('status', 'active')
+            ->whereDoesntHave('funnel', function ($query) {
+                $query->where('trigger_name', 'fluent_crm/subscriber_status_changed');
+            })
             ->update([
                 'status' => 'cancelled'
             ]);
@@ -255,7 +258,7 @@ class Cleanup
 
         $hash = md5(wp_generate_uuid4() . '_' . $contact->id . '_' . '_' . time() . '__' . $contact->id);
         $exist->value = $hash;
-        $exist->updated_at = date('Y-m-d H:i:s');
+        $exist->updated_at = gmdate('Y-m-d H:i:s');
         $exist->save();
 
         return true;

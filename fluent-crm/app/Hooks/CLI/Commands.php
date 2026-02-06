@@ -229,6 +229,7 @@ class Commands
         if ($skippedContacts) {
             \WP_CLI::line(sprintf('%d contacts has been skipped', count($skippedContacts)));
 
+            // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fwrite
             fwrite(STDOUT, 'Show Skipped contacts? yes/no' . ' ');
             $value = strtolower(trim(fgets(STDIN)));
 
@@ -332,6 +333,7 @@ class Commands
                 // ask if they want to resume
                 \WP_CLI::line(sprintf('Looks like you have migrated %d customers already.', $completedCount));
                 // Adding space to question and showing it.
+                // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fwrite
                 fwrite(STDOUT, 'Do you want to resume? Type YES to resume or type NO start from scratch: ' . ' ');
 
                 $result = strtolower(trim(fgets(STDIN)));
@@ -448,6 +450,7 @@ class Commands
         if ($skippedContacts) {
             \WP_CLI::line(sprintf('%d contacts has been skipped', count($skippedContacts)));
 
+            // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fwrite
             fwrite(STDOUT, 'Show Skipped contacts? yes/no' . ': ');
             $value = strtolower(trim(fgets(STDIN)));
 
@@ -654,6 +657,7 @@ class Commands
         if ($skippedContacts) {
             \WP_CLI::line(sprintf('%d contacts has been skipped', count($skippedContacts)));
 
+            // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fwrite
             fwrite(STDOUT, 'Show Skipped contacts? yes/no' . ': ');
             $value = strtolower(trim(fgets(STDIN)));
 
@@ -771,6 +775,7 @@ class Commands
 
         \WP_CLI::confirm('Do you really want to remove all the contacts and related data?');
 
+        // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fwrite
         fwrite(STDOUT, 'Please Type "yes" if you really want to do this? yes/no' . ': ');
         $value = strtolower(trim(fgets(STDIN)));
 
@@ -804,6 +809,7 @@ class Commands
         global $wpdb;
         foreach ($tables as $table) {
             \WP_CLI::line('Droping Table: ' . $table);
+            // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared WordPress.DB.PreparedSQL.NotPrepared
             $wpdb->query("DROP TABLE IF EXISTS " . $wpdb->prefix . $table);
         }
         $options = [
@@ -1067,17 +1073,31 @@ class Commands
         $progress = \WP_CLI\Utils\make_progress_bar('Synced Contacts', $subscribers->count());
 
         foreach ($subscribers as $subscriber) {
-            $user = get_user_by('user_email', $subscriber->user_email);
+            $progress->tick();
+
+            $user = get_user_by('email', $subscriber->email);
+
+            if (!$subscriber->user_id && !$user) {
+                continue;
+            }
+
+            if ($user) {
+                if ($subscriber->user_id == $user->ID) {
+                    continue;
+                }
+            }
+
             if ($user) {
                 $subscriber->user_id = $user->ID;
                 $subscriber->save();
+                \WP_CLI::line("Updated user_id for contact ID: {$subscriber->id}");
             } else if ($subscriber->user_id) {
                 $subscriber->user_id = NULL;
                 $subscriber->save();
+                \WP_CLI::line("Removed user_id for contact ID: {$subscriber->id}");
             }
-
-            $progress->tick();
         }
+
         \WP_CLI::line('User ids for contacts has been synced');
     }
 

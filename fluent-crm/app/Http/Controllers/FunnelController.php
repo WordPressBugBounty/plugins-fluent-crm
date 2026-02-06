@@ -157,7 +157,7 @@ class FunnelController extends Controller
             if (empty($funnelData['title'])) {
                 $allTriggers = $this->getTriggers();
                 $label = Arr::get($allTriggers, $funnelData['trigger_name'] . '.label', 'Unknown Automation');
-                $funnelData['title'] = $label . ' (Created at ' . date('Y-m-d') . ')';
+                $funnelData['title'] = $label . ' (Created at ' . gmdate('Y-m-d') . ')';
             }
 
             $funnelData['status'] = 'draft';
@@ -530,7 +530,8 @@ class FunnelController extends Controller
         $funnel->save();
 
         return $this->sendSuccess([
-            'message' => __(sprintf('Status has been updated to %s', $newStatus), 'fluent-crm')
+            /* translators: %s: subscription status */
+            'message' => sprintf(esc_html__('Status has been updated to %s', 'fluent-crm'), $newStatus)
         ]);
     }
 
@@ -809,12 +810,21 @@ class FunnelController extends Controller
         $funnelSubscriber->save();
 
         return [
+            /* translators: %s: subscription status */
             'message' => sprintf(esc_html__('Status has been updated to %s', 'fluent-crm'), $status)
         ];
     }
 
     private function maybeMigrateDB()
     {
+        // Temp
+        Funnel::whereNull('trigger_name')
+            ->where('status', 'draft')
+            ->whereNull('created_by')
+            ->delete();
+
+
+
         $sequence = \FluentCrm\App\Models\FunnelSequence::first();
         $isMigrated = false;
         global $wpdb;
@@ -829,6 +839,7 @@ class FunnelController extends Controller
 
         if (!$isMigrated) {
             $sequenceTable = $wpdb->prefix . 'fc_funnel_sequences';
+            // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared 
             $wpdb->query("ALTER TABLE {$sequenceTable} ADD COLUMN `parent_id` bigint NOT NULL DEFAULT '0', ADD `condition_type` varchar(192) NULL AFTER `parent_id`");
         }
     }
@@ -1405,7 +1416,8 @@ class FunnelController extends Controller
         $funnel->save();
 
         return $this->sendSuccess([
-            'message' => __(sprintf('Title has been updated to %s', $newTitle), 'fluent-crm')
+            /* translators: %s: the new funnel title */
+            'message' => sprintf(esc_html__('Title has been updated to %s', 'fluent-crm'), $newTitle)
         ]);
     }
 

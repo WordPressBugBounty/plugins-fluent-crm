@@ -125,10 +125,12 @@ class ParserState
     public function parseIdentifier($bIgnoreCase = \true)
     {
         if ($this->isEnd()) {
+            // phpcs:ignore WordPress.Security.EscapeOutput.ExceptionNotEscaped
             throw new UnexpectedEOFException('', '', 'identifier', $this->iLineNo);
         }
         $sResult = $this->parseCharacter(\true);
         if ($sResult === null) {
+            // phpcs:ignore WordPress.Security.EscapeOutput.ExceptionNotEscaped
             throw new UnexpectedTokenException($sResult, $this->peek(5), 'identifier', $this->iLineNo);
         }
         $sCharacter = null;
@@ -264,6 +266,7 @@ class ParserState
             $iLineCount = \substr_count($mValue, "\n");
             $iLength = $this->strlen($mValue);
             if (!$this->streql($this->substr($this->iCurrentPosition, $iLength), $mValue)) {
+                // phpcs:ignore WordPress.Security.EscapeOutput.ExceptionNotEscaped
                 throw new UnexpectedTokenException($mValue, $this->peek(\max($iLength, 5)), $this->iLineNo);
             }
             $this->iLineNo += $iLineCount;
@@ -271,6 +274,7 @@ class ParserState
             return $mValue;
         } else {
             if ($this->iCurrentPosition + $mValue > $this->iLength) {
+                // phpcs:ignore WordPress.Security.EscapeOutput.ExceptionNotEscaped
                 throw new UnexpectedEOFException($mValue, $this->peek(5), 'count', $this->iLineNo);
             }
             $sResult = $this->substr($this->iCurrentPosition, $mValue);
@@ -296,6 +300,7 @@ class ParserState
         if (\preg_match($mExpression, $sInput, $aMatches, \PREG_OFFSET_CAPTURE) === 1) {
             return $this->consume($aMatches[0][0]);
         }
+        // phpcs:ignore WordPress.Security.EscapeOutput.ExceptionNotEscaped
         throw new UnexpectedTokenException($mExpression, $this->peek(5), 'expression', $this->iLineNo);
     }
     /**
@@ -364,6 +369,7 @@ class ParserState
             return $out;
         }
         $this->iCurrentPosition = $start;
+        // phpcs:ignore WordPress.Security.EscapeOutput.ExceptionNotEscaped
         throw new UnexpectedEOFException('One of ("' . \implode('","', $aEnd) . '")', $this->peek(5), 'search', $this->iLineNo);
     }
     /**

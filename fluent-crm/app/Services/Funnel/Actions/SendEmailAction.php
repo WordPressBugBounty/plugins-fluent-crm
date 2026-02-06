@@ -204,13 +204,23 @@ class SendEmailAction extends BaseAction
     {
         $settings = $sequence->settings;
         $refCampaign = Arr::get($settings, 'reference_campaign');
-        if (!$refCampaign) {
+
+        if(!$refCampaign) {
             FunnelHelper::changeFunnelSubSequenceStatus($funnelSubscriberId, $sequence->id, 'skipped');
             return;
         }
 
-        $campaign = FunnelCampaign::find($refCampaign);
+        if($funnelMetric) {
+            // We are making sure, this action will run only once per funnel subscriber
+            if (did_action('fluent_crm/did_run_' . $funnelMetric->id)) {
+                FunnelHelper::changeFunnelSubSequenceStatus($funnelSubscriberId, $sequence->id, 'skipped');
+                return;
+            }
 
+            do_action('fluent_crm/did_run_' . $funnelMetric->id);
+        }
+
+        $campaign = FunnelCampaign::find($refCampaign);
         if (!$campaign) {
             return;
         }
@@ -254,7 +264,7 @@ class SendEmailAction extends BaseAction
              *
              * @param array $customAddresses The custom email addresses to be parsed.
              * @param object $subscriber The subscriber object containing subscriber details.
-             * 
+             *
              * @return array The filtered and parsed custom email addresses.
              */
             $customAddresses = apply_filters('fluent_crm/parse_campaign_email_text', $customAddresses, $subscriber);

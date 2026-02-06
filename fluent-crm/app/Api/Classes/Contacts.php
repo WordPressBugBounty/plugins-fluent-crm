@@ -122,7 +122,6 @@ class Contacts
      */
     public function createOrUpdate($data, $forceUpdate = false, $deleteOtherValues = false, $sync = false)
     {
-
         if (empty($data['email']) || !is_email($data['email'])) {
             return false;
         }
@@ -264,6 +263,7 @@ class Contacts
             return call_user_func_array([$this->instance, $method], $params);
         }
 
-        throw new \Exception("Method {$method} does not exist.");
+        /* translators: %s: method name */
+        throw new \Exception(sprintf('Method %s does not exist.', esc_html($method)));
     }
 }

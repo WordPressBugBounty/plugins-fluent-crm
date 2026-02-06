@@ -136,13 +136,20 @@ class ConditionAssessor
                     return strlen($sourceValue) > $dataValue;
                     break;
                 case 'match_all':
+                    // Exact match (order-independent)
+                    $sourceValue = (array) $sourceValue;
+                    $dataValue = (array) $dataValue;
+                    sort($sourceValue);
+                    sort($dataValue);
+                    $dataValue = array_map('intval', $dataValue);
+                    return $sourceValue == $dataValue;
                 case 'in_all':
                     $sourceValue = (array)$sourceValue;
                     $dataValue = (array)$dataValue;
                     sort($sourceValue);
                     sort($dataValue);
-                    return $sourceValue == $dataValue;
-                    break;
+                    $dataValue = array_map('intval', $dataValue);
+                    return empty(array_diff($dataValue, $sourceValue));
                 case 'match_none_of':
                 case 'not_in_all':
                     $sourceValue = (array)$sourceValue;
@@ -174,7 +181,7 @@ class ConditionAssessor
 
                     return strtotime($sourceValue) > strtotime($dataValue);
                 case 'date_equal':
-                    return date('YMD', strtotime($sourceValue)) == date('YMD', strtotime($dataValue));
+                    return gmdate('YMD', strtotime($sourceValue)) == gmdate('YMD', strtotime($dataValue));
                 case 'days_before':
                     if (!$sourceValue || $sourceValue == '0000-00-00') {
                         return false;

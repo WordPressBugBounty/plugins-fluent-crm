@@ -45,8 +45,22 @@ abstract class Controller
 
 
         if ($validator->validate()->fails()) {
+            // Sanitize validation error messages before returning them
+            $errors = $validator->errors();
+            if (is_array($errors)) {
+                array_walk_recursive($errors, function (&$value) {
+                    if (is_string($value)) {
+                        $value = sanitize_text_field($value);
+                    }
+                });
+            }
+
+            // phpcs:ignore WordPress.Security.EscapeOutput.ExceptionNotEscaped -- Sanitization is already done above
             throw new ValidationException(
-                'Unprocessable Entity!', 422, null, $validator->errors()
+                esc_html__('Unprocessable Entity!', 'fluent-crm'),
+                422,
+                null,
+                $errors
             );
         }
 
@@ -72,6 +86,17 @@ abstract class Controller
     {
         if ($data instanceof ValidationException) {
             $data = $data->errors();
+        }
+
+        // Sanitize error payload before sending the response to prevent unescaped output
+        if (is_array($data)) {
+            array_walk_recursive($data, function (&$value) {
+                if (is_string($value)) {
+                    $value = sanitize_text_field($value);
+                }
+            });
+        } elseif (is_string($data)) {
+            $data = sanitize_text_field($data);
         }
 
         return $this->sendError($data, $code);

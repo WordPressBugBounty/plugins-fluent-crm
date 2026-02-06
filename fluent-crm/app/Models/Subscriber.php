@@ -968,7 +968,6 @@ class Subscriber extends Model
                  * @deprecated since 2.8.0. Use fluent_crm/contact_created instead
                  */
                 do_action('fluentcrm_contact_created', $insertedModel);
-
                 do_action('fluent_crm/contact_created', $insertedModel);
 
                 $insertedModels[] = $insertedModel;
@@ -1225,6 +1224,8 @@ class Subscriber extends Model
             $this->lists()->attach($lists);
             $this->load('lists');
             fluentcrm_contact_added_to_lists($newListIds, $this);
+
+            do_action('fluent_crm/contact_added_to_lists', $this, $newListIds);
         }
 
         return $this;
@@ -1267,6 +1268,8 @@ class Subscriber extends Model
             $this->tags()->attach($tags);
             $this->load('tags');
             fluentcrm_contact_added_to_tags($newTagIds, $this);
+
+            do_action('fluent_crm/contact_added_to_tags', $this, $newTagIds);
         }
 
         return $this;
@@ -1341,6 +1344,8 @@ class Subscriber extends Model
             $this->lists()->detach($validListIds);
             $this->load('lists');
             fluentcrm_contact_removed_from_lists($validListIds, $this);
+
+            do_action('fluent_crm/contact_removed_from_lists', $this, $validListIds);
         }
 
         return $this;
@@ -1374,6 +1379,8 @@ class Subscriber extends Model
             $this->tags()->detach($validTagIds);
             $this->load('tags');
             fluentcrm_contact_removed_from_tags($validTagIds, $this);
+
+            do_action('fluent_crm/contact_removed_from_tags', $this, $validTagIds);
         }
 
         return $this;
@@ -1537,15 +1544,15 @@ class Subscriber extends Model
             case 'days_before':
                 $daysToSeconds = intval($filter['value']) * 24 * 60 * 60;
                 $filter['operator'] = '<';
-                $filter['value'] = date('Y-m-d', current_time('timestamp') - $daysToSeconds);
+                $filter['value'] = gmdate('Y-m-d', current_time('timestamp') - $daysToSeconds);
                 break;
 
             case 'days_within':
                 $daysToSeconds = intval($filter['value']) * 24 * 60 * 60;
                 $filter['operator'] = 'BETWEEN';
                 $filter['value'] = [
-                    date('Y-m-d 00:00:01', current_time('timestamp') - $daysToSeconds),
-                    date('Y-m-d') . ' 23:59:59'
+                    gmdate('Y-m-d 00:00:01', current_time('timestamp') - $daysToSeconds),
+                    gmdate('Y-m-d') . ' 23:59:59'
                 ];
                 break;
         }
@@ -2392,7 +2399,7 @@ class Subscriber extends Model
             return $hash;
         }
 
-        $hash = md5(mt_rand(100, 10000) . '_' . $this->id . '_' . $this->email . '_' . time());
+        $hash = md5(wp_rand(100, 10000) . '_' . $this->id . '_' . $this->email . '_' . time());
 
         $hash = str_replace('e', 'd', $hash);
 

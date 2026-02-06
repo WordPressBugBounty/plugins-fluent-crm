@@ -85,6 +85,10 @@ abstract class BaseHandler
                 return new \WP_Error('db_error', $e->getMessage());
             }
 
+            if ( Helper::wasProcessedByKeyId( 'mail_'. $email->campaign_id . '_' . $email->email_address ) ) {
+                continue;
+            }
+
             $this->sentCount++;
 
             $response = Mailer::send($emailData, $email->subscriber, $email);

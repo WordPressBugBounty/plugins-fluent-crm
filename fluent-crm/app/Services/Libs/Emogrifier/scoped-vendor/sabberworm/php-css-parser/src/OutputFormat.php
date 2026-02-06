@@ -205,6 +205,7 @@ class OutputFormat
         } elseif (\method_exists(OutputFormatter::class, $sMethodName)) {
             return \call_user_func_array([$this->getFormatter(), $sMethodName], $aArguments);
         } else {
+            // phpcs:ignore WordPress.Security.EscapeOutput.ExceptionNotEscaped
             throw new \Exception('Unknown OutputFormat method called: ' . $sMethodName);
         }
     }
