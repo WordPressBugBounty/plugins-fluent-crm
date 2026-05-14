@@ -44,7 +44,51 @@ class FunnelHandler
 {
     private $settingsKey = 'fluentcrm_funnel_settings';
 
+    private $lockKey = '_fc_funnel_processor_lock';
+
+    private $lockTimeout = 90;
+
     protected $funnelFired = false;
+
+
+    public function register()
+    {
+        /*
+         * handle() runs at init priority 10 so that initTriggers() / initBenchMarkBlocks()
+         * can register their fluentcrm_funnel_arg_num_* filter handlers first.
+         * The trigger-registration loop then runs at priority 20, after those filters are set up,
+         * so apply_filters('fluentcrm_funnel_arg_num_*') returns the correct arg count.
+         */
+        add_action('init', [$this, 'handle'], 10);
+        add_action('init', function () {
+            $triggers = get_option($this->settingsKey, []);
+            $triggers = array_unique($triggers);
+            if ($triggers) {
+                foreach ($triggers as $triggerName) {
+                    /**
+                     * Determine the number of arguments passed to the funnel trigger in FluentCRM.
+                     *
+                     * This filter allows you to modify the number of arguments that are passed to the funnel trigger
+                     * based on the trigger name.
+                     *
+                     * @param int $argNum The number of arguments to pass to the funnel trigger. Default is 1.
+                     * @since 2.5.6
+                     *
+                     */
+                    $argNum = apply_filters('fluentcrm_funnel_arg_num_' . $triggerName, 1);
+                    add_action($triggerName, function () use ($triggerName, $argNum) {
+                        $this->mapTriggers($triggerName, func_get_args(), $argNum);
+                    }, 10, $argNum);
+                }
+
+                if (in_array('edd_update_payment_status', $triggers)) {
+                    add_action('edd_complete_purchase', function ($paymentId) {
+                        $this->mapTriggers('edd_update_payment_status', [$paymentId, 'publish', 'pending'], 3);
+                    });
+                }
+            }
+        }, 20);
+    }
 
     public function handle()
     {
@@ -56,49 +100,22 @@ class FunnelHandler
             new \FluentCrm\App\Services\Funnel\ProFunnelItems();
         }
 
-        $triggers = get_option($this->settingsKey, []);
-
-        $triggers = array_unique($triggers);
-
-        if ($triggers) {
-            foreach ($triggers as $triggerName) {
-                /**
-                 * Determine the number of arguments passed to the funnel trigger in FluentCRM.
-                 *
-                 * This filter allows you to modify the number of arguments that are passed to the funnel trigger
-                 * based on the trigger name.
-                 *
-                 * @since 2.5.6
-                 * 
-                 * @param int $argNum The number of arguments to pass to the funnel trigger. Default is 1.
-                 */
-                $argNum = apply_filters('fluentcrm_funnel_arg_num_' . $triggerName, 1);
-                add_action($triggerName, function () use ($triggerName, $argNum) {
-                    $this->mapTriggers($triggerName, func_get_args(), $argNum);
-                }, 10, $argNum);
-            }
-
-            if (in_array('edd_update_payment_status', $triggers)) {
-                add_action('edd_complete_purchase', function ($paymentId) {
-                    $this->mapTriggers('edd_update_payment_status', [$paymentId, 'publish', 'pending'], 3);
-                });
-            }
-        }
-
         add_action('fluent_crm_process_automation', function () {
             if ($this->funnelFired) {
                 return;
             }
 
             $this->funnelFired = true;
-            $lastProcessor = get_option('_fc_last_funnel_processor');
-            if ($lastProcessor && (time() - $lastProcessor) < 60) {
-                return; // We want to run the processor only once per 60 seconds
+
+            if (!$this->acquireFunnelProcessorLock()) {
+                return;
             }
 
-            update_option('_fc_last_funnel_processor', time(), 'no');
-            (new FunnelProcessor())->followUpSequenceActions();
-            update_option('_fc_last_funnel_processor', false, 'no');
+            try {
+                (new FunnelProcessor())->followUpSequenceActions();
+            } finally {
+                $this->releaseFunnelProcessorLock();
+            }
         });
     }
 
@@ -141,6 +158,56 @@ class FunnelHandler
         }
     }
 
+    private function acquireFunnelProcessorLock()
+    {
+        $now = time();
+
+        if (wp_using_ext_object_cache()) {
+            if (wp_cache_add($this->lockKey, $now, 'fc_instant_options', $this->lockTimeout)) {
+                return true;
+            }
+
+            $existing = wp_cache_get($this->lockKey, 'fc_instant_options');
+            if ($existing && ($now - (int)$existing) > $this->lockTimeout) {
+                wp_cache_delete($this->lockKey, 'fc_instant_options');
+                if (wp_cache_add($this->lockKey, $now, 'fc_instant_options', $this->lockTimeout)) {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        global $wpdb;
+
+        $wpdb->query($wpdb->prepare(
+            "INSERT IGNORE INTO {$wpdb->options} (option_name, option_value, autoload) VALUES (%s, %s, %s)",
+            $this->lockKey, '', 'no'
+        ));
+
+        $affected = $wpdb->query($wpdb->prepare(
+            "UPDATE {$wpdb->options} SET option_value = %s WHERE option_name = %s AND (option_value = '' OR option_value < %d)",
+            (string)$now, $this->lockKey, $now - $this->lockTimeout
+        ));
+
+        if ($affected > 0) {
+            wp_cache_delete($this->lockKey, 'options');
+            return true;
+        }
+
+        return false;
+    }
+
+    private function releaseFunnelProcessorLock()
+    {
+        if (wp_using_ext_object_cache()) {
+            wp_cache_delete($this->lockKey, 'fc_instant_options');
+            return;
+        }
+
+        update_option($this->lockKey, '', false);
+    }
+
     public function resetFunnelIndexes()
     {
         $funnels = Funnel::select('trigger_name')
@@ -173,7 +240,7 @@ class FunnelHandler
     {
         new UserRegistrationTrigger();
         new FluentFormSubmissionTrigger();
-        if (defined('FLUENTFORMPRO'))  {
+        if (defined('FLUENTFORMPRO')) {
             new FluentFormSubscriptionPaymentReceivedTrigger();
             new FluentFormSubscriptionCancelledTrigger();
         }
@@ -220,13 +287,14 @@ class FunnelHandler
                 continue;
             }
 
-            $sequencePoints = new SequencePoints($funnel, $funnelSubscriber);
-            $funnelProcessorClass->processSequencePoints($sequencePoints, $subscriber, $funnelSubscriber);
+            $funnelProcessorClass->resumeFunnelSubscriber($funnel, $subscriber, $funnelSubscriber);
         }
     }
 
     public function saveSequences()
     {
+        check_ajax_referer('fluentcrm_ajax_nonce', '_nonce');
+
         $hasPermission = PermissionManager::currentUserCan('fcrm_write_funnels');
 
         if (!$hasPermission) {
@@ -250,6 +318,8 @@ class FunnelHandler
 
     public function exportFunnel()
     {
+        check_ajax_referer('fluentcrm_ajax_nonce', '_nonce');
+
         $permission = 'manage_options';
         if (!current_user_can($permission)) {
             die('You do not have permission');
@@ -262,9 +332,9 @@ class FunnelHandler
          *
          * The dynamic portion of the hook name, `$funnel->trigger_name`, refers to the trigger name of the funnel.
          *
+         * @param object $funnel The funnel object containing the editor details.
          * @since 2.0.0
          *
-         * @param object $funnel The funnel object containing the editor details.
          */
         $funnel = apply_filters('fluentcrm_funnel_editor_details_' . $funnel->trigger_name, $funnel);
 
@@ -283,6 +353,8 @@ class FunnelHandler
 
     public function saveEmailAction()
     {
+        check_ajax_referer('fluentcrm_ajax_nonce', '_nonce');
+
         $hasPermission = PermissionManager::currentUserCan('fcrm_write_funnels');
 
         if (!$hasPermission) {
@@ -295,7 +367,7 @@ class FunnelHandler
         $funnelId = $request->get('funnel_id');
         $funnel = Funnel::findOrFail($funnelId);
 
-        $settings = json_decode(wp_unslash($request->getJson('action_data')), true);
+        $settings = Helper::parseArrayOrJson($request->get('action_data'));
 
         $settings['action_name'] = 'send_custom_email';
 
@@ -341,6 +413,8 @@ class FunnelHandler
 
     public function saveCampaignEmail()
     {
+        check_ajax_referer('fluentcrm_ajax_nonce', '_nonce');
+
         $hasPermission = PermissionManager::currentUserCan('fcrm_manage_emails');
 
         if (!$hasPermission) {
@@ -352,7 +426,7 @@ class FunnelHandler
         $request = FluentCrm('request');
         $id = $request->get('campaign_id');
 
-        $data = json_decode(wp_unslash($request->getJson('action_data')), true);
+        $data = Helper::parseArrayOrJson($request->get('action_data'));
 
         if (empty($data)) {
             wp_send_json([

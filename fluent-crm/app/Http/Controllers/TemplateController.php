@@ -5,7 +5,7 @@ namespace FluentCrm\App\Http\Controllers;
 use FluentCrm\App\Models\Template;
 use FluentCrm\App\Services\Helper;
 use FluentCrm\Framework\Support\Arr;
-use FluentCrm\Framework\Request\Request;
+use FluentCrm\Framework\Http\Request\Request;
 
 /**
  *  TemplateController - REST API Handler Class
@@ -20,8 +20,8 @@ class TemplateController extends Controller
 {
     public function templates(Request $request)
     {
-        $order = $request->getSafe('order', 'desc', 'sanitize_sql_orderby');
-        $orderBy = $request->getSafe('orderBy', 'ID', 'sanitize_sql_orderby');
+        $order = $request->getSafe('order', 'sanitize_sql_orderby', 'desc');
+        $orderBy = $request->getSafe('orderBy', 'sanitize_sql_orderby', 'ID');
 
         $templatesQuery = Template::emailTemplates(
             $request->get('types', ['publish', 'draft'])
@@ -56,8 +56,12 @@ class TemplateController extends Controller
 
         if(!$footerSettings || !is_array($footerSettings)) {
             $footerSettings = [
-                'custom_footer' => 'no',
-                'footer_content' => ''
+                'custom_footer'    => 'no',
+                'footer_content'   => '',
+                'disable_footer'   => 'no',
+                'font_size'        => 13,
+                'font_color'       => '#202020',
+                'background_color' => 'transparent'
             ];
         }
 
@@ -127,7 +131,7 @@ class TemplateController extends Controller
             return $this->update($request, $templateId);
         }
 
-        $templateData = wp_unslash($this->request->getJson('template'));
+        $templateData = Helper::parseArrayOrJson($this->request->get('template'));
 
         $postData = Arr::only($templateData, [
             'post_title',
@@ -139,8 +143,8 @@ class TemplateController extends Controller
             $postData['post_title'] = 'Email Template @ '.current_time('mysql');
         }
 
-        if(empty($postData['email_subject'])) {
-            $postData['email_subject'] =  $postData['post_title'];
+        if (empty($templateData['email_subject'])) {
+            $templateData['email_subject'] = $postData['post_title'];
         }
 
         if(empty($postData['post_excerpt'])) {
@@ -226,7 +230,7 @@ class TemplateController extends Controller
     {
         $oldTemplate = Template::findOrFail($id);
 
-        $templateData = wp_unslash($this->request->getJson('template'));
+        $templateData = Helper::parseArrayOrJson($this->request->get('template'));
 
         $footerSettings =  Arr::get($templateData, 'settings.footer_settings');
         if($footerSettings) {
@@ -277,7 +281,15 @@ class TemplateController extends Controller
     {
         $actionName = sanitize_text_field($request->get('action_name', ''));
 
-        $templateIds = $request->getSafe('template_ids', [], 'intval');
+        $templateIds = array_map('intval', (array)$request->get('template_ids', []));
+
+        $templateIds = array_unique(array_filter($templateIds));
+
+        $selectAllTemplates = filter_var($request->get('select_all'), FILTER_VALIDATE_BOOLEAN);
+
+        if ($selectAllTemplates) {
+            $templateIds = Template::pluck('id')->toArray();
+        }
 
         $templateIds = array_filter($templateIds);
         if ($actionName == 'change_template_status') {
@@ -309,7 +321,7 @@ class TemplateController extends Controller
             }
 
             return $this->sendSuccess([
-                'message' => __('Selected Templates has been deleted permanently', 'fluent-crm'),
+                'message' => __('Selected Templates have been deleted permanently', 'fluent-crm'),
             ]);
         }
 
@@ -369,7 +381,7 @@ class TemplateController extends Controller
         fluentcrm_update_option('global_email_style_config', $settings);
 
         return [
-            'message' => 'Global style settings has been updated'
+            'message' => __('Global style settings have been updated', 'fluent-crm')
         ];
     }
 
@@ -391,6 +403,147 @@ class TemplateController extends Controller
     }
 
     /**
+     * Downloads a single built-in template file and returns it without saving
+     * it as a local email template.
+     *
+     * @param \FluentCrm\Framework\Http\Request\Request $request
+     * @return \FluentCrm\Framework\Http\Response\Response
+     */
+    public function getBuiltInTemplate(Request $request)
+    {
+        $fileUrl = esc_url_raw($request->get('file', ''));
+
+        if (!$fileUrl || !$this->isAllowedRemoteTemplateUrl($fileUrl)) {
+            return $this->sendError([
+                'message' => __('Invalid template source URL', 'fluent-crm')
+            ]);
+        }
+
+        $response = wp_remote_get($fileUrl, [
+            'sslverify'           => true,
+            'timeout'             => 20,
+            'redirection'         => 0,
+            'limit_response_size' => 1024 * 1024
+        ]);
+
+        if (is_wp_error($response)) {
+            return $this->sendError([
+                'message' => __('Unable to download the selected template. Please try again.', 'fluent-crm')
+            ]);
+        }
+
+        $responseCode = wp_remote_retrieve_response_code($response);
+        if ($responseCode < 200 || $responseCode >= 300) {
+            return $this->sendError([
+                'message' => __('Unable to download the selected template. Please try again.', 'fluent-crm')
+            ]);
+        }
+
+        $templateData = Helper::parseArrayOrJson(wp_remote_retrieve_body($response));
+
+        if (Arr::get($templateData, 'is_fc_template') !== 'yes') {
+            return $this->sendError([
+                'message' => __('The selected file is not a valid FluentCRM template.', 'fluent-crm')
+            ]);
+        }
+
+        $template = $this->formatRemoteTemplateData($templateData);
+
+        if (!$template['post_content']) {
+            return $this->sendError([
+                'message' => __('The selected template does not have any email content.', 'fluent-crm')
+            ]);
+        }
+
+        return $this->sendSuccess([
+            'message'  => __('Template has been inserted', 'fluent-crm'),
+            'template' => $template
+        ]);
+    }
+
+    /**
+     * Restricts direct template downloads to trusted FluentCRM template hosts.
+     *
+     * @param string $url
+     * @return bool
+     */
+    protected function isAllowedRemoteTemplateUrl($url)
+    {
+        $parsedUrl = wp_parse_url($url);
+
+        if (empty($parsedUrl['scheme']) || empty($parsedUrl['host']) || $parsedUrl['scheme'] !== 'https') {
+            return false;
+        }
+
+        $allowedHosts = [
+            'fluentcrm.com',
+            'www.fluentcrm.com',
+            'wpmanageninja.com',
+            'www.wpmanageninja.com'
+        ];
+
+        if (defined('FC_TEMPLATE_API_DOMAIN')) {
+            $configuredHost = wp_parse_url(FC_TEMPLATE_API_DOMAIN, PHP_URL_HOST);
+            if ($configuredHost) {
+                $allowedHosts[] = strtolower($configuredHost);
+            }
+        }
+
+        return in_array(strtolower($parsedUrl['host']), array_unique($allowedHosts), true);
+    }
+
+    /**
+     * Normalizes remote JSON to the local template shape without creating a WP post.
+     *
+     * @param array $templateData
+     * @return array
+     */
+    protected function formatRemoteTemplateData($templateData)
+    {
+        $designTemplate = sanitize_text_field(Arr::get($templateData, 'design_template'));
+        if (!$designTemplate) {
+            $designTemplate = Helper::getDefaultEmailTemplate();
+        }
+
+        $templateConfig = Arr::get($templateData, 'settings.template_config', []);
+        if (!is_array($templateConfig)) {
+            $templateConfig = [];
+        }
+
+        if (!isset($templateConfig['content_padding'])) {
+            $templateConfig['content_padding'] = 20;
+        }
+
+        $footerSettings = Arr::get($templateData, 'settings.footer_settings', []);
+        if (!is_array($footerSettings)) {
+            $footerSettings = [];
+        }
+
+        $footerSettings = wp_parse_args($footerSettings, [
+            'custom_footer'  => 'no',
+            'footer_content' => '',
+            'disable_footer' => 'no',
+            'font_size'      => 13,
+            'font_color'     => '#202020',
+            'background_color' => 'transparent'
+        ]);
+
+        return [
+            'post_title'      => sanitize_text_field(Arr::get($templateData, 'post_title', '')),
+            'post_content'    => Arr::get($templateData, 'post_content', ''),
+            'post_excerpt'    => sanitize_textarea_field(Arr::get($templateData, 'post_excerpt', '')),
+            'email_subject'   => sanitize_text_field(Arr::get($templateData, 'email_subject', '')),
+            'edit_type'       => sanitize_text_field(Arr::get($templateData, 'edit_type', 'html')),
+            'design_template' => $designTemplate,
+            'settings'        => [
+                'template_config' => $templateConfig,
+                'footer_settings' => $footerSettings
+            ],
+            '_visual_builder_design' => Arr::get($templateData, '_visual_builder_design')
+        ];
+    }
+
+    /**
      * Fetches and formats email templates from a remote FluentCRM API endpoint.
      * This method makes an HTTP request to retrieve email templates from FluentCRM's public API.
      * It processes the response and formats the templates into a standardized structure.
@@ -402,7 +555,7 @@ class TemplateController extends Controller
     public function loadRemoteTemplates()
     {
         $restBase =  defined('FC_TEMPLATE_API_DOMAIN') ? FC_TEMPLATE_API_DOMAIN : 'https://fluentcrm.com';
-        $restApi = $restBase.'/wp-json/wp/v2/email-templates';
+        $restApi = $restBase.'/wp-json/wp/v2/email-templates?per_page=50';
 
         // Make a GET request to retrieve CRM templates
         $response = wp_remote_get($restApi, [
@@ -418,6 +571,11 @@ class TemplateController extends Controller
 
         // Decode the JSON response from the request
         $templateLists = json_decode(wp_remote_retrieve_body($response), true);
+
+        if (!is_array($templateLists)) {
+            return [];
+        }
+
         $formattedTemplates = [];
 
         foreach ($templateLists as $template) {

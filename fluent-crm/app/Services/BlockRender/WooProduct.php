@@ -54,9 +54,9 @@ class WooProduct
             $contentColorStyle = 'color: ' . $color . ';';
         }
 
-        $pricingStyle = 'margin: 5px 0px; 10px;';
+        $pricingStyle = 'display:block;margin:8px 0 10px;font-size:18px;line-height:1.25;';
         if ($color = Arr::get($atts, 'pricingColor')) {
-            $pricingStyle = 'color: ' . $color . ';';
+            $pricingStyle .= 'color: ' . $color . ';';
         }
 
         $contentHtml = sprintf(
@@ -75,9 +75,9 @@ class WooProduct
 
         if (Arr::get($atts, 'showPrice')) {
             $contentHtml .= sprintf(
-                '<div style="%1$s">%2$s</div>',
+                '<div class="fcw_p_price" style="%1$s">%2$s</div>',
                 $pricingStyle,
-                wp_kses_post($product->get_price_html())
+                ProductListRenderer::preparePriceHtml($product->get_price_html(), __('Free', 'fluent-crm'))
             );
         }
 

@@ -24,12 +24,14 @@ class ContactsQuery
             'tags'               => [],
             'lists'              => [],
             'statuses'           => [],
+            'sms_statuses'           => [],
             'has_commerce'       => false,
             'custom_fields'      => false,
             'limit'              => false,
             'offset'             => false,
             'contact_status'     => '',
-            'company_ids'        => []
+            'company_ids'        => [],
+            'contact_ids'        => []
         ]);
 
         $this->setupQuery();
@@ -88,6 +90,15 @@ class ContactsQuery
 
                 $subscribersQuery->filterByStatues($statuses);
             }
+
+            if ($sms_statuses = $this->args['sms_statuses']) {
+                $sms_statuses = (array) $sms_statuses;
+                $subscribersQuery->where(function ($query) use ($sms_statuses) {
+                    foreach ($sms_statuses as $sms_status) {
+                        $query->orWhere('sms_status', $sms_status);
+                    }
+                });
+            }
         }
 
         if ($this->args['has_commerce']) {
@@ -114,6 +125,10 @@ class ContactsQuery
 
         if ($this->args['company_ids']) {
             $subscribersQuery->filterByCompanies($this->args['company_ids']);
+        }
+
+        if ($this->args['contact_ids'] && is_array($this->args['contact_ids']) && !empty($this->args['contact_ids'])) {
+            $subscribersQuery->whereIn('id', $this->args['contact_ids']);
         }
 
         $this->model = $subscribersQuery;

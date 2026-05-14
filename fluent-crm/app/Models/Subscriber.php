@@ -2,6 +2,7 @@
 
 namespace FluentCrm\App\Models;
 
+use FluentCrm\App\Models\CampaignEmail;
 use FluentCrm\App\Services\Helper;
 use FluentCrm\App\Services\Sanitize;
 use FluentCrm\Framework\Support\Arr;
@@ -42,6 +43,7 @@ class Subscriber extends Model
         'email',
         'status', // pending / subscribed / bounced / unsubscribed; Default: subscriber
         'contact_type', // lead / customer
+        'sms_status', // sms_pending / sms_subscribed / sms_unsubscribed / sms_bounced; Default: sms_subscribed
         'address_line_1',
         'address_line_2',
         'postal_code',
@@ -83,7 +85,7 @@ class Subscriber extends Model
                 }
 
                 if ($user) {
-                    if ($model->first_name && $model->last_name != $user->first_name) {
+                    if ($model->first_name && $model->first_name != $user->first_name) {
                         update_user_meta($user->ID, 'first_name', $model->first_name);
                     }
                     if ($model->last_name && $model->last_name != $user->last_name) {
@@ -310,7 +312,7 @@ class Subscriber extends Model
                     $prefix . 'lists.id'
                 )
                 ->where($prefix . 'subscriber_pivot.object_type', 'FluentCrm\App\Models\Lists')
-                ->whereIn($prefix . 'tags.' . $filterBy, $keys)
+                ->whereIn($prefix . 'lists.' . $filterBy, $keys)
                 ->groupBy($prefix . 'subscriber_pivot.subscriber_id')
                 ->select($prefix . 'subscriber_pivot.subscriber_id');
         });
@@ -627,9 +629,7 @@ class Subscriber extends Model
         $updateValues = [];
 
         if ($deleteOtherValues) {
-            $deleteMetaKeys = array_map(function ($key) {
-                return $key;
-            }, array_keys($emptyValues));
+            $deleteMetaKeys = array_keys($emptyValues);
 
             if ($deleteMetaKeys) {
                 $this->custom_field_meta()->whereIn('key', $deleteMetaKeys)->delete();
@@ -1151,7 +1151,7 @@ class Subscriber extends Model
 
         if ($isSubscribed && $exist->status == 'subscribed') {
             if (!$isNew) {
-                do_action('fluent_crm/subscriber_status_changed', $this, $oldStatus, $this->status);
+                do_action('fluent_crm/subscriber_status_changed', $exist, $oldStatus, $exist->status);
             }
             do_action('fluentcrm_subscriber_status_to_subscribed', $exist, $oldStatus);
         }
@@ -1519,14 +1519,14 @@ class Subscriber extends Model
         switch ($filter['operator']) {
             case 'before':
                 $filter['operator'] = '<';
-                if (strlen($filter['value']) < 11) {
+                if (!empty($filter['value']) && strlen($filter['value']) < 11) {
                     $filter['value'] = $filter['value'] . ' 00:00:00';
                 }
                 break;
 
             case 'after':
                 $filter['operator'] = '>';
-                if (strlen($filter['value']) < 11) {
+                if (!empty($filter['value']) && strlen($filter['value']) < 11) {
                     $filter['value'] = $filter['value'] . ' 00:00:00';
                 }
                 break;
@@ -1899,7 +1899,8 @@ class Subscriber extends Model
 
                 $query = $query->where(function ($q) use ($filter) {
                     $q->whereNotNull($filter['property'])
-                        ->where($filter['property'], '!=', '0000-00-00');
+                        ->where($filter['property'], '!=', '0000-00-00')
+                        ->where($filter['property'], '!=', '');
                 });
 
                 $query = self::applyGeneralFilterQuery($query, $filter, $filter['property']);
@@ -1926,7 +1927,8 @@ class Subscriber extends Model
                 });
             } else if ($operator == 'not_null') {
                 $query = $query->where(function ($q) use ($filter) {
-                    return $q->where($filter['property'], '!=', '');
+                    return $q->whereNotNull($filter['property'])
+                        ->where($filter['property'], '!=', '');
                 });
             } else {
                 $query = $query->where($filter['property'], $operator, $searchTerm);
@@ -2162,10 +2164,15 @@ class Subscriber extends Model
     public function buildActivitiesFilterQuery($query, $filters)
     {
         foreach ($filters as $filter) {
-            if (empty($filter['value']) && $filter['property'] !== 'email_opened' && $filter['property'] !== 'email_link_clicked') {
-                continue;
+            if (empty($filter['value'])) {
+                if (in_array($filter['property'], ['email_opened', 'email_link_clicked'])) {
+                    if ($filter['operator'] != 'never') {
+                        continue;
+                    }
+                } else {
+                    continue;
+                }
             }
-
 
             $originalValue = $filter['value'];
 
@@ -2256,12 +2263,18 @@ class Subscriber extends Model
                 }
 
                 continue;
+            } else if ($filterProp == 'email_opened') {
+                $relation = 'campaignEmails';
+                $filter['where'] = [
+                    'prop'  => 'is_open',
+                    'value' => 1,
+                    'field' => 'updated_at'
+                ];
             } else if ($filterProp != 'email_sent') {
                 $relation = 'urlMetrics';
-
                 $filter['where'] = [
                     'prop'  => 'type',
-                    'value' => $filter['property'] == 'email_opened' ? 'open' : 'click',
+                    'value' => 'click',
                     'field' => 'updated_at'
                 ];
             }
@@ -2313,8 +2326,16 @@ class Subscriber extends Model
             return false;
         }
 
+        if ($activityName == 'email_opened') {
+            $lastOpen = CampaignEmail::where('subscriber_id', $this->id)
+                ->where('is_open', 1)
+                ->orderBy('updated_at', 'DESC')
+                ->first();
+            return $lastOpen ? $lastOpen->updated_at : false;
+        }
+
         $lastActivity = CampaignUrlMetric::where('subscriber_id', $this->id)
-            ->where('type', ($activityName == 'email_link_clicked') ? 'click' : 'open')
+            ->where('type', 'click')
             ->orderBy('updated_at', 'DESC')
             ->first();
 
@@ -2394,18 +2415,7 @@ class Subscriber extends Model
 
     public function getSecureHash()
     {
-        $hash = $this->getMeta('_secure_hash', 'internal');
-        if ($hash) {
-            return $hash;
-        }
-
-        $hash = md5(wp_rand(100, 10000) . '_' . $this->id . '_' . $this->email . '_' . time());
-
-        $hash = str_replace('e', 'd', $hash);
-
-        $this->updateMeta('_secure_hash', $hash, 'internal');
-
-        return $hash;
+        return fluentCrmGetContactSecureHash($this->id);
     }
 
     public function trackEvent($eventData, $isUnique = false)

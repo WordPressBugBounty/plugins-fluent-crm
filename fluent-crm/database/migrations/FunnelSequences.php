@@ -46,7 +46,8 @@ class FunnelSequences
                 INDEX `{$indexPrefix}_fid_idx` (`funnel_id` ASC),
                 KEY `c_delay` (`c_delay`),
                 KEY `sequence` (`sequence`),
-                KEY `action_name` (`action_name`)
+                KEY `action_name` (`action_name`),
+                KEY `type_action_name_idx` (`type`, `action_name`)
             ) $charsetCollate;";
 
             dbDelta($sql);
@@ -72,6 +73,17 @@ class FunnelSequences
                         ADD INDEX `action_name` (`action_name`);";
                 // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
                 $wpdb->query($indexSql);
+            }
+
+            $indexNames = [];
+            foreach ($indexes as $index) {
+                $indexNames[] = $index->Key_name;
+            }
+
+            // Add composite index for benchmark lookups (type + action_name)
+            if (!in_array('type_action_name_idx', $indexNames)) {
+                // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+                $wpdb->query("ALTER TABLE {$table} ADD INDEX `type_action_name_idx` (`type`, `action_name`)");
             }
         }
     }

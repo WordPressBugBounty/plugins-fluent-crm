@@ -59,6 +59,8 @@ class FormElementBuilder
             $inputHtml = $this->renderDatePicker($field);
         } else if ($type == 'custom_date_time') {
             $inputHtml = $this->renderDateTimePicker($field);
+        } else if ($type == 'date_dropdowns') {
+            $inputHtml = $this->renderDateDropdowns($field);
         }
 
         return $this->renderLabel($field, $inputHtml);
@@ -171,8 +173,10 @@ class FormElementBuilder
 
         if ($label = Arr::get($field, 'label')) {
             if ($id = Arr::get($field, 'id')) {
+                // date_dropdowns: label must target first visible select, not the hidden input
+                $forId = (Arr::get($field, 'type') === 'date_dropdowns') ? $id . '_day' : $id;
                 $labelAtts = $this->buildAttributes([
-                    'for' => $id
+                    'for' => $forId
                 ]);
             } else {
                 $labelAtts = '';
@@ -214,7 +218,9 @@ class FormElementBuilder
 
     public function renderDate($field)
     {
-        wp_enqueue_script('combodate', FLUENTCRM_PLUGIN_URL . 'assets/libs/combodate/combodate.js', ['jquery', 'moment'], '1.0.7', true);
+        // Note: combodate requires moment.js which is not available on public pages.
+        // Use custom_date type (flatpickr) instead for new date fields.
+        wp_enqueue_script('combodate', FLUENTCRM_PLUGIN_URL . 'assets/libs/combodate/combodate.js', ['jquery'], '1.0.7', true);
 
         add_action('wp_footer', function () use ($field) {
 ?>
@@ -226,6 +232,112 @@ class FormElementBuilder
         <?php
         });
         return $this->renderInput($field);
+    }
+
+    public function renderDateDropdowns($field)
+    {
+        $id = esc_attr(Arr::get($field, 'id', 'fc_date'));
+        $name = esc_attr(Arr::get($field, 'name', 'date'));
+        $value = Arr::get($field, 'value', '');
+
+        $selectedDay = '';
+        $selectedMonth = '';
+        $selectedYear = '';
+
+        if ($value && preg_match('/^(\d{4})-(\d{2})-(\d{2})/', $value, $m)) {
+            $selectedYear  = (int) $m[1];
+            $selectedMonth = (int) $m[2];
+            $selectedDay   = (int) $m[3];
+        }
+
+        $currentYear = (int) gmdate('Y');
+        $minYear = $currentYear - 120;
+
+        // Day select (id for label for= so clicking label focuses first visible control)
+        $html = '<div class="fc_date_dropdowns" id="' . $id . '_wrap">';
+        $html .= '<select class="fc_date_dropdown fc_date_day" id="' . $id . '_day" data-role="day">';
+        $html .= '<option value="">' . esc_html__('Day', 'fluent-crm') . '</option>';
+        for ($d = 1; $d <= 31; $d++) {
+            $sel = ($selectedDay === $d) ? ' selected' : '';
+            $html .= '<option value="' . $d . '"' . $sel . '>' . sprintf('%02d', $d) . '</option>';
+        }
+        $html .= '</select>';
+
+        // Month select
+        $html .= '<select class="fc_date_dropdown fc_date_month" data-role="month">';
+        $html .= '<option value="">' . esc_html__('Month', 'fluent-crm') . '</option>';
+        for ($mo = 1; $mo <= 12; $mo++) {
+            $sel = ($selectedMonth === $mo) ? ' selected' : '';
+            $html .= '<option value="' . $mo . '"' . $sel . '>' . sprintf('%02d', $mo) . '</option>';
+        }
+        $html .= '</select>';
+
+        // Year select
+        $html .= '<select class="fc_date_dropdown fc_date_year" data-role="year">';
+        $html .= '<option value="">' . esc_html__('Year', 'fluent-crm') . '</option>';
+        for ($y = $currentYear; $y >= $minYear; $y--) {
+            $sel = ($selectedYear === $y) ? ' selected' : '';
+            $html .= '<option value="' . $y . '"' . $sel . '>' . $y . '</option>';
+        }
+        $html .= '</select>';
+
+        $html .= '<input type="hidden" name="' . $name . '" id="' . $id . '" value="' . esc_attr($value) . '" />';
+        $html .= '</div>';
+
+        add_action('wp_footer', function () use ($id) {
+        ?>
+            <script>
+                (function() {
+                    var wrap = document.getElementById('<?php echo esc_js($id); ?>_wrap');
+                    if (!wrap) return;
+                    var hidden = document.getElementById('<?php echo esc_js($id); ?>');
+                    var daySelect = wrap.querySelector('[data-role="day"]');
+                    var monthSelect = wrap.querySelector('[data-role="month"]');
+                    var yearSelect = wrap.querySelector('[data-role="year"]');
+                    function daysInMonth(month, year) {
+                        if (!month || !year) return 31;
+                        var m = parseInt(month, 10);
+                        var y = parseInt(year, 10);
+                        return new Date(y, m, 0).getDate();
+                    }
+                    function updateDayOptions() {
+                        var m = monthSelect.value;
+                        var y = yearSelect.value;
+                        var maxDay = daysInMonth(m, y);
+                        var currentDay = parseInt(daySelect.value, 10) || 0;
+                        var options = daySelect.querySelectorAll('option');
+                        for (var i = 1; i < options.length; i++) {
+                            var val = parseInt(options[i].value, 10);
+                            options[i].disabled = val > maxDay;
+                            if (val > maxDay && currentDay === val) currentDay = maxDay;
+                        }
+                        if (currentDay > maxDay) {
+                            daySelect.value = String(maxDay);
+                        }
+                    }
+                    function sync() {
+                        var d = parseInt(daySelect.value, 10);
+                        var m = parseInt(monthSelect.value, 10);
+                        var y = parseInt(yearSelect.value, 10);
+                        if (d && m && y) {
+                            var maxDay = daysInMonth(m, y);
+                            if (d > maxDay) d = maxDay;
+                            hidden.value = y + '-' + (m < 10 ? '0' + m : m) + '-' + (d < 10 ? '0' + d : d);
+                        } else {
+                            hidden.value = '';
+                        }
+                    }
+                    if (monthSelect) monthSelect.addEventListener('change', function() { updateDayOptions(); sync(); });
+                    if (yearSelect) yearSelect.addEventListener('change', function() { updateDayOptions(); sync(); });
+                    if (daySelect) daySelect.addEventListener('change', sync);
+                    updateDayOptions();
+                    sync();
+                })();
+            </script>
+        <?php
+        });
+
+        return $html;
     }
 
     public function renderButton($field)

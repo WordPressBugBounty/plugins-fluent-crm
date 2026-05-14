@@ -2,9 +2,9 @@
 Contributors: techjewel,adreastrian,heera,wpmanageninja
 Tags: email marketing, newsletter, crm, email newsletter, subscribers
 Requires at least: 5.0
-Tested up to: 6.8
+Tested up to: 6.9
 Requires PHP: 7.3
-Stable tag: 2.9.87
+Stable tag: 3.0.1
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -18,7 +18,6 @@ The easiest and fastest Email Marketing, Newsletter, Marketing Automation Plugin
 👉 Official 5 Minutes Guide: [Getting started in 5 minutes](https://fluentcrm.com/fluentcrm-101/)
 
 [youtube https://www.youtube.com/watch?v=eN5UfpZ5mbA]
-
 
 = Your Self Hosted CRM & Email Marketing Solution in WordPress  =
 
@@ -220,7 +219,7 @@ You can report any security bugs found in the source code of FluentCRM plugins t
 
 = Will it is a performance issue for WordPress? =
 
-Absolutely not! From the very first, We were careful about this. It stores all the Campaign and Contact data in custom database tables, so it will not affect your WordPress database. We built the application with VueJS, and it’s only run when you go to the admin dashboard of Fluent CRM. Also, The Admin UI is super fast as It’s a SPA and communicates over ajax.
+Absolutely not! From the very first, We were careful about this. It stores all the Campaign and Contact data in custom database tables, so it will not affect your WordPress database. We built the application with VueJS, and it’s only run when you go to the admin dashboard of FluentCRM. Also, The Admin UI is super fast as It’s a SPA and communicates over ajax.
 
 = How can I migrate From GroundHogg CRM =
 
@@ -254,13 +253,36 @@ You can report any security bugs found in the source code of FluentCRM plugins t
 3. All Contacts
 4. Contact Overview
 5. Campaign Reports
-6. Optin Forms
+6. Opt-In Forms
 7. Marketing Funnel Builder
 8. General Settings
 9. Contact Segments
 10. Pro Integrations
 
 == Changelog ==
+
+= 3.0.0 (Date: May 14, 2026) =
+- New: FluentCRM v3 rebuilt with Vue 3 and Element Plus for a faster, cleaner experience.
+- New: Gutenberg-native email builder with device preview
+- New: Reusable Email Patterns added to the email builder
+- New: SMS marketing - Campaigns, Automations, and Direct Message with Incoming support 
+- New: Frontend Portal introduced.
+- New: Redesigned bulk selection experience with more actions
+- New: New dashboard and rewritten reports with charts, widgets, campaign insights, and UTM visibility.
+- New: Dark Mode support with persistent admin theme preference.
+- New: Write with AI - Generate email content, and summaries with AI assistance.
+- New: AI Summaries added in Contacts
+- New: MCP for AI Agents introduced
+- New: Global search across CRM records.
+- New: Dedicated email preference page, improved docs page, and reorganized settings.
+- New: RTL support, drag-and-drop custom fields, and a better importer flow.
+- New: Added FluentCart abandoned cart recovery.
+- New: Added toSend email service integration with bounce handling
+- Improvement: Email sending optimized for better speed, reliability, and deliverability.
+- Improvement: Bounce handling now more robust
+- Improvement: Abandoned cart for WooCommerce are more reliable
+- Improvement: Better link tracking, automation reliability, and overall framework scalability.
+- Other: Security hardening, compatibility fixes, UI polish, and many bug fixes.
 
 = 2.9.87 (Date: November 24, 2025) =
 - Hotfix: Automation Custom Email Sending Issue Fixed

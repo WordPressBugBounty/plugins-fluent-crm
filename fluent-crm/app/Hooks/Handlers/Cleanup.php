@@ -194,7 +194,7 @@ class Cleanup
 
         $data = [
             'group_id'    => 'fluent-crm-contact',
-            'group_label' => __('Fluent CRM Data', 'fluent-crm'),
+            'group_label' => __('FluentCRM Data', 'fluent-crm'),
             'item_id'     => 'crm-contact',
             'data'        => []
         ];
@@ -258,7 +258,7 @@ class Cleanup
 
         $hash = md5(wp_generate_uuid4() . '_' . $contact->id . '_' . '_' . time() . '__' . $contact->id);
         $exist->value = $hash;
-        $exist->updated_at = gmdate('Y-m-d H:i:s');
+        $exist->updated_at = current_time('mysql');
         $exist->save();
 
         return true;

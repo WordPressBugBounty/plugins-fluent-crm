@@ -46,7 +46,9 @@ class FunnelSubscribers
                 KEY `status` (`status`),
                 KEY `type` (`type`),
                 KEY `next_execution_time` (`next_execution_time`),
-                KEY `next_sequence` (`next_sequence`)
+                KEY `next_sequence` (`next_sequence`),
+                UNIQUE KEY `funnel_subscriber_idx` (`funnel_id`, `subscriber_id`),
+                KEY `status_next_exec_idx` (`status`, `next_execution_time`)
             ) $charsetCollate;";
             dbDelta($sql);
         } else {
@@ -67,6 +69,61 @@ class FunnelSubscribers
 
                 // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
                 $wpdb->query($sql);
+            }
+
+            $indexNames = [];
+            foreach ($indexes as $index) {
+                $indexNames[] = $index->Key_name;
+            }
+
+            // Upgrade non-unique index to UNIQUE: remove duplicates first (keep newest), then replace index
+            if (in_array('funnel_subscriber_idx', $indexNames)) {
+                // Check if it's already unique
+                $isUnique = false;
+                foreach ($indexes as $index) {
+                    if ($index->Key_name === 'funnel_subscriber_idx' && $index->Non_unique == 0) {
+                        $isUnique = true;
+                        break;
+                    }
+                }
+
+                if (!$isUnique) {
+                    // Check if any duplicates exist before running cleanup
+                    // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+                    $hasDuplicates = $wpdb->get_var("SELECT COUNT(*) FROM (
+                        SELECT funnel_id, subscriber_id
+                        FROM {$table}
+                        GROUP BY funnel_id, subscriber_id
+                        HAVING COUNT(*) > 1
+                    ) dups");
+
+                    if ($hasDuplicates) {
+                        // Remove duplicate funnel subscribers, keeping the newest (highest id) per funnel+subscriber pair
+                        // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+                        $wpdb->query("DELETE fs FROM {$table} fs
+                            INNER JOIN (
+                                SELECT funnel_id, subscriber_id, MAX(id) as keep_id
+                                FROM {$table}
+                                GROUP BY funnel_id, subscriber_id
+                                HAVING COUNT(*) > 1
+                            ) dups ON fs.funnel_id = dups.funnel_id
+                                AND fs.subscriber_id = dups.subscriber_id
+                                AND fs.id != dups.keep_id");
+                    }
+
+                    // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+                    $wpdb->query("ALTER TABLE {$table} DROP INDEX `funnel_subscriber_idx`, ADD UNIQUE KEY `funnel_subscriber_idx` (`funnel_id`, `subscriber_id`)");
+                }
+            } elseif (!in_array('funnel_subscriber_idx', $indexNames)) {
+                // Fresh install: add as unique from the start
+                // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+                $wpdb->query("ALTER TABLE {$table} ADD UNIQUE KEY `funnel_subscriber_idx` (`funnel_id`, `subscriber_id`)");
+            }
+
+            // Add composite index for cron heartbeat query (runs every 60 seconds)
+            if (!in_array('status_next_exec_idx', $indexNames)) {
+                // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+                $wpdb->query("ALTER TABLE {$table} ADD INDEX `status_next_exec_idx` (`status`, `next_execution_time`)");
             }
 
         }

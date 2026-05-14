@@ -27,7 +27,7 @@ class Scheduler
          * Migrating from CRON to Action Scheduler for Every Minutes Tasks
          */
         add_action('fluentcrm_scheduled_minute_tasks', function () {
-            if (!as_next_scheduled_action('fluentcrm_scheduled_every_minute_tasks')) {
+            if (!as_has_scheduled_action('fluentcrm_scheduled_every_minute_tasks', [], 'fluent-crm')) {
                 Helper::debugLog('Migrating Every Minute CRON to Action Scheduler for FluentCRM');
                 as_schedule_recurring_action(time(), 60, 'fluentcrm_scheduled_every_minute_tasks', [], 'fluent-crm');
                 return;
@@ -56,10 +56,6 @@ class Scheduler
             if (!get_option('fluentcrm_is_sending_emails')) {
                 $nextCron = as_next_scheduled_action('fluentcrm_scheduled_every_minute_tasks');
                 $willRun = !$nextCron || $nextCron == 1 || ($nextCron - time()) >= 3 || ($nextCron - time()) < -70;
-
-                // $willRun will be true if the next cron is not scheduled or it is scheduled for more than 3 seconds
-                // or it is scheduled for less than -70 seconds (which means it is already passed)
-                // or if the next cron is scheduled for 1 second (which means it is already passed)
 
                 if (!$willRun) {
                     $lastCalled = (int)fluentcrm_get_option('fluentcrm_is_sending_emails_last_called');
@@ -135,7 +131,7 @@ class Scheduler
 
     public static function process()
     {
-        
+
         wp_raise_memory_limit('admin');
         $lastScheduler = fluentCrmGetOptionCache('_fcrm_last_scheduler');
 
@@ -153,10 +149,16 @@ class Scheduler
 
     public static function processForSubscriber($subscriber)
     {
+        if (!is_object($subscriber) || empty($subscriber->id)) {
+            return false;
+        }
+
         if (!defined('FLUENTCRM_DOING_BULK_IMPORT')) {
             // @todo: Implement this immediately
             (new Handler)->processSubscriberEmail($subscriber->id);
         }
+
+        return true;
     }
 
     public static function processHourly()
@@ -214,9 +216,14 @@ class Scheduler
     }
 
     /**
+     * Discover and process pending campaigns.
+     *
+     * Called by cron/Action Scheduler. Handles housekeeping (stale email reset),
+     * finds campaigns ready to process, and kicks off processing. For continuous
+     * processing, use processCampaignById() via the AJAX handler.
+     *
      * @return bool
      */
-
     public static function processFiveMinutes()
     {
         $lastRun = fluentCrmGetOptionCache('_fcrm_last_five_minutes_run', 30);
@@ -225,32 +232,20 @@ class Scheduler
             return false;
         }
 
-        fluentCrmSetOptionCache('_fcrm_last_five_minutes_run', time(), 30);
-
-        $lastChecked = fluentCrmGetOptionCache('_fcrm_last_email_process_cleanup', 600);
-        if (!$lastChecked || time() - $lastChecked > 140) {
-            $dateStamp = gmdate('Y-m-d H:i:s', (current_time('timestamp') - 120));
-            CampaignEmail::where('status', 'processing')
-                ->where('updated_at', '<', $dateStamp)
-                ->update([
-                    'status' => 'pending'
-                ]);
-
-            fluentCrmSetOptionCache('_fcrm_last_email_process_cleanup', time(), 600);
-        }
+        fluentCrmSetOptionCache('_fcrm_last_five_minutes_run', time(), 60);
 
         CampaignEmail::where('status', 'processing')
-            ->where('updated_at', '<', gmdate('Y-m-d H:i:s', (current_time('timestamp') - 30)))
+            ->where('updated_at', '<', gmdate('Y-m-d H:i:s', (current_time('timestamp') - 100)))
             ->update([
                 'status' => 'pending'
             ]);
 
-        $cutOutTime = gmdate('Y-m-d H:i:s', current_time('timestamp') + 360); // within 6 minutes of the future
+        $cutOutTime = gmdate('Y-m-d H:i:s', current_time('timestamp') + 360);
 
         $campaigns = Campaign::whereIn('status', ['pending-scheduled', 'processing'])
             ->withoutGlobalScope('type')
             ->whereIn('type', fluentCrmAutoProcessCampaignTypes())
-            ->orderBy('scheduled_at', 'DESC')
+            ->orderBy('scheduled_at', 'ASC')
             ->where('scheduled_at', '<=', $cutOutTime)
             ->limit(2)
             ->get();
@@ -261,36 +256,89 @@ class Scheduler
             return false;
         }
 
-        $firstCampaign = $campaigns[0];
+        $firstCampaign = $campaigns->first();
 
         if ($firstCampaign->status == 'pending-scheduled') {
             $firstCampaign->status = 'processing';
             $firstCampaign->save();
         }
 
+        $result = self::processCampaignById($firstCampaign->id);
+
+        // If first campaign is done and there are more queued, chain the next one.
+        // Skip if memory is low (aborted) to avoid cascading failures.
+        if (!$result && count($campaigns) > 1 && !fluentCrmIsMemoryExceeded()) {
+            // Verify first campaign actually finished (not just aborted)
+            $firstCampaign = Campaign::withoutGlobalScope('type')->find($firstCampaign->id);
+            if ($firstCampaign && $firstCampaign->status != 'processing') {
+                $nextCampaign = $campaigns->last();
+                if ($nextCampaign->status == 'pending-scheduled') {
+                    $nextCampaign->status = 'processing';
+                    $nextCampaign->save();
+                }
+                self::fireCampaignProcessingChain($nextCampaign->id);
+            }
+        }
+
+        return $result;
+    }
+
+    /**
+     * Process a specific campaign by ID.
+     *
+     * Can be called directly from the AJAX handler for continuous chaining
+     * without re-discovering campaigns or running housekeeping.
+     *
+     * @param int $campaignId
+     * @return bool True if more processing is needed, false if done.
+     */
+    public static function processCampaignById($campaignId)
+    {
+        if (function_exists('set_time_limit')) {
+            @set_time_limit(120);
+        }
+
+        $campaign = Campaign::withoutGlobalScope('type')->find($campaignId);
+        if (!$campaign) {
+            return false;
+        }
+
+        $campaignProcessingChunk = (int)apply_filters('fluent_crm/five_minute_campaign_processing_chunk', 20, $campaign);
+        if ($campaignProcessingChunk < 1) {
+            $campaignProcessingChunk = 1;
+        }
+
         $runTime = fluentCrmMaxRunTime() - 5;
-        $campaign = (new CampaignProcessor($firstCampaign->id))->processEmails(20, $runTime);
+        $campaign = (new CampaignProcessor($campaignId))->processEmails($campaignProcessingChunk, $runTime);
 
         if (fluentCrmIsMemoryExceeded()) {
             return false;
         }
 
-        if (($campaign && $campaign->status == 'processing') || count($campaigns) > 1) {
-            // Send a background request here
-            wp_remote_post(admin_url('admin-ajax.php'), [
-                'sslverify' => false,
-                'blocking'  => false,
-                'cookies'   => array(),
-                'body'      => [
-                    'retry'  => 1,
-                    'time'   => time(),
-                    'action' => 'fluentcrm-post-campaigns-emails-processing'
-                ]
-            ]);
+        if ($campaign && $campaign->status == 'processing') {
+            self::fireCampaignProcessingChain($campaignId);
             return true;
         }
 
         return false;
+    }
+
+    /**
+     * Fire a background AJAX request to continue processing a specific campaign.
+     *
+     * @param int $campaignId
+     */
+    private static function fireCampaignProcessingChain($campaignId)
+    {
+        $url = add_query_arg([
+            'action'      => 'fluentcrm-post-campaigns-emails-processing',
+            'campaign_id' => $campaignId,
+            'time'        => time()
+        ], admin_url('admin-ajax.php'));
+
+        \FluentCrm\App\Services\Libs\Mailer\Handler::fireNonBlockingRequest($url, [
+            'retry' => 1
+        ]);
     }
 
     public static function maybeCleanupCsvFiles()

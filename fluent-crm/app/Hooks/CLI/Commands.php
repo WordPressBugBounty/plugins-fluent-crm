@@ -195,7 +195,7 @@ class Commands
 
             $offset += $limit;
 
-            if (!$customers) {
+            if ($customers->isEmpty()) {
                 $processingStatus = false;
             } else {
                 foreach ($customers as $customer) {
@@ -415,7 +415,7 @@ class Commands
 
             $offset += 10;
 
-            if (!$customers) {
+            if ($customers->isEmpty()) {
                 $processingStatus = false;
             } else {
                 foreach ($customers as $customer) {
@@ -634,7 +634,7 @@ class Commands
 
             $offset += 10;
 
-            if (!$students) {
+            if ($students->isEmpty()) {
                 $processingStatus = false;
             } else {
                 foreach ($students as $student) {
@@ -869,7 +869,7 @@ class Commands
             return;
         }
 
-        if (!$licenses) {
+        if ($licenses->isEmpty()) {
             \WP_CLI::line('No users found');
             return;
         }
@@ -934,7 +934,7 @@ class Commands
             return;
         }
 
-        if (!$licenses) {
+        if ($licenses->isEmpty()) {
             \WP_CLI::line('No users found');
             return;
         }
@@ -1099,6 +1099,11 @@ class Commands
         }
 
         \WP_CLI::line('User ids for contacts has been synced');
+    }
+
+    public function simulate_funnel($args, $assoc_args)
+    {
+        (new SimulateFunnelCommand())->handle($args, $assoc_args);
     }
 
 }

@@ -1,0 +1,1 @@
+import"../../vendor.js?ver=3.0.0-beta.1";import"../../vendor-element-plus.js?ver=3.0.0-beta.1";window.FLUENTCRM.addAction("fluent_crm_subscriber_loaded","fluentcrm_test",function(e){return!1}),window.FLUENTCRM.addAction("fluent_crm_leaving_profile","fluentcrm_test",function(e){return!1});
