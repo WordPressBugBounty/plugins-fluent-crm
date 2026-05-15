@@ -175,7 +175,8 @@ class FunnelCampaign extends Campaign
             // Let's create the email body here
             $rawTemplates = [
                 'raw_html',
-                'visual_builder'
+                'visual_builder',
+                'raw_classic'
             ];
             $emailBody = $this->email_body;
             if (!in_array($this->design_template, $rawTemplates)) {

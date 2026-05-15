@@ -924,7 +924,8 @@ class CampaignController extends Controller
 
         $rawTemplates = [
             'raw_html',
-            'visual_builder'
+            'visual_builder',
+            'raw_classic'
         ];
 
         if (in_array($designTemplate, $rawTemplates)) {
@@ -1096,7 +1097,8 @@ class CampaignController extends Controller
 
         $rawTemplates = [
             'raw_html',
-            'visual_builder'
+            'visual_builder',
+            'raw_classic'
         ];
 
         if (in_array($designTemplate, $rawTemplates)) {

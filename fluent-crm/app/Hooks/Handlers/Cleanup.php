@@ -273,7 +273,8 @@ class Cleanup
         // We will create email body and then cache it for future use
         $rawTemplates = [
             'raw_html',
-            'visual_builder'
+            'visual_builder',
+            'raw_classic'
         ];
 
         if (in_array($campaign->design_template, $rawTemplates)) {

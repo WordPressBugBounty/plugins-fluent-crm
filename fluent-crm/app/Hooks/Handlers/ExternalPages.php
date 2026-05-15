@@ -1417,7 +1417,8 @@ class ExternalPages
 
         $rawTemplates = [
             'raw_html',
-            'visual_builder'
+            'visual_builder',
+            'raw_classic'
         ];
 
         if (in_array($email->campaign->design_template, $rawTemplates)) {
@@ -1678,7 +1679,8 @@ class ExternalPages
             // Let's generate the email body
             $rawTemplates = [
                 'raw_html',
-                'visual_builder'
+                'visual_builder',
+                'raw_classic'
             ];
 
             if (in_array($campaign->design_template, $rawTemplates)) {

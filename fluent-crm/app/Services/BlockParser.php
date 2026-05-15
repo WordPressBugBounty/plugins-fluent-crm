@@ -22,12 +22,6 @@ class BlockParser
 
     public function parse($content)
     {
-        $forceLegacy = (bool)apply_filters('fluent_crm/block_parser_force_legacy', false, $content);
-        if ($forceLegacy) {
-            return $this->parseWithLegacyParser($content);
-        }
-
-        $parsed = '';
         try {
             $gutenParse = new \FluentCrm\App\Services\GutenbergEmailParser();
             $parsed = $gutenParse->parse($content);

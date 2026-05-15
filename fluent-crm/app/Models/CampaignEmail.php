@@ -358,7 +358,8 @@ class CampaignEmail extends Model
         if (!$this->is_parsed) {
             $rawTemplates = [
                 'raw_html',
-                'visual_builder'
+                'visual_builder',
+                'raw_classic'
             ];
 
             $emailBody = ($campaign) ? $campaign->email_body : $this->email_body;
@@ -546,7 +547,8 @@ class CampaignEmail extends Model
 
         $rawTemplates = [
             'raw_html',
-            'visual_builder'
+            'visual_builder',
+            'raw_classic'
         ];
 
         if (in_array($this->campaign->design_template, $rawTemplates)) {
