@@ -140,12 +140,6 @@ add_action('wp_ajax_nopriv_fluentcrm-post-campaigns-emails-processing', function
 add_action('wp_loaded', function () use ($app) {
     if (isset($_GET['ns_url'])) {
         (new \FluentCrm\App\Hooks\Handlers\RedirectionHandler())->redirect($_GET);
-    } else if (isset($_GET['do_fluentcrm_scheduled_tasks'])) {
-        do_action('fluentcrm_scheduled_minute_tasks');
-        wp_send_json_success();
-    } else if (isset($_GET['fluentcrm_scheduled_hourly_tasks'])) {
-        do_action('fluentcrm_scheduled_hourly_tasks');
-        wp_send_json_success();
     }
 });
 

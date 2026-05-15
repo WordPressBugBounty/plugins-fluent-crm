@@ -49,7 +49,22 @@ class ContactsQuery
         }
 
         if ($shortBy = $this->args['sort_by']) {
-            if (in_array($shortBy, (new Subscriber())->getFillable()) || $shortBy == 'id') {
+            // Allowlist of every real fc_subscribers column. The framework
+            // rewrite (May 2025) made orderBy() throw LogicException for
+            // names that don't match ^[a-zA-Z0-9_\.]+$, and unknown columns
+            // would produce SQL errors — so the check has to happen before
+            // we hand the value to the builder. getFillable() used to be
+            // the gate but it omits id, contact_owner and a few others,
+            // so legitimate sorts (e.g., contact_owner) silently dropped.
+            $allowedSortBy = [
+                'id', 'user_id', 'hash', 'contact_owner', 'company_id', 'prefix',
+                'first_name', 'last_name', 'email', 'timezone', 'address_line_1',
+                'address_line_2', 'postal_code', 'city', 'state', 'country', 'ip',
+                'latitude', 'longitude', 'total_points', 'life_time_value', 'phone',
+                'status', 'contact_type', 'source', 'avatar', 'date_of_birth',
+                'created_at', 'last_activity', 'updated_at',
+            ];
+            if (in_array($shortBy, $allowedSortBy, true)) {
                 $subscribersQuery->orderBy($shortBy, $this->args['sort_type']);
             }
         }

@@ -821,6 +821,47 @@ class CompanyController extends Controller
         ]);
     }
 
+    public function bulkDeleteNotes(Request $request, $id)
+    {
+        $company = Company::findOrFail($id);
+        $noteIds = array_filter(array_map('intval', (array) $request->get('note_ids', [])));
+
+        if (empty($noteIds)) {
+            return $this->sendError([
+                'message' => __('No note IDs provided', 'fluent-crm')
+            ]);
+        }
+
+        if (count($noteIds) > 200) {
+            return $this->sendError([
+                'message' => __('Too many notes selected. Please delete 200 or fewer notes at a time.', 'fluent-crm')
+            ]);
+        }
+
+        // Scope delete to this company so users cannot delete notes belonging to other companies.
+        $deletableNoteIds = CompanyNote::where('subscriber_id', $company->id)
+            ->whereIn('id', $noteIds)
+            ->pluck('id')
+            ->toArray();
+
+        $deletedCount = 0;
+        if ($deletableNoteIds) {
+            $deletedCount = CompanyNote::whereIn('id', $deletableNoteIds)->delete();
+
+            foreach ($deletableNoteIds as $deletedNoteId) {
+                do_action('fluent_crm/company_note_deleted', $deletedNoteId, $company);
+            }
+        }
+
+        return $this->sendSuccess([
+            'message' => sprintf(
+                /* translators: %d: number of deleted notes */
+                _n('%d note deleted', '%d notes deleted', $deletedCount, 'fluent-crm'),
+                $deletedCount
+            )
+        ]);
+    }
+
     public function getCustomGlobalFields(CustomCompanyField $model)
     {
         return $this->sendSuccess(

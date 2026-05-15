@@ -42,6 +42,11 @@ class SubscriberPolicy extends BasePolicy
         return $this->currentUserCan('fcrm_manage_contacts_delete');
     }
 
+    public function bulkDeleteNotes(Request $request)
+    {
+        return $this->currentUserCan('fcrm_manage_contacts_delete');
+    }
+
     public function deleteEmails(Request $request)
     {
         return $this->currentUserCan('fcrm_manage_email_delete');

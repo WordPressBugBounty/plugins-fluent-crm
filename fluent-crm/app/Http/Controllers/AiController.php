@@ -11,15 +11,15 @@ use FluentCrm\Framework\Support\Arr;
 class AiController extends Controller
 {
     private $credentialsOptionKey = '_fluent_ai_creds';
-    private $legacyCredentialsOptionKey = '_ai_writing_settings';
+    private $writingSettingsOptionKey = '_ai_writing_settings';
     private $providerModels = [
         'open_ai' => ['auto', 'gpt-5.5', 'gpt-5.4', 'gpt-5.4-mini', 'gpt-5.4-nano', 'gpt-4.1', 'gpt-4o', 'gpt-4o-mini', 'gpt-5-mini'],
         'claude'  => ['auto', 'claude-opus-4-7', 'claude-sonnet-4-6', 'claude-haiku-4-5-20251001', 'claude-opus-4-6'],
-        'gemini'  => ['auto', 'gemini-3.1-pro-preview', 'gemini-3.1-flash', 'gemini-3-flash-preview', 'gemini-3.1-flash-lite', 'gemini-2.5-flash', 'gemini-2.5-pro', 'gemini-2.5-flash-lite'],
+        'gemini'  => ['auto', 'gemini-3.1-pro-preview', 'gemini-3-flash-preview', 'gemini-3.1-flash-lite', 'gemini-2.5-flash', 'gemini-2.5-pro', 'gemini-2.5-flash-lite'],
     ];
 
     private $autoProviderModels = [
-        'open_ai' => 'gpt-5.5',
+        'open_ai' => 'gpt-5-mini',
         'claude'  => 'claude-sonnet-4-6',
         'gemini'  => 'gemini-2.5-flash',
     ];
@@ -86,8 +86,7 @@ class AiController extends Controller
         ];
 
         update_option($this->credentialsOptionKey, $credentials, false);
-        fluentcrm_update_option($this->legacyCredentialsOptionKey, $preferences);
-        delete_option('_fluentcrm_ai_writing_preferences');
+        fluentcrm_update_option($this->writingSettingsOptionKey, $preferences);
 
         return $this->sendSuccess([
             'message' => __('AI configuration saved successfully.', 'fluent-crm'),
@@ -879,9 +878,9 @@ class AiController extends Controller
                 'Content-Type'  => 'application/json',
             ],
             'body' => wp_json_encode([
-                'model'      => $model,
-                'messages'   => $messages,
-                'max_tokens' => 2048,
+                'model'                 => $model,
+                'messages'              => $messages,
+                'max_completion_tokens' => 2048,
             ]),
         ]);
 
@@ -1020,59 +1019,34 @@ class AiController extends Controller
     private function getSavedCredentials()
     {
         $credentials = get_option($this->credentialsOptionKey, []);
-        $legacySettings = $this->getLegacySavedSettings();
 
         if (!is_array($credentials)) {
             $credentials = [];
         }
 
-        $provider = $this->normalizeProvider(Arr::get($credentials, 'provider', Arr::get($legacySettings, 'provider', '')));
-        $model = sanitize_text_field(Arr::get($credentials, 'model', Arr::get($legacySettings, 'model', 'auto')));
+        $provider = $this->normalizeProvider(Arr::get($credentials, 'provider', ''));
+        $model = sanitize_text_field(Arr::get($credentials, 'model', 'auto'));
 
         return [
             'provider'   => $provider,
             'model'      => $model ?: 'auto',
-            'api_key'    => sanitize_text_field(Arr::get($credentials, 'api_key', Arr::get($legacySettings, 'api_key', ''))),
+            'api_key'    => sanitize_text_field(Arr::get($credentials, 'api_key', '')),
             'created_by' => sanitize_text_field(Arr::get($credentials, 'created_by', '')),
         ];
     }
 
     private function getSavedPreferences()
     {
-        $preferences = fluentcrm_get_option($this->legacyCredentialsOptionKey, []);
-        $legacySettings = $this->getLegacySavedSettings();
-
-        if (!is_array($preferences) || !$preferences) {
-            $preferences = get_option('_fluentcrm_ai_writing_preferences', []);
-        }
+        $preferences = fluentcrm_get_option($this->writingSettingsOptionKey, []);
 
         if (!is_array($preferences)) {
             $preferences = [];
         }
 
         return [
-            'is_enabled'    => sanitize_text_field(Arr::get($preferences, 'is_enabled', Arr::get($legacySettings, 'is_enabled', 'no'))) === 'yes' ? 'yes' : 'no',
-            'custom_prompt' => sanitize_textarea_field(Arr::get($preferences, 'custom_prompt', Arr::get($legacySettings, 'custom_prompt', ''))),
+            'is_enabled'    => sanitize_text_field(Arr::get($preferences, 'is_enabled', 'no')) === 'yes' ? 'yes' : 'no',
+            'custom_prompt' => sanitize_textarea_field(Arr::get($preferences, 'custom_prompt', '')),
         ];
-    }
-
-    private function getLegacySavedSettings()
-    {
-        $settings = fluentcrm_get_option($this->legacyCredentialsOptionKey, []);
-
-        if (!is_array($settings)) {
-            return [];
-        }
-
-        if (!empty($settings['provider'])) {
-            $settings['provider'] = $this->normalizeProvider($settings['provider']);
-        }
-
-        if (empty($settings['model'])) {
-            $settings['model'] = 'auto';
-        }
-
-        return $settings;
     }
 
     private function normalizeProvider($provider)

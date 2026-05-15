@@ -891,6 +891,47 @@ class SubscriberController extends Controller
         ]);
     }
 
+    public function bulkDeleteNotes(Request $request, $id)
+    {
+        $subscriber = Subscriber::findOrFail($id);
+        $noteIds = array_filter(array_map('intval', (array) $request->get('note_ids', [])));
+
+        if (empty($noteIds)) {
+            return $this->sendError([
+                'message' => __('No note IDs provided', 'fluent-crm')
+            ]);
+        }
+
+        if (count($noteIds) > 200) {
+            return $this->sendError([
+                'message' => __('Too many notes selected. Please delete 200 or fewer notes at a time.', 'fluent-crm')
+            ]);
+        }
+
+        // Scope delete to this subscriber so users cannot delete notes belonging to other contacts.
+        $deletableNoteIds = SubscriberNote::where('subscriber_id', $subscriber->id)
+            ->whereIn('id', $noteIds)
+            ->pluck('id')
+            ->toArray();
+
+        $deletedCount = 0;
+        if ($deletableNoteIds) {
+            $deletedCount = SubscriberNote::whereIn('id', $deletableNoteIds)->delete();
+
+            foreach ($deletableNoteIds as $deletedNoteId) {
+                do_action('fluent_crm/note_delete', $deletedNoteId, $subscriber);
+            }
+        }
+
+        return $this->sendSuccess([
+            'message' => sprintf(
+                /* translators: %d: number of deleted notes */
+                _n('%d note deleted', '%d notes deleted', $deletedCount, 'fluent-crm'),
+                $deletedCount
+            )
+        ]);
+    }
+
     public function getFormSubmissions()
     {
         $provider = $this->request->get('provider');

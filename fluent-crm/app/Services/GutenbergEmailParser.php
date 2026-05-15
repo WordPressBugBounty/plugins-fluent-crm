@@ -1012,7 +1012,7 @@ class GutenbergEmailParser
             $class .= ' ' . $className;
         }
 
-        return "<a class='".esc_attr($class)."' id=\"$elementId\" style='$styles' href=\"{$url}\">{$text}</a>";
+        return "<a class='" . esc_attr($class) . "' id=\"" . esc_attr($elementId) . "\" style='" . esc_attr($styles) . "' href=\"" . esc_url($url) . "\">" . esc_html($text) . "</a>";
     }
 
     /**
@@ -1046,19 +1046,46 @@ class GutenbergEmailParser
             }
         }
 
+        $buttonAttrs = $this->getFirstButtonBlockAttrs($block);
+        $buttonElementId = uniqid('block-', false);
+        $buttonAttrs['elem_id'] = $buttonElementId;
+
         $buttonHtml = $this->renderButton(
             '<a href="' . esc_url($buttonUrl) . '">' . esc_html($buttonText) . '</a>',
-            []
+            $buttonAttrs
         );
 
         if (!$buttonHtml) {
             $buttonHtml = '<a href="' . esc_url($buttonUrl) . '">' . esc_html($buttonText) . '</a>';
+        } else {
+            $this->collectInlineStyles($buttonElementId, $buttonAttrs, 'core/button');
         }
 
         return WooProduct::renderProduct($buttonHtml, [
             'blockName' => 'fluentcrm/woo-product',
             'attrs'     => $attrs
         ]);
+    }
+
+    /**
+     * Find the first nested Gutenberg button attrs inside product blocks.
+     */
+    private function getFirstButtonBlockAttrs($block)
+    {
+        $innerBlocks = Arr::get($block, 'innerBlocks', []);
+
+        foreach ($innerBlocks as $innerBlock) {
+            if (Arr::get($innerBlock, 'blockName') === 'core/button') {
+                return Arr::get($innerBlock, 'attrs', []);
+            }
+
+            $buttonAttrs = $this->getFirstButtonBlockAttrs($innerBlock);
+            if ($buttonAttrs) {
+                return $buttonAttrs;
+            }
+        }
+
+        return [];
     }
 
     /**

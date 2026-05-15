@@ -4,7 +4,7 @@ Tags: email marketing, newsletter, crm, email newsletter, subscribers
 Requires at least: 5.0
 Tested up to: 6.9
 Requires PHP: 7.3
-Stable tag: 3.0.2
+Stable tag: 3.0.3
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -260,6 +260,19 @@ You can report any security bugs found in the source code of FluentCRM plugins t
 10. Pro Integrations
 
 == Changelog ==
+
+= 3.0.3 (Date: May 15, 2026) =
+- Improvement: Performance Issues in DB
+- Improvement: SMS SmartCodes
+- Improvement:Advance Filter and Dynamic Segment Issues
+- Fixed: UI Issues
+- Fixed: Woo Button Styling Issue
+- Fixed: SmartCode Links issues in Gutenberg Button
+- Fixed: Automation DarkMode Issues
+- Other Improvement & Bug Fixes
+
+= 3.0.2 (Date: May 14, 2026) =
+- Fixed Issues on some sites
 
 = 3.0.0 (Date: May 14, 2026) =
 - New: FluentCRM v3 rebuilt with Vue 3 and Element Plus for a faster, cleaner experience.

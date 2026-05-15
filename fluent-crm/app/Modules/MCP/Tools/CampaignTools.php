@@ -32,7 +32,24 @@ class CampaignTools
         $statuses = (array) ($params['statuses'] ?? []);
         $statuses = array_values(array_filter(array_map('sanitize_key', $statuses)));
 
+        // All fc_campaigns columns. The framework rewrite made orderBy() throw
+        // LogicException on column names that don't match ^[a-zA-Z0-9_\.]+$
+        // — empty strings, "id ASC", "DROP TABLE", etc. — so an unguarded
+        // sort_by would 500 the tool. Schema is stable (migration only adds
+        // indexes), so hardcoding the column list avoids a per-request
+        // SHOW COLUMNS without restricting agents to the input_schema enum.
+        $allowedSortBy = [
+            'id', 'parent_id', 'type', 'title', 'available_urls', 'slug',
+            'status', 'template_id', 'email_subject', 'email_pre_header',
+            'email_body', 'recipients_count', 'delay', 'utm_status',
+            'utm_source', 'utm_medium', 'utm_campaign', 'utm_term',
+            'utm_content', 'design_template', 'scheduled_at', 'settings',
+            'created_by', 'created_at', 'updated_at',
+        ];
         $sortBy = sanitize_key((string) ($params['sort_by'] ?? 'created_at'));
+        if (!in_array($sortBy, $allowedSortBy, true)) {
+            $sortBy = 'created_at';
+        }
         $sortType = strtoupper(sanitize_text_field((string) ($params['sort_type'] ?? 'DESC')));
         $sortType = in_array($sortType, ['ASC', 'DESC'], true) ? $sortType : 'DESC';
         $includeStats = !isset($params['include_stats']) ? true : (bool) $params['include_stats'];

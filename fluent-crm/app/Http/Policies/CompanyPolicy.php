@@ -54,6 +54,11 @@ class CompanyPolicy extends BasePolicy
         return $this->verifyRequest($request);
     }
 
+    public function bulkDeleteNotes(Request $request)
+    {
+        return $this->verifyRequest($request);
+    }
+
     public function deleteSubscribes(Request $request)
     {
         return $this->detachSubscribers($request);

@@ -27,28 +27,27 @@ class Scheduler
          * Migrating from CRON to Action Scheduler for Every Minutes Tasks
          */
         add_action('fluentcrm_scheduled_minute_tasks', function () {
+            // Auto-migration: ensure the Action Scheduler recurring action exists.
             if (!as_has_scheduled_action('fluentcrm_scheduled_every_minute_tasks', [], 'fluent-crm')) {
                 Helper::debugLog('Migrating Every Minute CRON to Action Scheduler for FluentCRM');
                 as_schedule_recurring_action(time(), 60, 'fluentcrm_scheduled_every_minute_tasks', [], 'fluent-crm');
                 return;
             }
 
-            // We already have the action scheduled, but that can be blocked by some other plugin
+            // WP-Cron is a TRUE fallback: only take over when Action Scheduler
+            // has actually stalled. _fcrm_last_scheduler is written by
+            // Scheduler::process() on every successful AS-driven minute tick;
+            // if it's fresh, AS owns this minute and we no-op here.
             $lastScheduler = fluentCrmGetOptionCache('_fcrm_last_scheduler');
-            if (($lastScheduler && (time() - $lastScheduler) > 70)) {
-                Helper::debugLog('Action scheduler is not working', 'Scheduler::register -> ' . (time() - $lastScheduler));
-                self::process();
+            if ($lastScheduler && (time() - $lastScheduler) <= 70) {
                 return;
             }
 
-            do_action('fluent_crm_process_automation');
-
-            // Looks like action scheduler is working just fine. Maybe we can check for some regular tasks
-            // We will run the five minutes tasks for around 60% times
-            if (wp_rand(1, 100) > 40) {
-                self::processFiveMinutes();
-            }
-
+            // AS appears stalled (or has never run on this site yet) — take
+            // over via the same locked entry point AS uses. The atomic lock
+            // inside process() prevents two concurrent WP-Cron runners both
+            // deciding to take over from racing each other.
+            self::process();
         });
 
         // This is required to instantly send emails for regular email handler
@@ -131,19 +130,34 @@ class Scheduler
 
     public static function process()
     {
-
         wp_raise_memory_limit('admin');
-        $lastScheduler = fluentCrmGetOptionCache('_fcrm_last_scheduler');
 
-        if (($lastScheduler && (time() - $lastScheduler) < 30) || did_action('fluentcrm_process_scheduled_tasks_init')) {
-            return false; // it's too fast. We don't want to run this again within 30 seconds
+        // In-process re-entrance guard (cheap; complements the cross-process lock below).
+        if (did_action('fluentcrm_process_scheduled_tasks_init')) {
+            return false;
         }
 
-        fluentCrmSetOptionCache('_fcrm_last_scheduler', time(), 50);
-        do_action('fluentcrm_process_scheduled_tasks_init');
+        // Atomic cross-process mutex. Prevents concurrent AS + WP-Cron + AJAX
+        // runners from all reaching Handler->handle() at the same time. The
+        // downstream BaseHandler also has its own lock — this outer guard
+        // avoids wasted PHP bootstraps for the loser of the race.
+        if (!self::acquireLock('minute_scheduler', 90)) {
+            return false;
+        }
 
-        // Send Pending Emails
-        (new Handler)->handle();
+        try {
+            // _fcrm_last_scheduler stays as the success-timestamp signal used
+            // by the WP-Cron fallback in register() to detect a stalled Action
+            // Scheduler. It is no longer the gate that prevents re-entry —
+            // that role belongs to the atomic lock above.
+            fluentCrmSetOptionCache('_fcrm_last_scheduler', time(), 50);
+            do_action('fluentcrm_process_scheduled_tasks_init');
+
+            (new Handler)->handle();
+        } finally {
+            self::releaseLock('minute_scheduler');
+        }
+
         return true;
     }
 
@@ -163,9 +177,22 @@ class Scheduler
 
     public static function processHourly()
     {
-        self::markArchiveCampaigns();
-        self::maybeCleanupCsvFiles();
-        do_action('fluent_crm_process_automation');
+        // Atomic mutex. Closes the duplicate-event leak in markArchiveCampaigns():
+        // without this, two concurrent hourly runners both pass the SELECT,
+        // both UPDATE rows to 'archived' (idempotent), and both fire
+        // fluent_crm/campaign_archived for the same campaign — causing
+        // listeners (webhooks, metrics, notifications) to fire twice.
+        if (!self::acquireLock('hourly_scheduler', 300)) {
+            return;
+        }
+
+        try {
+            self::markArchiveCampaigns();
+            self::maybeCleanupCsvFiles();
+            do_action('fluent_crm_process_automation');
+        } finally {
+            self::releaseLock('hourly_scheduler');
+        }
     }
 
 
@@ -226,61 +253,73 @@ class Scheduler
      */
     public static function processFiveMinutes()
     {
+        // Cheap time-based pre-check — skips the lock-acquire round trip when
+        // the function is called more frequently than the work needs to run.
         $lastRun = fluentCrmGetOptionCache('_fcrm_last_five_minutes_run', 30);
-
         if ($lastRun && (time() - $lastRun) < 60) {
             return false;
         }
 
-        fluentCrmSetOptionCache('_fcrm_last_five_minutes_run', time(), 60);
-
-        CampaignEmail::where('status', 'processing')
-            ->where('updated_at', '<', gmdate('Y-m-d H:i:s', (current_time('timestamp') - 100)))
-            ->update([
-                'status' => 'pending'
-            ]);
-
-        $cutOutTime = gmdate('Y-m-d H:i:s', current_time('timestamp') + 360);
-
-        $campaigns = Campaign::whereIn('status', ['pending-scheduled', 'processing'])
-            ->withoutGlobalScope('type')
-            ->whereIn('type', fluentCrmAutoProcessCampaignTypes())
-            ->orderBy('scheduled_at', 'ASC')
-            ->where('scheduled_at', '<=', $cutOutTime)
-            ->limit(2)
-            ->get();
-
-        if ($campaigns->isEmpty()) {
-            do_action('fluent_crm_process_automation');
-            do_action('fluentcrm_scheduled_hourly_tasks');
+        // Atomic mutex. The throttle above is non-atomic so two near-simultaneous
+        // callers can both pass it; the lock guarantees that only one actually
+        // proceeds into discovery + processing.
+        if (!self::acquireLock('five_minute_scheduler', 180)) {
             return false;
         }
 
-        $firstCampaign = $campaigns->first();
+        try {
+            fluentCrmSetOptionCache('_fcrm_last_five_minutes_run', time(), 60);
 
-        if ($firstCampaign->status == 'pending-scheduled') {
-            $firstCampaign->status = 'processing';
-            $firstCampaign->save();
-        }
+            CampaignEmail::where('status', 'processing')
+                ->where('updated_at', '<', gmdate('Y-m-d H:i:s', (current_time('timestamp') - 100)))
+                ->update([
+                    'status' => 'pending'
+                ]);
 
-        $result = self::processCampaignById($firstCampaign->id);
+            $cutOutTime = gmdate('Y-m-d H:i:s', current_time('timestamp') + 360);
 
-        // If first campaign is done and there are more queued, chain the next one.
-        // Skip if memory is low (aborted) to avoid cascading failures.
-        if (!$result && count($campaigns) > 1 && !fluentCrmIsMemoryExceeded()) {
-            // Verify first campaign actually finished (not just aborted)
-            $firstCampaign = Campaign::withoutGlobalScope('type')->find($firstCampaign->id);
-            if ($firstCampaign && $firstCampaign->status != 'processing') {
-                $nextCampaign = $campaigns->last();
-                if ($nextCampaign->status == 'pending-scheduled') {
-                    $nextCampaign->status = 'processing';
-                    $nextCampaign->save();
-                }
-                self::fireCampaignProcessingChain($nextCampaign->id);
+            $campaigns = Campaign::whereIn('status', ['pending-scheduled', 'processing'])
+                ->withoutGlobalScope('type')
+                ->whereIn('type', fluentCrmAutoProcessCampaignTypes())
+                ->orderBy('scheduled_at', 'ASC')
+                ->where('scheduled_at', '<=', $cutOutTime)
+                ->limit(2)
+                ->get();
+
+            if ($campaigns->isEmpty()) {
+                do_action('fluent_crm_process_automation');
+                do_action('fluentcrm_scheduled_hourly_tasks');
+                return false;
             }
-        }
 
-        return $result;
+            $firstCampaign = $campaigns->first();
+
+            if ($firstCampaign->status == 'pending-scheduled') {
+                $firstCampaign->status = 'processing';
+                $firstCampaign->save();
+            }
+
+            $result = self::processCampaignById($firstCampaign->id);
+
+            // If first campaign is done and there are more queued, chain the next one.
+            // Skip if memory is low (aborted) to avoid cascading failures.
+            if (!$result && count($campaigns) > 1 && !fluentCrmIsMemoryExceeded()) {
+                // Verify first campaign actually finished (not just aborted)
+                $firstCampaign = Campaign::withoutGlobalScope('type')->find($firstCampaign->id);
+                if ($firstCampaign && $firstCampaign->status != 'processing') {
+                    $nextCampaign = $campaigns->last();
+                    if ($nextCampaign->status == 'pending-scheduled') {
+                        $nextCampaign->status = 'processing';
+                        $nextCampaign->save();
+                    }
+                    self::fireCampaignProcessingChain($nextCampaign->id);
+                }
+            }
+
+            return $result;
+        } finally {
+            self::releaseLock('five_minute_scheduler');
+        }
     }
 
     /**
@@ -294,33 +333,51 @@ class Scheduler
      */
     public static function processCampaignById($campaignId)
     {
-        if (function_exists('set_time_limit')) {
-            @set_time_limit(120);
-        }
-
-        $campaign = Campaign::withoutGlobalScope('type')->find($campaignId);
-        if (!$campaign) {
+        // Per-campaign scheduler lock. processCampaignById has two entry points
+        // — the AJAX self-trigger fluentcrm-post-campaigns-emails-processing
+        // (which bypasses processFiveMinutes' scheduler-level lock entirely)
+        // and processFiveMinutes itself (which holds five_minute_scheduler).
+        // Without this guard, fireCampaignProcessingChain could pile up
+        // overlapping AJAX requests for the same campaign that all reach
+        // CampaignProcessor and bail at its per-campaign lock — wasted PHP
+        // bootstraps. Lock name is per-campaign so different campaigns still
+        // process in parallel. TTL matches the set_time_limit(120) below.
+        $lockName = 'campaign_chain_' . (int)$campaignId;
+        if (!self::acquireLock($lockName, 120)) {
             return false;
         }
 
-        $campaignProcessingChunk = (int)apply_filters('fluent_crm/five_minute_campaign_processing_chunk', 20, $campaign);
-        if ($campaignProcessingChunk < 1) {
-            $campaignProcessingChunk = 1;
-        }
+        try {
+            if (function_exists('set_time_limit')) {
+                @set_time_limit(120);
+            }
 
-        $runTime = fluentCrmMaxRunTime() - 5;
-        $campaign = (new CampaignProcessor($campaignId))->processEmails($campaignProcessingChunk, $runTime);
+            $campaign = Campaign::withoutGlobalScope('type')->find($campaignId);
+            if (!$campaign) {
+                return false;
+            }
 
-        if (fluentCrmIsMemoryExceeded()) {
+            $campaignProcessingChunk = (int)apply_filters('fluent_crm/five_minute_campaign_processing_chunk', 20, $campaign);
+            if ($campaignProcessingChunk < 1) {
+                $campaignProcessingChunk = 1;
+            }
+
+            $runTime = fluentCrmMaxRunTime() - 5;
+            $campaign = (new CampaignProcessor($campaignId))->processEmails($campaignProcessingChunk, $runTime);
+
+            if (fluentCrmIsMemoryExceeded()) {
+                return false;
+            }
+
+            if ($campaign && $campaign->status == 'processing') {
+                self::fireCampaignProcessingChain($campaignId);
+                return true;
+            }
+
             return false;
+        } finally {
+            self::releaseLock($lockName);
         }
-
-        if ($campaign && $campaign->status == 'processing') {
-            self::fireCampaignProcessingChain($campaignId);
-            return true;
-        }
-
-        return false;
     }
 
     /**
@@ -358,5 +415,79 @@ class Scheduler
     {
         (new MultiThreadHandler())->handle();
         return true;
+    }
+
+    /**
+     * Atomically claim a scheduler-level lock so two runners can't enter the
+     * same critical section concurrently (e.g. Action Scheduler + WP-Cron
+     * minute ticks landing in the same second).
+     *
+     * Uses wp_cache_add() when an external object cache is available, otherwise
+     * a conditional UPDATE on wp_options keyed off a timestamp. The UPDATE
+     * succeeds only if the row is unclaimed or its stored timestamp is older
+     * than $ttl, so a crashed runner's lock self-recovers after the TTL.
+     *
+     * Mirrors BaseHandler::acquireLock() / FunnelHandler::acquireFunnelProcessorLock().
+     * Kept local instead of extracted to a shared helper to limit blast radius.
+     *
+     * @param string $name Lock identifier appended to the option key.
+     * @param int    $ttl  Seconds before a held lock is considered abandoned.
+     * @return bool True if the lock was acquired by this process.
+     */
+    private static function acquireLock($name, $ttl)
+    {
+        $key = '_fluentcrm_lock_' . $name;
+        $now = time();
+
+        if (wp_using_ext_object_cache()) {
+            if (wp_cache_add($key, $now, 'fc_instant_options', $ttl)) {
+                return true;
+            }
+
+            $existing = wp_cache_get($key, 'fc_instant_options');
+            if ($existing && ($now - (int)$existing) > $ttl) {
+                wp_cache_delete($key, 'fc_instant_options');
+                if (wp_cache_add($key, $now, 'fc_instant_options', $ttl)) {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        global $wpdb;
+
+        $wpdb->query($wpdb->prepare(
+            "INSERT IGNORE INTO {$wpdb->options} (option_name, option_value, autoload) VALUES (%s, %s, %s)",
+            $key, '', 'no'
+        ));
+
+        $affected = $wpdb->query($wpdb->prepare(
+            "UPDATE {$wpdb->options} SET option_value = %s WHERE option_name = %s AND (option_value = '' OR option_value < %d)",
+            (string)$now, $key, $now - $ttl
+        ));
+
+        if ($affected > 0) {
+            wp_cache_delete($key, 'options');
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
+     * Release a scheduler-level lock previously acquired by acquireLock().
+     * Safe to call even if the lock was not held by this process — the worst
+     * case is freeing the slot a tick early.
+     */
+    private static function releaseLock($name)
+    {
+        $key = '_fluentcrm_lock_' . $name;
+
+        if (wp_using_ext_object_cache()) {
+            wp_cache_delete($key, 'fc_instant_options');
+        } else {
+            update_option($key, '', false);
+        }
     }
 }

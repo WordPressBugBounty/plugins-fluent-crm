@@ -31,7 +31,20 @@ class FunnelTools
             array_map('sanitize_key', $statuses),
             ['draft', 'published']
         ));
-        $sortBy   = sanitize_key((string) ($params['sort_by'] ?? 'id'));
+        // All fc_funnels columns. The framework rewrite made orderBy() throw
+        // LogicException on column names that don't match ^[a-zA-Z0-9_\.]+$
+        // — empty strings, "id ASC", "DROP TABLE", etc. — so an unguarded
+        // sort_by would 500 the tool. Schema is stable (migration only adds
+        // indexes), so hardcoding the column list avoids a per-request
+        // SHOW COLUMNS without restricting agents to the input_schema enum.
+        $allowedSortBy = [
+            'id', 'type', 'title', 'trigger_name', 'status', 'conditions',
+            'settings', 'created_by', 'created_at', 'updated_at',
+        ];
+        $sortBy = sanitize_key((string) ($params['sort_by'] ?? 'id'));
+        if (!in_array($sortBy, $allowedSortBy, true)) {
+            $sortBy = 'id';
+        }
         $sortType = strtoupper(sanitize_text_field((string) ($params['sort_type'] ?? 'DESC')));
         $sortType = in_array($sortType, ['ASC', 'DESC'], true) ? $sortType : 'DESC';
 

@@ -105,6 +105,7 @@ $router->prefix('subscribers')->withPolicy('SubscriberPolicy')->group(function (
     $router->post('{id}/notes', [SubscriberController::class, 'addNote'])->int('id');
     $router->put('{id}/notes/{note_id}', [SubscriberController::class, 'updateNote'])->int('id')->int('note_id');
     $router->delete('{id}/notes/{note_id}', [SubscriberController::class, 'deleteNote'])->int('id')->int('note_id');
+    $router->post('{id}/notes/bulk-delete', [SubscriberController::class, 'bulkDeleteNotes'])->int('id');
     $router->get('{id}/external_view', [SubscriberController::class, 'getExternalView'])->int('id');
     $router->post('{id}/external_view', [SubscriberController::class, 'saveExternalViewData'])->int('id');
     $router->get('{id}/info-widgets', [SubscriberController::class, 'getInfoWidgets'])->int('id');
@@ -496,6 +497,7 @@ $router->prefix('companies')->withPolicy('CompanyPolicy')->group(function ($rout
     $router->post('{id}/notes', [CompanyController::class, 'addNote'])->int('id');
     $router->put('{id}/notes/{note_id}', [CompanyController::class, 'updateNote'])->int('id')->int('note_id');
     $router->delete('{id}/notes/{note_id}', [CompanyController::class, 'deleteNote'])->int('id')->int('note_id');
+    $router->post('{id}/notes/bulk-delete', [CompanyController::class, 'bulkDeleteNotes'])->int('id');
 
     $router->post('csv-import', [CsvController::class, 'importCompanies']);
 

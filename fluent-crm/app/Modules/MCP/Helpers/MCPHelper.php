@@ -560,9 +560,26 @@ class MCPHelper
             $args['filters_groups_raw'] = $advanced;
         }
 
-        $sortBy = sanitize_text_field((string) ($filter['sort_by'] ?? 'id'));
+        // All fc_subscribers columns. The framework rewrite made orderBy() throw
+        // LogicException on column names that don't match ^[a-zA-Z0-9_\.]+$
+        // — empty strings, "id ASC", "DROP TABLE", etc. — so an unguarded
+        // sort_by would 500 the tool. Schema is stable (migration only adds
+        // indexes), so hardcoding the column list avoids a per-request
+        // SHOW COLUMNS without restricting agents to the input_schema enum.
+        $allowedSortBy = [
+            'id', 'user_id', 'hash', 'contact_owner', 'company_id', 'prefix',
+            'first_name', 'last_name', 'email', 'timezone', 'address_line_1',
+            'address_line_2', 'postal_code', 'city', 'state', 'country', 'ip',
+            'latitude', 'longitude', 'total_points', 'life_time_value', 'phone',
+            'status', 'contact_type', 'source', 'avatar', 'date_of_birth',
+            'created_at', 'last_activity', 'updated_at',
+        ];
+        $sortBy = sanitize_key((string) ($filter['sort_by'] ?? 'id'));
+        if (!in_array($sortBy, $allowedSortBy, true)) {
+            $sortBy = 'id';
+        }
+        $args['sort_by'] = $sortBy;
         $sortType = strtoupper(sanitize_text_field((string) ($filter['sort_type'] ?? 'DESC')));
-        $args['sort_by']   = $sortBy;
         $args['sort_type'] = in_array($sortType, ['ASC', 'DESC'], true) ? $sortType : 'DESC';
 
         if (isset($filter['custom_fields']) && $filter['custom_fields']) {

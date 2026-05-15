@@ -25,15 +25,13 @@ class AdminMenu
 
     public function init()
     {
+        // Maybe we have to update the database tables
+        UpgradationHandler::maybeUpdateDbTables();
 
         add_action('admin_menu', array($this, 'addMenu'));
 
         if (isset($_GET['page']) && $_GET['page'] == 'fluentcrm-admin' && is_admin()) {
             $this->mayBeRedirect();
-
-            // Maybe we have to update the database tables
-            UpgradationHandler::maybeUpdateDbTables();
-
             add_action('admin_enqueue_scripts', array($this, 'loadAssets'), 1);
         }
 

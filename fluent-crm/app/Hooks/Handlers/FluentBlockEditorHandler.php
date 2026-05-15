@@ -1023,14 +1023,6 @@ class FluentBlockEditorHandler
             $credentials = [];
         }
 
-        if (!$credentials) {
-            $credentials = fluentcrm_get_option('_ai_writing_settings', []);
-        }
-
-        if (!is_array($preferences) || !$preferences) {
-            $preferences = get_option('_fluentcrm_ai_writing_preferences', []);
-        }
-
         return [
             'enabled' => (
                 is_array($credentials)
