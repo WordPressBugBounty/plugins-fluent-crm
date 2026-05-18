@@ -127,7 +127,9 @@ $router->prefix('campaigns')->withPolicy('CampaignPolicy')->group(function ($rou
     $router->get('/', [CampaignController::class, 'campaigns']);
     $router->post('/', [CampaignController::class, 'create']);
     $router->post('/send-test-email', [CampaignController::class, 'sendTestEmail']);
+    // Editor/draft preview iframe: renders a campaign payload or campaign_id without email-history metadata.
     $router->post('/email-preview-html', [CampaignController::class, 'getEmailPreviewBody']);
+    // Sent/scheduled email history preview: used from contact profile, campaign emails, and all emails.
     $router->get('emails/{email_id}/preview', [CampaignController::class, 'previewEmail'])->int('email_id');
 
     $router->post('estimated-contacts', [CampaignController::class, 'getContactEstimation']);

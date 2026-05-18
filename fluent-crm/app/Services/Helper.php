@@ -2166,7 +2166,8 @@ class Helper
             'footer_content' => '',
             'font_size'      => 13,
             'font_color'     => '#202020',
-            'background_color' => 'transparent'
+            'background_color' => 'transparent',
+            'footer_padding' => 20
         ];
 
         if ($campaign && isset($campaign->settings)) {
@@ -2174,7 +2175,12 @@ class Helper
                 return [];
             }
             $footerSettings = Arr::get($campaign->settings, 'footer_settings', []);
-            if (Arr::get($footerSettings, 'disable_footer') == 'yes') {
+            $disableFooter = Arr::get($footerSettings, 'disable_footer');
+            if ($disableFooter !== 'yes' && $disableFooter !== 'no') {
+                $disableFooter = Arr::get($campaign->settings, 'template_config.disable_footer');
+            }
+
+            if ($disableFooter == 'yes') {
                 $defaults['disable_footer'] = 'yes';
                 $defaults['footer_content'] = '';
                 return $defaults;
@@ -2189,6 +2195,13 @@ class Helper
 
             if (!empty($footerSettings['background_color'])) {
                 $defaults['background_color'] = $footerSettings['background_color'];
+            }
+
+            $footerPadding = Arr::get($footerSettings, 'footer_padding');
+            if ($footerPadding !== null && $footerPadding !== '') {
+                $defaults['footer_padding'] = min(80, max(0, intval($footerPadding)));
+            } else {
+                $defaults['footer_padding'] = 20;
             }
 
             $customFooter = Arr::get($campaign->settings, 'footer_settings.custom_footer');

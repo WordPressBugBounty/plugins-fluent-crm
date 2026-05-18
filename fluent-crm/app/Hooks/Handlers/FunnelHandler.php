@@ -50,44 +50,80 @@ class FunnelHandler
 
     protected $funnelFired = false;
 
+    private $registeredFunnelTriggers = [];
+
+    private $registeredTriggerFallbacks = [];
 
     public function register()
     {
         /*
-         * handle() runs at init priority 10 so that initTriggers() / initBenchMarkBlocks()
-         * can register their fluentcrm_funnel_arg_num_* filter handlers first.
-         * The trigger-registration loop then runs at priority 20, after those filters are set up,
-         * so apply_filters('fluentcrm_funnel_arg_num_*') returns the correct arg count.
+         * Pro integrations can register trigger arg-count filters before init priority 2.
+         * Register those ready triggers early so events fired during init priority 10,
+         * such as EDD manual order status updates, are not missed.
+         *
+         * handle() still runs at init priority 10 so core triggers and benchmarks can
+         * register their fluentcrm_funnel_arg_num_* filters before the fallback pass.
+         *
+         * The fallback pass at priority 20 preserves the existing behavior for triggers
+         * whose arg-count filters are not available during the early pass.
          */
+        add_action('init', [$this, 'registerEarlyActiveTriggers'], 2);
         add_action('init', [$this, 'handle'], 10);
-        add_action('init', function () {
-            $triggers = get_option($this->settingsKey, []);
-            $triggers = array_unique($triggers);
-            if ($triggers) {
-                foreach ($triggers as $triggerName) {
-                    /**
-                     * Determine the number of arguments passed to the funnel trigger in FluentCRM.
-                     *
-                     * This filter allows you to modify the number of arguments that are passed to the funnel trigger
-                     * based on the trigger name.
-                     *
-                     * @param int $argNum The number of arguments to pass to the funnel trigger. Default is 1.
-                     * @since 2.5.6
-                     *
-                     */
-                    $argNum = apply_filters('fluentcrm_funnel_arg_num_' . $triggerName, 1);
-                    add_action($triggerName, function () use ($triggerName, $argNum) {
-                        $this->mapTriggers($triggerName, func_get_args(), $argNum);
-                    }, 10, $argNum);
-                }
+        add_action('init', [$this, 'registerActiveTriggers'], 20);
+    }
 
-                if (in_array('edd_update_payment_status', $triggers)) {
-                    add_action('edd_complete_purchase', function ($paymentId) {
-                        $this->mapTriggers('edd_update_payment_status', [$paymentId, 'publish', 'pending'], 3);
-                    });
-                }
+    public function registerEarlyActiveTriggers()
+    {
+        $this->registerActiveTriggers(true);
+    }
+
+    public function registerActiveTriggers($onlyRegisteredArgFilters = false)
+    {
+        $triggers = get_option($this->settingsKey, []);
+        $triggers = array_unique($triggers);
+
+        if (!$triggers) {
+            return;
+        }
+
+        foreach ($triggers as $triggerName) {
+            if (isset($this->registeredFunnelTriggers[$triggerName])) {
+                continue;
             }
-        }, 20);
+
+            /*
+             * Early registration is only safe when the trigger's arg-count filter is
+             * already registered. Otherwise the priority 20 pass will register it
+             * after handle() has initialized the core trigger filters.
+             */
+            $argNumFilterName = 'fluentcrm_funnel_arg_num_' . $triggerName;
+            if ($onlyRegisteredArgFilters && !has_filter($argNumFilterName)) {
+                continue;
+            }
+
+            $argNum = apply_filters($argNumFilterName, 1);
+            add_action($triggerName, function () use ($triggerName, $argNum) {
+                $this->mapTriggers($triggerName, func_get_args(), $argNum);
+            }, 10, $argNum);
+
+            $this->registeredFunnelTriggers[$triggerName] = true;
+        }
+
+        /*
+         * EDD also exposes edd_complete_purchase after a successful payment.
+         * Keep the existing fallback, but attach it only once and only after the
+         * main EDD payment-status trigger has been registered.
+         */
+        if (
+            isset($this->registeredFunnelTriggers['edd_update_payment_status']) &&
+            empty($this->registeredTriggerFallbacks['edd_complete_purchase'])
+        ) {
+            add_action('edd_complete_purchase', function ($paymentId) {
+                $this->mapTriggers('edd_update_payment_status', [$paymentId, 'publish', 'pending'], 3);
+            });
+
+            $this->registeredTriggerFallbacks['edd_complete_purchase'] = true;
+        }
     }
 
     public function handle()

@@ -1,1 +1,1 @@
-import{bi as e,b1 as r,y as o}from"../../../vendor.js?ver=3.0.5";import{_ as t}from"../../../_plugin-vue_export-helper.js?ver=3.0.5";const n=t({name:"email-view"},[["render",function(t,n,s,a,i,m){const p=e("router-view");return r(),o(p)}]]);export{n as default};
+import{bi as e,b1 as r,y as o}from"../../../vendor.js?ver=3.0.6";import{_ as s}from"../../../fc-bits-ui.js?ver=3.0.6";import"../../../vendor-element-plus.js?ver=3.0.6";const t=s({name:"email-view"},[["render",function(s,t,i,n,a,m){const v=e("router-view");return r(),o(v)}]]);export{t as default};

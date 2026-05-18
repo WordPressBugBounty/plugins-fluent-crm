@@ -577,6 +577,16 @@ class AdminMenu
             \FluentCrm\App\Vite::injectViteClient();
         }, 1);
 
+        // NOTE: HTML-level <link rel="modulepreload"> hints were attempted
+        // and reverted. Hosting layers that fingerprint asset URLs (the
+        // 3.0.5 trigger) would rewrite the preload hrefs but NOT the
+        // chunk-to-chunk import URLs Vite bakes at build time — leading
+        // to URL divergence and module duplication at the chunk level
+        // (the same root cause as 3.0.5, one level down the chunk tree).
+        // Route preloading now happens via Vite-baked dynamic import()
+        // calls in resources/admin/app.js's preload callback, which
+        // guarantees URL parity. See docs/app-entry-refactor-roadmap.md.
+
         wp_enqueue_script('fluentcrm_global_admin', fluentCrmMix('admin/js/global_admin.js'), array('jquery'), $this->version);
         wp_enqueue_script('fluentcrm_admin_app_boot', fluentCrmMix('admin/js/boot.js'), array(), $this->version);
 

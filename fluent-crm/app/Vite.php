@@ -8,11 +8,38 @@ use FluentCrm\Framework\Support\Arr;
 class Vite
 {
     private array $moduleScripts = [];
-    private bool $isScriptFilterAdded = false;
     private string $viteHostProtocol = 'http://';
     private string $viteHost = 'localhost';
     private string $vitePort = '5174';
     private string $resourceDirectory = 'resources/';
+
+    /**
+     * Bridge from Mix-era enqueue paths to Vite source paths.
+     *
+     * The PHP codebase still calls fluentCrmMix('admin/js/app.js') and
+     * fluentCrmMix('admin/css/app3.css') even though Vite's manifest and
+     * dev server are keyed by source paths (admin/app.js, styles/app3.scss).
+     * Both mapToSourcePath() and getSourcePathForManifest() read this
+     * table — one source of truth.
+     */
+    private const MIX_TO_VITE_PATH_MAP = [
+        // JS: Mix wrote `admin/js/<name>.js`, Vite reads the source path
+        'admin/js/boot.js'                 => 'admin/boot.js',
+        'admin/js/app.js'                  => 'admin/app.js',
+        'admin/js/adminbar-search.js'      => 'admin/adminbar-search.js',
+        'admin/js/global_admin.js'         => 'admin/global_admin.js',
+        'admin/js/setup-wizard.js'         => 'admin/setup-wizard.js',
+        'admin/js/contact-navigations.js'  => 'admin/experiments/contact-navigations.js',
+        'admin/js/visual-editor.js'        => 'admin/visual-editor/visual-editor.js',
+        'public/public_pref.js'            => 'public/public_pref.js',
+
+        // CSS: Mix wrote `admin/css/<name>.css`, Vite serves SCSS sources
+        'admin/css/admin_rtl.css'    => 'scss/admin_rtl.scss',
+        'admin/css/app_global.css'   => 'scss/app_global.scss',
+        'admin/css/setup-wizard.css' => 'scss/setup-wizard.scss',
+        'admin/css/app3.css'         => 'styles/app3.scss',
+        'public/public_pref.css'     => 'scss/public_pref.scss',
+    ];
 
     protected static ?Vite $instance = null;
     public ?string $lastJsHandle = null;
@@ -38,10 +65,26 @@ class Vite
      */
     public function maybeConvertToModule($tag, $handle, $src): string
     {
+        // Fast rejection for scripts that obviously aren't ours. The filter
+        // is registered globally at priority 999 so it fires for EVERY
+        // script on EVERY admin page (including pages where FluentCRM
+        // isn't active). On a typical admin page that's ~30 unrelated
+        // scripts. Short-circuit here so the detailed checks below only
+        // run for our own assets.
+        $isPotentiallyOurs =
+            strpos($src, FLUENTCRM_PLUGIN_URL) !== false ||
+            strpos($src, 'localhost:' . $this->vitePort) !== false ||
+            strpos($src, '@vite/client') !== false ||
+            in_array($handle, $this->moduleScripts, true);
+
+        if (!$isPotentiallyOurs) {
+            return $tag;
+        }
+
         // Check if this script is from Vite dev server, Vite built assets, or is a module script
         $isViteScript = false;
         $fluentCrmAssetBase = FLUENTCRM_PLUGIN_URL . 'assets/';
-        
+
         // Check if from dev server
         if (strpos($src, 'localhost:' . $this->vitePort) !== false || strpos($src, '@vite/client') !== false) {
             $isViteScript = true;
@@ -158,12 +201,9 @@ class Vite
         $this->moduleScripts[] = $handle;
         $this->lastJsHandle = $handle;
 
-        if (!$this->isScriptFilterAdded) {
-            add_filter('script_loader_tag', function ($tag, $handle, $src) {
-                return $this->addModuleToScript($tag, $handle, $src);
-            }, 10, 3);
-            $this->isScriptFilterAdded = true;
-        }
+        // No per-handle script_loader_tag filter needed — the constructor
+        // registers maybeConvertToModule globally at priority 999 and it
+        // already detects handles in $moduleScripts as Vite scripts.
 
         if ($this->shouldServeViaDevServer()) {
             $srcPath = $this->getVitePath() . $src;
@@ -189,20 +229,6 @@ class Vite
         return $this;
     }
 
-    private function addModuleToScript($tag, $handle, $src): string
-    {
-        if (in_array($handle, $this->moduleScripts)) {
-            // For Vue 3 and ES6 modules, we need type="module"
-            // Check if this is from Vite dev server or production build
-            if ($this->usingDevMode() || strpos($src, 'assets/') !== false) {
-                $tag = '<script type="module" crossorigin src="' . esc_url($src) . '" id="' . esc_attr($handle) . '-js"></script>' . "\n";
-            } else {
-                $tag = '<script type="module" src="' . esc_url($src) . '" id="' . esc_attr($handle) . '-js"></script>' . "\n";
-            }
-        }
-        return $tag;
-    }
-
     private function getFileFromManifest($src)
     {
         if (isset($this->manifestData[$this->resourceDirectory . $src])) {
@@ -224,13 +250,12 @@ class Vite
         return ($assetPath . $file['file']);
     }
 
-    // CSS files already merged into style.css — skip individual enqueue
-    private array $mergedIntoStyleCss = [
-        'admin/css/vendor.css',
-        'admin/css/vendor-element-plus.css',
-        'admin/visual-editor/visual-editor.css',
-    ];
-
+    // Per-chunk CSS auto-enqueue. The Vite build's mergeCssChunksPlugin
+    // collapses most chunk CSS into admin/css/style.css (which AdminMenu.php
+    // enqueues explicitly), and the moveManifestPlugin then strips the
+    // merged paths from the manifest. What remains in manifest `css` arrays
+    // is only files that survived to disk (e.g. legacy SCSS entry outputs
+    // like admin/css/admin_rtl.css) — those we enqueue here.
     private function ensureChunkCssIsLoaded($file)
     {
         $assetPath = static::getAssetPath();
@@ -238,11 +263,6 @@ class Vite
 
         foreach ($cssFiles as $cssPath) {
             if (isset($this->enqueuedChunkCss[$cssPath])) {
-                continue;
-            }
-
-            if (in_array($cssPath, $this->mergedIntoStyleCss)) {
-                $this->enqueuedChunkCss[$cssPath] = true;
                 continue;
             }
 
@@ -496,84 +516,31 @@ class Vite
     }
     
     /**
-     * Map built asset paths to source paths for dev mode
+     * Resolve a Mix-style enqueue path to a dev-server URL.
+     * Used when the Vite dev server is running.
      */
     private function mapToSourcePath($path): string
     {
-        // CSS mappings (built path -> source path, WITHOUT resources/ prefix)
-        $cssMap = [
-
-            'admin/css/admin_rtl.css' => 'scss/admin_rtl.scss',
-            'admin/css/app_global.css' => 'scss/app_global.scss',
-            'admin/css/setup-wizard.css' => 'scss/setup-wizard.scss',
-            'admin/css/app3.css' => 'styles/app3.scss',
-            'public/public_pref.css' => 'scss/public_pref.scss',
-        ];
-        
-        // JS mappings (built path -> source path, WITHOUT resources/ prefix)
-        $jsMap = [
-            'admin/js/boot.js' => 'admin/boot.js',
-            'admin/js/app.js' => 'admin/app.js',
-            'admin/js/adminbar-search.js' => 'admin/adminbar-search.js',
-            'admin/js/global_admin.js' => 'admin/global_admin.js',
-            'admin/js/setup-wizard.js' => 'admin/setup-wizard.js',
-            'admin/js/contact-navigations.js' => 'admin/experiments/contact-navigations.js',
-            'admin/js/visual-editor.js' => 'admin/visual-editor/visual-editor.js',
-            'public/public_pref.js' => 'public/public_pref.js',
-        ];
-        
-        // Combine all mappings
-        $pathMap = array_merge($cssMap, $jsMap);
-        
-        // Check if we have a direct mapping
-        if (isset($pathMap[$path])) {
-            // Return Vite path with resources/ prefix added once
-            return $this->getVitePath() . $pathMap[$path];
+        if (isset(self::MIX_TO_VITE_PATH_MAP[$path])) {
+            return $this->getVitePath() . self::MIX_TO_VITE_PATH_MAP[$path];
         }
-        
+
         // If path already starts with resources/, use it as-is
         if (strpos($path, 'resources/') === 0) {
             return $this->getVitePath() . substr($path, 10); // Remove 'resources/' prefix
         }
-        
-        // Fallback: use the path as-is (it will be added to getVitePath which includes resources/)
+
+        // Fallback: use the path as-is (getVitePath includes resources/)
         return $this->getVitePath() . $path;
     }
-    
+
     /**
-     * Map Mix-style paths to Vite source paths for manifest lookup
-     * This is the reverse of mapToSourcePath - used in production
+     * Resolve a Mix-style enqueue path to the manifest source key.
+     * Used in production for manifest lookups.
      */
     private function getSourcePathForManifest($path): string
     {
-        // Map Mix paths (what code calls) to Vite source paths (what's in manifest)
-        $pathMap = [
-            // JS files (Mix uses admin/js/*, Vite uses admin/*)
-            'admin/js/boot.js' => 'admin/boot.js',
-            'admin/js/app.js' => 'admin/app.js',
-            'admin/js/adminbar-search.js' => 'admin/adminbar-search.js',
-            'admin/js/global_admin.js' => 'admin/global_admin.js',
-            'admin/js/setup-wizard.js' => 'admin/setup-wizard.js',
-            'admin/js/contact-navigations.js' => 'admin/experiments/contact-navigations.js',
-            'admin/js/visual-editor.js' => 'admin/visual-editor/visual-editor.js',
-            'public/public_pref.js' => 'public/public_pref.js',
-            
-            // CSS files (Mix uses admin/css/*, Vite uses scss/* or styles/*)
-
-            'admin/css/admin_rtl.css' => 'scss/admin_rtl.scss',
-            'admin/css/app_global.css' => 'scss/app_global.scss',
-            'admin/css/setup-wizard.css' => 'scss/setup-wizard.scss',
-            'admin/css/app3.css' => 'styles/app3.scss',
-            'public/public_pref.css' => 'scss/public_pref.scss',
-        ];
-        
-        // If we have a direct mapping, return it
-        if (isset($pathMap[$path])) {
-            return $pathMap[$path];
-        }
-        
-        // Otherwise return the original path (for static assets, etc.)
-        return $path;
+        return self::MIX_TO_VITE_PATH_MAP[$path] ?? $path;
     }
 
     public static function getAssetUrl($path = ''): string
@@ -601,7 +568,7 @@ class Vite
     public static function injectViteClient()
     {
         $vite = static::getInstance();
-        
+
         if ($vite->shouldServeViaDevServer()) {
             $protocol = rtrim($vite->viteHostProtocol, ':/');
             $host = rtrim($vite->viteHost, '/');
@@ -613,33 +580,4 @@ class Vite
         }
     }
 
-    /**
-     * Print script tag for modules (useful for inline printing)
-     */
-    public static function printScriptTag($handle, $source, $version = null, $isStatic = false)
-    {
-        if (empty($version)) {
-            $version = FLUENTCRM_PLUGIN_VERSION;
-        }
-
-        $vite = static::getInstance();
-
-        if ($isStatic) {
-            $srcPath = $vite->getStaticEnqueuePath($source);
-        } else {
-            if ($vite->shouldServeViaDevServer()) {
-                $srcPath = $vite->getVitePath() . $source;
-            } else {
-                $assetFile = $vite->getFileFromManifest($source);
-                $srcPath = $vite->getProductionFilePath($assetFile);
-            }
-        }
-
-        if (!empty($srcPath)) {
-            $version = empty($version) ? FLUENTCRM_PLUGIN_VERSION : $version;
-            $type = !$isStatic && in_array($handle, $vite->moduleScripts) ? 'module' : 'text/javascript';
-
-            echo '<script type="' . esc_attr($type) . '" src="' . esc_url($srcPath) . '?ver=' . esc_attr($version) . '" id="' . esc_attr($handle) . '-js"></script>' . "\n";
-        }
-    }
 }

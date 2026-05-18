@@ -181,24 +181,36 @@ class EmailDesignTemplates
 
     private function filterTemplateData($templateData)
     {
-        if (Arr::get($templateData, 'config.disable_footer') == 'yes') {
+        $footerConfig = Arr::get($templateData, 'footer_config', []);
+        $disableFooter = Arr::get($footerConfig, 'disable_footer');
+        if ($disableFooter !== 'yes' && $disableFooter !== 'no') {
+            $disableFooter = Arr::get($templateData, 'config.disable_footer');
+        }
+
+        if ($disableFooter == 'yes') {
             $templateData['footer_text'] = '';
         } else {
-            $footerConfig = Arr::get($templateData, 'footer_config', []);
             $style = 'font-size: 13px; color: #202020;';
             if ($footerConfig) {
                 $fontSize = Arr::get($footerConfig, 'font_size', 13) . 'px';
                 $color = sanitize_hex_color(Arr::get($footerConfig, 'font_color', '#202020')) ?: '#202020';
                 $backgroundColor = Arr::get($footerConfig, 'background_color', 'transparent');
+                $paddingRaw = Arr::get($footerConfig, 'footer_padding');
                 $safeBackgroundColor = sanitize_hex_color($backgroundColor);
                 if ($backgroundColor === 'transparent') {
                     $safeBackgroundColor = 'transparent';
+                }
+
+                $safePadding = 20;
+                if ($paddingRaw !== null && $paddingRaw !== '') {
+                    $safePadding = min(80, max(0, intval($paddingRaw)));
                 }
 
                 $style = "font-size: {$fontSize}; color: {$color};";
                 if ($safeBackgroundColor) {
                     $style .= " background-color: {$safeBackgroundColor};";
                 }
+                $style .= " padding-top: {$safePadding}px; padding-bottom: {$safePadding}px;";
                 $templateData['footer_text'] = $footerConfig['footer_content'] ?? '';
             }
 

@@ -91,20 +91,40 @@ class Campaign extends Model
         $defaultConfig = Helper::getTemplateConfig($this->design_template, false);
         $templateConfig = wp_parse_args($templateConfig, $defaultConfig);
         $templateConfig['design_template'] = $this->design_template;
-
-        $settings['template_config'] = $templateConfig;
         $footerDefaults = [
             'disable_footer' => 'no',
             'custom_footer'  => 'no',
             'footer_content' => '',
             'font_size'      => 13,
             'font_color'     => '#202020',
-            'background_color' => 'transparent'
+            'background_color' => 'transparent',
+            'footer_padding' => 20
         ];
 
         $footerSettings = Arr::get($settings, 'footer_settings', []);
+        $footerSettings = is_array($footerSettings) ? $footerSettings : [];
+
+        // Backward compatibility: older imports may only carry disable_footer in template_config.
+        if (!isset($footerSettings['disable_footer'])) {
+            $legacyDisable = Arr::get($templateConfig, 'disable_footer');
+            if ($legacyDisable === 'yes' || $legacyDisable === 'no') {
+                $footerSettings['disable_footer'] = $legacyDisable;
+            }
+        }
+
+        if (!isset($footerSettings['custom_footer'])) {
+            $legacyFooterContent = Arr::get($footerSettings, 'footer_content', '');
+            if (is_string($legacyFooterContent) && trim(wp_strip_all_tags($legacyFooterContent))) {
+                $footerSettings['custom_footer'] = 'yes';
+            }
+        }
+
         $footerSettings = wp_parse_args($footerSettings, $footerDefaults);
+        $footerSettings['disable_footer'] = ($footerSettings['disable_footer'] === 'yes') ? 'yes' : 'no';
+        $footerSettings['custom_footer'] = ($footerSettings['custom_footer'] === 'yes') ? 'yes' : 'no';
         $settings['footer_settings'] = $footerSettings;
+        $templateConfig['disable_footer'] = $footerSettings['disable_footer'];
+        $settings['template_config'] = $templateConfig;
 
         $mailerDefaults = [
             'from_name'      => '',

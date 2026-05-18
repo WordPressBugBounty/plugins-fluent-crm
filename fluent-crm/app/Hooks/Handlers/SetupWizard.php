@@ -80,10 +80,12 @@ class SetupWizard
             Vite::injectViteClient();
         }, 1);
 
-        // style.css is the merged bundle of all Vue component CSS + Element Plus CSS.
-        // In dev mode, Vite HMR injects it via the client above.
-        // In production, Vite::enqueueScript skips vendor-element-plus.css
-        // (it's in $mergedIntoStyleCss), so we must load style.css explicitly.
+        // style.css is the merged bundle of all Vue component CSS + Element Plus CSS,
+        // produced by vite.config.mjs's mergeCssChunksPlugin. The manifest is
+        // stripped of references to the merged files at build time
+        // (moveManifestPlugin), so Vite::enqueueScript's auto-enqueue won't
+        // pick it up — load it explicitly here. In dev mode, Vite HMR
+        // injects the styles via the client above.
         if (!Vite::underDevelopment()) {
             wp_enqueue_style(
                 'fluentcrm_vendor',

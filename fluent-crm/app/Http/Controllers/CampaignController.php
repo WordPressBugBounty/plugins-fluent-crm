@@ -381,7 +381,7 @@ class CampaignController extends Controller
             if ($nextStep == 1) {
                 do_action('fluent_crm/update_campaign_compose', $data, $campaign);
             } else if ($nextStep == 2) {
-                $footerDisabled = Arr::get($campaign->settings, 'template_config.disable_footer') == 'yes';
+                $footerDisabled = Arr::get(Helper::getFooterConfig($campaign), 'disable_footer') === 'yes';
                 if (($footerDisabled || $campaign->design_template === 'visual_builder') && !Helper::hasComplianceText($campaign->email_body)) {
                     return $this->sendError([
                         'compliance_failed' => true,
@@ -1049,6 +1049,15 @@ class CampaignController extends Controller
         ];
     }
 
+    /**
+     * Render the editor/draft email preview iframe.
+     *
+     * Route: POST /campaigns/email-preview-html
+     * Used by resources/admin/Pieces/EmailElements/EmailPreview.vue.
+     * For sent email-history previews, see previewEmail().
+     *
+     * @return array
+     */
     public function getEmailPreviewBody()
     {
         if (!defined('FLUENTCRM_PREVIEWING_EMAIL')) {
@@ -1331,6 +1340,18 @@ class CampaignController extends Controller
         ]);
     }
 
+    /**
+     * Render a sent/scheduled email-history preview with metadata and click stats.
+     *
+     * Route: GET /campaigns/emails/{email_id}/preview
+     * Used by contact profile email history, campaign email rows, and all-emails preview.
+     * The body renderer is CampaignEmail::previewData(); keep its template handling aligned
+     * with getEmailPreviewBody() so raw/classic and Gutenberg previews stay consistent.
+     *
+     * @param Request $request
+     * @param int     $emailId
+     * @return array
+     */
     public function previewEmail(Request $request, $emailId)
     {
         if (!defined('FLUENTCRM_PREVIEWING_EMAIL')) {

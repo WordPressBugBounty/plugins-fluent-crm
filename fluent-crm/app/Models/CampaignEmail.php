@@ -204,13 +204,43 @@ class CampaignEmail extends Model
         ];
     }
 
+    /**
+     * Build preview data for one queued/sent email row.
+     *
+     * Route: GET /campaigns/emails/{email_id}/preview via CampaignController::previewEmail().
+     * This is the contact/campaign/all-emails history preview, not the draft editor preview
+     * route (POST /campaigns/email-preview-html). Keep the body rendering rules aligned with
+     * CampaignController::getEmailPreviewBody(): raw/classic-builder templates must bypass
+     * BlockParser, while block-editor templates should continue through BlockParser.
+     *
+     * @return array
+     */
     public function previewData()
     {
         $emailSettings = fluentcrmGetGlobalSettings('email_settings', []);
 
-        $emailBody = ($this->email_body) ? $this->email_body : $this->campaign->email_body;
-        // $emailBody = (new BlockParser($this->subscriber))->parse($emailBody);
-        $emailBody = (new BlockParser($this->subscriber))->parse($emailBody);
+        $campaign = $this->campaign;
+        $subscriber = $this->subscriber;
+
+        $emailBody = ($this->email_body) ? $this->email_body : (($campaign) ? $campaign->email_body : '');
+
+        $designTemplate = ($campaign) ? $campaign->design_template : '';
+
+        if (!$designTemplate) {
+            $designTemplate = 'plain';
+        }
+
+        $rawTemplates = [
+            'raw_html',
+            'visual_builder',
+            'raw_classic'
+        ];
+
+        if (in_array($designTemplate, $rawTemplates, true) || ($this->is_parsed && $this->email_body)) {
+            $emailBody = wp_unslash($emailBody);
+        } else {
+            $emailBody = (new BlockParser($subscriber))->parse($emailBody);
+        }
 
         /**
          * Determine the campaign email body content text.
@@ -222,23 +252,46 @@ class CampaignEmail extends Model
          * @since 2.7.0
          *
          */
-        $emailBody = apply_filters('fluent_crm/parse_campaign_email_text', $emailBody, $this->subscriber);
+        $emailBody = apply_filters('fluent_crm/parse_campaign_email_text', $emailBody, $subscriber);
 
-        $designTemplate = 'classic';
-        if ($this->campaign) {
-            $designTemplate = $this->campaign->design_template;
+        $templateConfig = wp_parse_args(
+            ($campaign) ? Arr::get($campaign->settings, 'template_config', []) : [],
+            Helper::getTemplateConfig($designTemplate)
+        );
+
+        $emailFooterConfig = ($campaign) ? Helper::getFooterConfig($campaign) : [];
+        $footerText = Arr::get($emailFooterConfig, 'footer_content', '');
+
+        if ($subscriber) {
+            $subscriber->campaign_id = $this->campaign_id;
+            /**
+             * Determine the footer text of a campaign email for previewing.
+             *
+             * This filter allows you to modify the footer text of a campaign email before it is sent to the subscriber.
+             *
+             * @param string $footerText The footer text of the campaign email.
+             * @param object $subscriber The subscriber object.
+             * @since 2.7.0
+             *
+             */
+            $footerText = apply_filters('fluent_crm/parse_campaign_email_text', $footerText, $subscriber);
         }
 
-        if (!$designTemplate) {
-            $designTemplate = 'classic';
+        $preHeader = ($campaign) ? $campaign->email_pre_header : '';
+
+        if ($preHeader && $subscriber) {
+            /**
+             * Filter the pre-header text of a campaign email for previewing.
+             *
+             * @param string $preHeader The pre-header text of the campaign email.
+             * @param object $subscriber The subscriber object.
+             * @since 2.7.0
+             *
+             */
+            $preHeader = apply_filters('fluent_crm/parse_campaign_email_text', $preHeader, $subscriber);
         }
 
-        if ($this->campaign && Arr::get($this->campaign->settings, 'template_config')) {
-            $templateConfig = wp_parse_args($this->campaign->settings['template_config'], Helper::getTemplateConfig($this->campaign->design_template));
-        } else {
-            $templateConfig = Helper::getTemplateConfig();
-        }
-
+        $emailFooterConfig['footer_content'] = $footerText;
 
         /**
          * Filter the email body content using a specific email design template.
@@ -263,13 +316,14 @@ class CampaignEmail extends Model
             'fluent_crm/email-design-template-' . $designTemplate,
             $emailBody,
             [
-                'preHeader'   => ($this->campaign) ? $this->campaign->email_pre_header : '',
-                'email_body'  => $emailBody,
-                'footer_text' => '',
-                'config'      => $templateConfig
+                'preHeader'     => $preHeader,
+                'email_body'    => $emailBody,
+                'footer_text'   => $footerText,
+                'footer_config' => $emailFooterConfig,
+                'config'        => $templateConfig
             ],
-            $this->campaign,
-            $this->subscriber
+            $campaign,
+            $subscriber
         );
 
 
@@ -284,29 +338,11 @@ class CampaignEmail extends Model
              * @since 2.7.0
              *
              */
-            $email_body = apply_filters('fluent_crm/parse_extended_crm_text', $email_body, $this->subscriber);
-        }
-
-        $footerText = '';
-        if ($this->subscriber) {
-            $subscriber = $this->subscriber;
-            $subscriber->campaign_id = $this->campaign_id;
-            $footerText = Arr::get(Helper::getGlobalEmailSettings(), 'email_footer', '');
-            /**
-             * Determine the footer text of a campaign email for previewing.
-             *
-             * This filter allows you to modify the footer text of a campaign email before it is sent to the subscriber.
-             *
-             * @param string $footerText The footer text of the campaign email.
-             * @param object $subscriber The subscriber object.
-             * @since 2.7.0
-             *
-             */
-            $footerText = apply_filters('fluent_crm/parse_campaign_email_text', $footerText, $subscriber);
+            $email_body = apply_filters('fluent_crm/parse_extended_crm_text', $email_body, $subscriber);
         }
 
         $preViewUrl = site_url('?fluentcrm=1&route=email_preview&_e_hash=' . $this->email_hash);
-        $email_body = str_replace(['##web_preview_url##', '{{crm_global_email_footer}}', '{{crm_preheader_text}}'], [$preViewUrl, $footerText, ''], $email_body);
+        $email_body = str_replace(['##web_preview_url##', '{{crm_global_email_footer}}', '{{crm_preheader_text}}'], [$preViewUrl, $footerText, $preHeader], $email_body);
 
 
         $email_body = str_replace(['https://fonts.googleapis.com/css2', 'https://fonts.googleapis.com/css'], 'https://fonts.bunny.net/css', $email_body);
@@ -314,7 +350,7 @@ class CampaignEmail extends Model
         return [
             'to'            => [
                 'email' => $this->email_address,
-                'name'  => $this->subscriber->full_name
+                'name'  => ($subscriber) ? $subscriber->full_name : ''
             ],
             'from'          => [
                 'name'  => Arr::get($emailSettings, 'from_name'),

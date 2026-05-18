@@ -241,6 +241,12 @@ class FluentBlockEditorHandler
             // Free-tier: $model stays null; the find block below uses withoutGlobalScopes() fallback.
             $contentField = 'email_body';
             $titleField = 'title';
+        } elseif ($blockType === 'recurring_mail') {
+            if (defined('FLUENTCAMPAIGN')) {
+                $model = \FluentCampaign\App\Models\RecurringMail::class;
+            }
+            $contentField = 'email_body';
+            $titleField = 'title';
         } elseif ($blockType === 'template') {
             $model = Template::class;
             $contentField = 'post_content';
@@ -518,6 +524,19 @@ class FluentBlockEditorHandler
                     $post_title = $campaign->title;
                     $recordId = $campaign->id;
                     $recordUpdatedAt = isset($campaign->updated_at) ? $campaign->updated_at : $recordUpdatedAt;
+                }
+            }
+
+            if ($context == 'recurring_mail') {
+                $mailId = (int)Arr::get($data, 'bid');
+                if ($mailId && $mailId != 'undefined') {
+                    $mail = \FluentCampaign\App\Models\RecurringMail::find($mailId);
+                    if ($mail) {
+                        $post_content = $mail->email_body;
+                        $post_title = $mail->title;
+                        $recordId = $mail->id;
+                        $recordUpdatedAt = isset($mail->updated_at) ? $mail->updated_at : $recordUpdatedAt;
+                    }
                 }
             }
 
@@ -1004,6 +1023,7 @@ class FluentBlockEditorHandler
             'campaign'              => $emailDefaults,
             'template'              => $emailDefaults,
             'recurring_campaign'    => $emailDefaults,
+            'recurring_mail'        => $emailDefaults,
             'sequence_mail'         => $emailDefaults,
             'email_body_in_funnel'  => $emailDefaults,
             'email_pattern'         => $minimalDefaults,
@@ -2085,7 +2105,7 @@ class FluentBlockEditorHandler
      */
     private static function getRequiredCapability($blockType)
     {
-        if (in_array($blockType, ['campaign', 'email_body_in_funnel', 'recurring_campaign', 'sequence_mail'], true)) {
+        if (in_array($blockType, ['campaign', 'email_body_in_funnel', 'recurring_campaign', 'recurring_mail', 'sequence_mail'], true)) {
             return 'fcrm_manage_emails';
         }
         if ($blockType === 'template') {

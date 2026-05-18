@@ -4,7 +4,7 @@ Tags: email marketing, newsletter, crm, email newsletter, subscribers
 Requires at least: 5.0
 Tested up to: 6.9
 Requires PHP: 7.4
-Stable tag: 3.0.5
+Stable tag: 3.0.6
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -261,7 +261,18 @@ You can report any security bugs found in the source code of FluentCRM plugins t
 
 == Changelog ==
 
+= 3.0.6 (Date: May 18, 2026) =
+- Fixed: Blank Page Issue
+- Fixed: Template Import Issue
+- Fixed: EDD Issue
+- Fixed: Email Footer Issues
+- Fixed: Recurring Campaign Issues
+- Other Improvement & Bug Fixes
+
 = 3.0.5 (Date: May 15, 2026) =
+- Hotfix
+
+= 3.0.4 (Date: May 15, 2026) =
 - Hotfix: Classic Template Email Issue fixed
 
 = 3.0.3 (Date: May 15, 2026) =
