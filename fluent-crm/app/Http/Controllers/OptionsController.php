@@ -456,7 +456,7 @@ class OptionsController extends Controller
         }
 
         if ($optionKey == 'edd_products' || $optionKey == 'product_selector_edd') {
-            if (class_exists('Easy_Digital_Downloads') && defined('FLUENTCAMPAIGN')) {
+            if (Helper::isEdd3() && defined('FLUENTCAMPAIGN')) {
                 $options = \FluentCampaign\App\Services\Integrations\Edd\Helper::getProducts();
             }
 

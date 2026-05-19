@@ -2,6 +2,8 @@
 
 namespace FluentCrm\App\Services\Funnel;
 
+use FluentCrm\App\Services\Helper;
+
 class ProFunnelItems
 {
     public function __construct()
@@ -271,7 +273,7 @@ class ProFunnelItems
             ];
         }
 
-        if (class_exists('\Easy_Digital_Downloads')) {
+        if (Helper::isEdd3()) {
             $triggers['edd_update_payment_status'] = [
                 'category'    => 'Easy Digital Downloads',
                 'label'       => 'Edd - New Order Success',
@@ -467,7 +469,7 @@ class ProFunnelItems
             ]
         ];
 
-        if (class_exists('\Easy_Digital_Downloads')) {
+        if (Helper::isEdd3()) {
             $blocks['edd_update_payment_status_benchmark'] = [
                 'is_pro'      => true,
                 'type'        => 'conditional',

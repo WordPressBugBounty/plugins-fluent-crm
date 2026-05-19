@@ -581,6 +581,15 @@ if(fluentcrm_is_rtl()) {
         }
     }
 
+    @media only screen and (max-width: 600px) {
+        .fc_woo_product_stack_mobile .fce_column {
+            display: block !important;
+            width: 100% !important;
+            padding-right: 0 !important;
+            padding-left: 0 !important;
+        }
+    }
+
 
     @media only screen and (max-width: 480px) {
         body, table, td, p, a, li, blockquote {

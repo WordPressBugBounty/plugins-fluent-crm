@@ -87,6 +87,10 @@ class FunnelHandler
         }
 
         foreach ($triggers as $triggerName) {
+            if ($this->shouldSkipEddTriggerRegistration($triggerName)) {
+                continue;
+            }
+
             if (isset($this->registeredFunnelTriggers[$triggerName])) {
                 continue;
             }
@@ -119,11 +123,35 @@ class FunnelHandler
             empty($this->registeredTriggerFallbacks['edd_complete_purchase'])
         ) {
             add_action('edd_complete_purchase', function ($paymentId) {
-                $this->mapTriggers('edd_update_payment_status', [$paymentId, 'publish', 'pending'], 3);
+                $this->mapTriggers('edd_update_payment_status', [$paymentId, 'complete', 'pending'], 3);
             });
 
             $this->registeredTriggerFallbacks['edd_complete_purchase'] = true;
         }
+    }
+
+    /**
+     * Skip stored EDD automation hooks when the active EDD install is unsupported.
+     *
+     * Existing EDD funnel data should remain stored, but EDD runtime dispatch must
+     * not be registered unless the site is running EDD 3 or newer.
+     *
+     * @param string $triggerName
+     * @return bool
+     */
+    private function shouldSkipEddTriggerRegistration($triggerName)
+    {
+        if (Helper::isEdd3()) {
+            return false;
+        }
+
+        return in_array($triggerName, [
+            'edd_update_payment_status',
+            'edd_sl_post_set_status',
+            'edd_recurring_add_subscription_payment',
+            'edd_subscription_status_change',
+            'edd_fc_order_refunded_simulation'
+        ], true);
     }
 
     public function handle()

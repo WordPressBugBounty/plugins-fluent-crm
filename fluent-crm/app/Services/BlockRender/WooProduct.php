@@ -112,10 +112,15 @@ class WooProduct
         $buttonHtml = '<div style="margin-top: 10px; margin-bottom: 10px;">'.$buttonHtml.'</div>';
 
         $contentHtml .= $buttonHtml;
+        $tableClass = 'fce_row';
+        if ($template === 'left' || $template === 'right') {
+            $tableClass .= ' fc_woo_product_stack_mobile';
+        }
+
         ob_start();
         ?>
 
-        <table class="fce_row" border="0" cellpadding="0" cellspacing="0" width="100%" style="table-layout: fixed; border-collapse: collapse;mso-table-lspace: 0pt;mso-table-rspace: 0pt;-ms-text-size-adjust: 100%;-webkit-text-size-adjust: 100%;margin-bottom: 20px; margin-top: 20px;<?php echo $tableStyle; //phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>"><tbody><tr>
+        <table class="<?php echo esc_attr($tableClass); ?>" border="0" cellpadding="0" cellspacing="0" width="100%" style="table-layout: fixed; border-collapse: collapse;mso-table-lspace: 0pt;mso-table-rspace: 0pt;-ms-text-size-adjust: 100%;-webkit-text-size-adjust: 100%;margin-bottom: 20px; margin-top: 20px;<?php echo $tableStyle; //phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>"><tbody><tr>
                 <?php
                 if($imageTd) {
                     echo $imageTd; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped

@@ -15,6 +15,9 @@ use FluentCrm\App\Services\Helper;
  */
 class PurchaseHistory
 {
+    /**
+     * Build the commerce summary widget for supported commerce providers.
+     */
     public function getCommerceStatWidget($subscriber)
     {
         /**
@@ -68,7 +71,7 @@ class PurchaseHistory
             return false;
         }
 
-        if (class_exists('\Easy_Digital_Downloads')) {
+        if (Helper::isEdd3()) {
 
             $customer = fluentCrmDb()->table('edd_customers')
                 ->where('email', $subscriber->email);
@@ -278,9 +281,12 @@ class PurchaseHistory
         return false;
     }
 
+    /**
+     * Return EDD 3 order history for the subscriber purchase-history panel.
+     */
     public function eddOrders($data, $subscriber)
     {
-        if (!class_exists('\Easy_Digital_Downloads')) {
+        if (!Helper::isEdd3()) {
             return $data;
         }
 
@@ -306,89 +312,56 @@ class PurchaseHistory
         $lasOrderData = '';
 
         /*
-         * Handle for EDD3
+         * EDD 3 stores orders in the edd_orders table. Legacy edd_payment posts
+         * are intentionally not queried because EDD 2 is no longer supported.
          */
-        if (function_exists('\edd_get_orders')) {
-            $totalCount = fluentCrmDb()->table('edd_orders')
-                ->where('customer_id', $customer->id)
-                ->count();
+        $totalCount = fluentCrmDb()->table('edd_orders')
+            ->where('customer_id', $customer->id)
+            ->count();
 
-            if (!$totalCount) {
-                return $data;
-            }
+        if (!$totalCount) {
+            return $data;
+        }
 
-            $valid_columns = ['id', 'date_created', 'total'];
-            $valid_directions = ['ASC', 'DESC'];
+        $valid_columns = ['id', 'date_created', 'total'];
+        $valid_directions = ['ASC', 'DESC'];
 
-            if (!in_array($sort_by, $valid_columns)) {
-                $sort_by = 'id';
-            }
-            if (!in_array(strtoupper($sort_type), $valid_directions)) {
-                $sort_type = 'DESC';
-            }
+        if (!in_array($sort_by, $valid_columns)) {
+            $sort_by = 'id';
+        }
+        if (!in_array(strtoupper($sort_type), $valid_directions)) {
+            $sort_type = 'DESC';
+        }
 
+        $orders = fluentCrmDb()->table('edd_orders')
+            ->where('customer_id', $customer->id)
+            ->orderBy($sort_by, $sort_type)
+            ->limit($per_page)
+            ->offset(($page - 1) * $per_page)
+            ->get();
 
-            $orders = fluentCrmDb()->table('edd_orders')
-                ->where('customer_id', $customer->id)
-                ->orderBy($sort_by, $sort_type)
-                ->limit($per_page)
-                ->offset(($page - 1) * $per_page)
-                ->get();
+        $formattedOrders = [];
 
-            $formattedOrders = [];
+        foreach ($orders as $order) {
+            $orderActionHtml = '<a target="_blank" href="' . add_query_arg('id', $order->id, admin_url('edit.php?post_type=download&page=edd-payment-history&view=view-order-details')) . '">
+                <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M8.5 5.5V7H4.75V15.25H13V11.5H14.5V16C14.5 16.1989 14.421 16.3897 14.2803 16.5303C14.1397 16.671 13.9489 16.75 13.75 16.75H4C3.80109 16.75 3.61032 16.671 3.46967 16.5303C3.32902 16.3897 3.25 16.1989 3.25 16V6.25C3.25 6.05109 3.32902 5.86032 3.46967 5.71967C3.61032 5.57902 3.80109 5.5 4 5.5H8.5ZM16.75 3.25V9.25H15.25V5.80975L9.40525 11.6553L8.34475 10.5948L14.1888 4.75H10.75V3.25H16.75Z" fill="#525866"/>
+                </svg>
+            </a>';
+            $date = '<span class="order_id">'.'#' . $order->id .'</span><span class="order_date">'.date_i18n(get_option('date_format'), strtotime($order->date_created)).'</span>';
 
-            foreach ($orders as $order) {
-                $orderActionHtml = '<a target="_blank" href="' . add_query_arg('id', $order->id, admin_url('edit.php?post_type=download&page=edd-payment-history&view=view-order-details')) . '">
-                    <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <path d="M8.5 5.5V7H4.75V15.25H13V11.5H14.5V16C14.5 16.1989 14.421 16.3897 14.2803 16.5303C14.1397 16.671 13.9489 16.75 13.75 16.75H4C3.80109 16.75 3.61032 16.671 3.46967 16.5303C3.32902 16.3897 3.25 16.1989 3.25 16V6.25C3.25 6.05109 3.32902 5.86032 3.46967 5.71967C3.61032 5.57902 3.80109 5.5 4 5.5H8.5ZM16.75 3.25V9.25H15.25V5.80975L9.40525 11.6553L8.34475 10.5948L14.1888 4.75H10.75V3.25H16.75Z" fill="#525866"/>
-                    </svg>
-                </a>';
-                $date = '<span class="order_id">'.'#' . $order->id .'</span><span class="order_date">'.date_i18n(get_option('date_format'), strtotime($order->date_created)).'</span>';
+            $status = '<span class="fcrm_badge fcrm_badge_'.esc_attr($order->status).'">'. Helper::getStatusText($order->status) .'</span>';
 
-                $status = '<span class="fcrm_badge fcrm_badge_'.esc_attr($order->status).'">'. Helper::getStatusText($order->status) .'</span>';
+            $formattedOrders[] = [
+                'date'   => $date,
+                'status' => $status,
+                'total'  => edd_currency_filter(edd_format_amount($order->total)),
+                'action' => $orderActionHtml
+            ];
+        }
 
-                $formattedOrders[] = [
-                    'date'   => $date,
-                    'status' => $status,
-                    'total'  => edd_currency_filter(edd_format_amount($order->total)),
-                    'action' => $orderActionHtml
-                ];
-            }
-
-            if (!$orders->isEmpty()) {
-                $lasOrderData = date_i18n(get_option('date_format'), strtotime($orders[0]->date_created));
-            }
-
-        } else {
-            $totalCount = count($customer->get_payment_ids());
-            if (!$totalCount) {
-                return $data;
-            }
-
-            $payments = edd_get_payments([
-                'customer_id' => $customer->id,
-                'customer'    => $customer->id,
-                'number'      => $per_page,
-                'offset'      => ($page - 1) * $per_page
-            ]);
-
-            $formattedOrders = [];
-            if ($payments) {
-                foreach ($payments as $payment) {
-                    if (!$payment instanceof \EDD_Payment) {
-                        $payment = new \EDD_Payment($payment->ID);
-                    }
-                    $orderActionHtml = '<a target="_blank" href="' . add_query_arg('id', $payment->ID, admin_url('edit.php?post_type=download&page=edd-payment-history&view=view-order-details')) . '">' . __('View Order', 'fluent-crm') . '</a>';
-                    $formattedOrders[] = [
-                        'order'  => '#' . $payment->number,
-                        'date'   => date_i18n(get_option('date_format'), strtotime($payment->date)),
-                        'status' => $payment->status_nicename,
-                        'total'  => edd_currency_filter(edd_format_amount($payment->total)),
-                        'action' => $orderActionHtml
-                    ];
-                }
-                $lasOrderData = date_i18n(get_option('date_format'), strtotime($payments[0]->post_date));
-            }
+        if (!$orders->isEmpty()) {
+            $lasOrderData = date_i18n(get_option('date_format'), strtotime($orders[0]->date_created));
         }
 
         /**

@@ -54,6 +54,20 @@ class FunnelController extends Controller
         $funnelQuery = Funnel::withCount('subscribers')
             ->orderBy($orderBy, $orderType);
 
+        if (!Helper::isEdd3()) {
+            /*
+             * EDD 2 is no longer supported, so hide existing EDD automations
+             * without deleting stored funnel data from the database.
+             */
+            $funnelQuery->whereNotIn('trigger_name', [
+                'edd_update_payment_status',
+                'edd_sl_post_set_status',
+                'edd_recurring_add_subscription_payment',
+                'edd_subscription_status_change',
+                'edd_fc_order_refunded_simulation'
+            ]);
+        }
+
         if ($search = $request->getSafe('search', 'sanitize_text_field')) {
             global $wpdb;
             $searchTerm = '%%' . $wpdb->esc_like($search) . '%%';
@@ -1416,7 +1430,7 @@ class FunnelController extends Controller
             $categories[] = 'wcs';
         }
 
-        if (defined('EDD_PLUGIN_FILE')) {
+        if (Helper::isEdd3()) {
             $categories[] = 'edd';
         }
 

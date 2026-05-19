@@ -185,7 +185,7 @@ class EmailPatternController extends Controller
             $value['description'] = sanitize_text_field($request->get('description'));
         }
 
-        if ($request->has('sync_status')) {
+        if ($request->exists('sync_status')) {
             $value['sync_status'] = sanitize_text_field($request->get('sync_status'));
         }
 

@@ -140,7 +140,7 @@ class CampaignAnalyticsController extends Controller
         if (defined('WC_PLUGIN_FILE')) {
             $sources[] = 'woo';
         }
-        if (class_exists('\Easy_Digital_Downloads')) {
+        if (Helper::isEdd3()) {
             $sources[] = 'edd';
         }
         if (defined('FLUENTCART_VERSION')) {
@@ -177,12 +177,16 @@ class CampaignAnalyticsController extends Controller
         }
 
         if ($source === 'edd') {
-            return fluentCrmDb()->table('postmeta')
+            /*
+             * EDD 3 writes order attribution meta to edd_ordermeta via the
+             * order meta API. Do not read legacy postmeta/edd_payment records.
+             */
+            return fluentCrmDb()->table('edd_ordermeta')
                 ->where('meta_key', '_fc_cid')
                 ->where('meta_value', $campaignId)
                 ->orderBy('meta_id', 'DESC')
                 ->get()
-                ->pluck('post_id')
+                ->pluck('edd_order_id')
                 ->map('intval')
                 ->all();
         }
@@ -238,10 +242,8 @@ class CampaignAnalyticsController extends Controller
         }
 
         if ($source === 'edd') {
-            // EDD treats "publish" as the canonical complete state; refunds move the
-            // payment out of complete (status becomes "refunded"), so a status filter
-            // alone is enough for net revenue.
-            $completeStatuses = ['publish', 'complete'];
+            // EDD 3 keeps canonical status and refund data in order tables.
+            $completeStatuses = ['complete', 'completed', 'partially_refunded'];
             foreach ($orderIds as $orderId) {
                 $payment = new \EDD_Payment($orderId);
                 if (!$payment || !$payment->ID) {
@@ -250,7 +252,10 @@ class CampaignAnalyticsController extends Controller
                 if (!in_array($payment->status, $completeStatuses, true)) {
                     continue;
                 }
-                $netCents = intval(((float) $payment->total) * 100);
+                $netTotal = function_exists('edd_get_order_total')
+                    ? edd_get_order_total($payment->ID)
+                    : $payment->total;
+                $netCents = intval(((float) $netTotal) * 100);
                 if ($netCents <= 0) {
                     continue;
                 }

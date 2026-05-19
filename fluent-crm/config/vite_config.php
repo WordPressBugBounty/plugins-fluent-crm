@@ -49,7 +49,8 @@
             '_PaginationBar.js',
             '__MergeCodes.js',
             '_BuiltinTemplateDrawer.js',
-            '_fc-bits.js'
+            '_fc-bits.js',
+            '_PromoCard.js'
         ]
     ],
     '_BuiltinTemplateDrawer.js' => [
@@ -847,7 +848,8 @@
             '_EmailPreview.js',
             '__MergeCodes.js',
             '_BuiltinTemplateDrawer.js',
-            '_fc-bits.js'
+            '_fc-bits.js',
+            '_PromoCard.js'
         ]
     ],
     'resources/admin/Modules/Email/Campaigns/Campaigns.vue' => [
@@ -959,6 +961,7 @@
             '__MergeCodes.js',
             '_BuiltinTemplateDrawer.js',
             '_fc-bits.js',
+            '_PromoCard.js',
             '_PhotoWidget.js',
             '__OptionSelector.js',
             '__AjaxSelector.js',
@@ -992,6 +995,7 @@
             '_EmailPreview.js',
             '_PageHeader.js',
             '_fc-bits-ui.js',
+            '_BaseCard.js',
             '_PaginationBar.js',
             '_Confirm.js',
             'resources/admin/Modules/Email/Campaigns/_components/EmailPreview.vue',
@@ -1054,6 +1058,7 @@
             '__MergeCodes.js',
             '_BuiltinTemplateDrawer.js',
             '_fc-bits.js',
+            '_PromoCard.js',
             '_PhotoWidget.js',
             '__OptionSelector.js',
             '__AjaxSelector.js',
@@ -1105,12 +1110,12 @@
             '__MergeCodes.js',
             '_BuiltinTemplateDrawer.js',
             '_fc-bits.js',
+            '_PromoCard.js',
             '__MailerConfig.js',
             '_Confirm.js',
             'resources/admin/Modules/Email/Campaigns/_components/EmailPreview.vue',
             '_Badge.js',
             '_GenericPromo.js',
-            '_PromoCard.js',
             '_SettingsIcons.js'
         ]
     ],
@@ -1218,7 +1223,8 @@
             '_PaginationBar.js',
             '__MergeCodes.js',
             '_BuiltinTemplateDrawer.js',
-            '_fc-bits.js'
+            '_fc-bits.js',
+            '_PromoCard.js'
         ]
     ],
     'resources/admin/Modules/Email/Templates/EditTemplate.vue' => [
@@ -1241,6 +1247,7 @@
             '__MergeCodes.js',
             '_BuiltinTemplateDrawer.js',
             '_fc-bits.js',
+            '_PromoCard.js',
             '_PhotoWidget.js',
             '__OptionSelector.js',
             '__AjaxSelector.js',
@@ -1526,7 +1533,8 @@
             '_PreviewIframeBuilder.js',
             '_TestEmail.js',
             '__MergeCodes.js',
-            '_BuiltinTemplateDrawer.js'
+            '_BuiltinTemplateDrawer.js',
+            '_PromoCard.js'
         ],
         'dynamicImports' => [
             'resources/admin/Modules/Funnels/parts/_LazyIndividualProgress.vue',

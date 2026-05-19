@@ -2,9 +2,9 @@
 Contributors: techjewel,adreastrian,heera,wpmanageninja
 Tags: email marketing, newsletter, crm, email newsletter, subscribers
 Requires at least: 5.0
-Tested up to: 6.9
+Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 3.0.6
+Stable tag: 3.0.7
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -260,6 +260,17 @@ You can report any security bugs found in the source code of FluentCRM plugins t
 10. Pro Integrations
 
 == Changelog ==
+
+= 3.0.7 (Date: May 19, 2026) =
+- New: Added WP Media Library support to Email Editor footer
+- Improvement: Template Import Issue for Visual Builder
+- Fixed: Duplication issue in sequences.
+- Fixed: Synced Pattern Saving Issue
+- Fixed: List block RTL rendering issue.
+- Fixed: WooCommerce single product email mobile layout.
+- Fixed: Campaign emails table contact column overflow.
+- Fixed: Some RTL Issue
+- Other Improvement & Bug Fixes
 
 = 3.0.6 (Date: May 18, 2026) =
 - Fixed: Blank Page Issue

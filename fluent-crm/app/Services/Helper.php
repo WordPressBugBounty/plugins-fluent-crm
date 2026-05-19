@@ -16,6 +16,21 @@ use FluentCrm\Framework\Support\Str;
 class Helper
 {
     /**
+     * Determine if the active Easy Digital Downloads version is supported.
+     *
+     * FluentCRM's EDD integration is EDD 3+ only because the current
+     * integration depends on the EDD 3 order APIs and database tables.
+     *
+     * @return bool
+     */
+    public static function isEdd3()
+    {
+        return class_exists('\Easy_Digital_Downloads')
+            && defined('EDD_VERSION')
+            && version_compare(EDD_VERSION, '3.0', '>=');
+    }
+
+    /**
      * Parse mixed input into an array.
      *
      * Accepts either a native array or a JSON string. For string inputs,
@@ -758,7 +773,7 @@ class Helper
             ];
         }
 
-        if (class_exists('\Easy_Digital_Downloads')) {
+        if (self::isEdd3()) {
             $validProviders['edd'] = [
                 'title' => __('EDD Purchase History', 'fluent-crm'),
                 'name'  => __('Easy Digital Downloads', 'fluent-crm')
@@ -1739,7 +1754,7 @@ class Helper
                 ];
             }
 
-            if (class_exists('\Easy_Digital_Downloads')) {
+            if (self::isEdd3()) {
                 $groups['edd'] = [
                     'label'    => __('EDD', 'fluent-crm'),
                     'value'    => 'edd',

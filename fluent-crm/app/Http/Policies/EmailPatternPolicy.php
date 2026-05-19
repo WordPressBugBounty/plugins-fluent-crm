@@ -8,7 +8,11 @@ class EmailPatternPolicy extends BasePolicy
 {
     public function verifyRequest(Request $request)
     {
-        return $this->currentUserCan('fcrm_manage_email_templates');
+        if ($request->method() == 'GET') {
+            return $this->currentUserCan('fcrm_read_emails');
+        }
+
+        return $this->currentUserCan('fcrm_manage_emails');
     }
 
     public function delete(Request $request)

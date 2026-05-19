@@ -132,7 +132,7 @@ class DashboardController extends Controller
             ];
         }
 
-        if (class_exists('\Easy_Digital_Downloads')) {
+        if (Helper::isEdd3()) {
             $recommendations[] = [
                 'provider'    => 'EDD',
                 'title'       => __('Do more with EDD + FluentCRM', 'fluent-crm'),

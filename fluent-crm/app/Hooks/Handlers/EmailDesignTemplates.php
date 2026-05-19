@@ -210,7 +210,7 @@ class EmailDesignTemplates
                 if ($safeBackgroundColor) {
                     $style .= " background-color: {$safeBackgroundColor};";
                 }
-                $style .= " padding-top: {$safePadding}px; padding-bottom: {$safePadding}px;";
+                $style .= " padding: {$safePadding}px;";
                 $templateData['footer_text'] = $footerConfig['footer_content'] ?? '';
             }
 
