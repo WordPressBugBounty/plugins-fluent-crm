@@ -104,7 +104,21 @@ class FluentConditionalContentBlockHandler
             return '';
         }
 
-        if (trim(wp_strip_all_tags($content)) === '') {
+        // no inner blocks placed at all — nothing to render.
+        // Checking $block->inner_blocks (parsed block data) is the authoritative source of truth
+        // and avoids inspecting the rendered HTML string, which loses semantic information.
+        if (count($block->inner_blocks) === 0) {
+            return '';
+        }
+
+        // inner blocks exist but all rendered to nothing — for example a Query Loop
+        // with no results, a dynamic block gated by its own conditions, or a plugin-restricted
+        // block. Avoids outputting an empty wrapper div in those cases.
+        // trim() on the raw HTML string is intentional: any real element (iframe, video, image,
+        // paragraph, etc.) produces a non-empty string. wp_strip_all_tags() is deliberately
+        // avoided here because it removes HTML tags and would incorrectly treat media-only
+        // content (iframes, videos, images) as empty.
+        if (trim($content) === '') {
             return '';
         }
 

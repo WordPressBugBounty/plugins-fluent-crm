@@ -173,8 +173,14 @@ class Campaign extends Model
                 $inserted = Subject::create($data);
                 $validSubjectIds[] = $inserted->id;
             } else {
-                Subject::where('id', $subject['id'])->update(Arr::only($subject, ['key', 'value']));
-                $validSubjectIds[] = $subject['id'];
+                $subjectItem = Subject::where('id', intval($subject['id']))
+                    ->where('object_id', $this->id)
+                    ->first();
+
+                if ($subjectItem) {
+                    $subjectItem->fill(Arr::only($subject, ['key', 'value']))->save();
+                    $validSubjectIds[] = $subjectItem->id;
+                }
             }
         }
 

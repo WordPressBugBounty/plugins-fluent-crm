@@ -364,10 +364,26 @@ class CampaignController extends Controller
 
         $campaign = Campaign::findOrFail($id);
 
-        $campaign->fill($updateData)->save();
+        $campaignSubjects = [];
 
         if (isset($data['update_subjects'])) {
             $campaignSubjects = Arr::get($data, 'subjects', []);
+
+            // Validate A/B subjects before saving campaign fields to avoid partial step updates.
+            $validSubjects = array_filter((array)$campaignSubjects, function ($subject) {
+                return !empty($subject['key']) && trim((string)Arr::get($subject, 'value', ''));
+            });
+
+            if (!empty($campaignSubjects) && count($validSubjects) < 2) {
+                return $this->sendError([
+                    'message' => __('Please provide at least two Subject Lines for A/B Test.', 'fluent-crm')
+                ], 422);
+            }
+        }
+
+        $campaign->fill($updateData)->save();
+
+        if (isset($data['update_subjects'])) {
             $campaign->syncSubjects($campaignSubjects);
             $campaign = Campaign::with(['subjects'])->find($id);
         } else {
@@ -808,6 +824,7 @@ class CampaignController extends Controller
     public function processingStat(Request $request, $campaignId)
     {
         $campaign = Campaign::withoutGlobalScope('type')
+            ->with(['subjects'])
             ->whereIn('type', fluentCrmAutoProcessCampaignTypes())
             ->findOrFail($campaignId);
 
@@ -822,6 +839,7 @@ class CampaignController extends Controller
             if ($campaign->status == 'scheduled' && current_time('timestamp') - strtotime($campaign->scheduled_at) > 300) {
                 if (Scheduler::markArchiveCampaigns()) {
                     $campaign = Campaign::withoutGlobalScope('type')
+                        ->with(['subjects'])
                         ->findOrFail($campaignId);
                 }
             }
@@ -849,6 +867,7 @@ class CampaignController extends Controller
         $didRun = false;
         if ($processedCampaign) {
             $campaign = $processedCampaign;
+            $campaign->load('subjects');
             $didRun = true;
         }
 
@@ -875,6 +894,7 @@ class CampaignController extends Controller
 
         if ($isTest) {
             $campaign = (object)$this->request->get('campaign');
+            $emailSubject = $campaign->email_subject;
 
             if (empty($campaign->settings)) {
                 $campaign->settings = [
@@ -882,8 +902,20 @@ class CampaignController extends Controller
                 ];
             }
 
+            if (!empty($campaign->subjects) && is_array($campaign->subjects)) {
+                $validSubjects = array_filter($campaign->subjects, function ($subject) {
+                    return trim((string)Arr::get((array)$subject, 'value', ''));
+                });
+
+                if ($validSubjects) {
+                    // Quick Test only verifies deliverability, so use the first configured A/B subject.
+                    $subject = reset($validSubjects);
+                    $emailSubject = Arr::get((array)$subject, 'value', $emailSubject);
+                }
+            }
+
             $campaignEmail = (object)[
-                'email_subject'    => $campaign->email_subject,
+                'email_subject'    => $emailSubject,
                 'email_pre_header' => $campaign->email_pre_header,
                 'email_body'       => $campaign->email_body
             ];
@@ -1068,7 +1100,7 @@ class CampaignController extends Controller
 
         if ($campaignId) {
             $campaignId = (int)$campaignId;
-            $campaign = Campaign::withoutGlobalScope('type')->findOrfail($campaignId);
+            $campaign = Campaign::withoutGlobalScope('type')->with(['subjects'])->findOrfail($campaignId);
         } else {
             $campaign = $this->request->get('campaign', []);
             if (isset($campaign['post_content'])) {
@@ -1220,7 +1252,8 @@ class CampaignController extends Controller
         $emailBody = str_replace(['https://fonts.googleapis.com/css2', 'https://fonts.googleapis.com/css'], 'https://fonts.bunny.net/css', $emailBody);
 
         return [
-            'preview_html' => $emailBody
+            'preview_html' => $emailBody,
+            'subjects'     => !empty($campaign->subjects) ? $campaign->subjects : []
         ];
     }
 
@@ -1373,6 +1406,7 @@ class CampaignController extends Controller
     {
         $requestCounter = $request->get('request_counter');
         $campaign = Campaign::withoutGlobalScope('type')
+            ->with(['subjects'])
             ->whereIn('type', fluentCrmAutoProcessCampaignTypes())
             ->findOrFail($campaignId);
 
@@ -1402,12 +1436,7 @@ class CampaignController extends Controller
                 if (($requestCounter % 4) === 0) {
                     $lastChecked = fluentCrmGetOptionCache('_fcrm_last_email_process_cleanup', 600);
                     if (!$lastChecked || time() - $lastChecked > 140) {
-                        $dateStamp = gmdate('Y-m-d H:i:s', (current_time('timestamp') - 150));
-                        CampaignEmail::where('status', 'processing')
-                            ->where('updated_at', '<', $dateStamp)
-                            ->update([
-                                'status' => 'pending'
-                            ]);
+                        Scheduler::resetStaleProcessingEmails(150, 'getCampaignStatus');
                         fluentCrmSetOptionCache('_fcrm_last_email_process_cleanup', time(), 600);
                     }
                 }
@@ -1467,7 +1496,7 @@ class CampaignController extends Controller
                         'status'     => 'archived',
                         'updated_at' => current_time('mysql')
                     ]);
-                    $campaign = Campaign::withoutGlobalScope('type')->findOrFail($campaignId);
+                    $campaign = Campaign::withoutGlobalScope('type')->with(['subjects'])->findOrFail($campaignId);
 
                     do_action('fluent_crm/campaign_archived', $campaign);
                 }

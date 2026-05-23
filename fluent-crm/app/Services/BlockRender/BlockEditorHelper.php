@@ -203,6 +203,12 @@ class BlockEditorHelper
             $cssProps .= '--wp--preset--spacing--' . $item['slug'] . ': ' . $item['size'] . ';';
         }
 
+        // Keep core color preset variables available inside the editor canvas.
+        // Without these, Gutenberg's link color styles can resolve to empty values.
+        foreach ($defaults['color'] as $item) {
+            $cssProps .= '--wp--preset--color--' . $item['slug'] . ': ' . $item['color'] . ';';
+        }
+
         return $cssProps;
     }
 

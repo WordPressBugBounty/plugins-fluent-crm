@@ -54,22 +54,52 @@ class FunnelHandler
 
     private $registeredTriggerFallbacks = [];
 
+    private $funnelItemsRegistered = false;
+
     public function register()
     {
         /*
+         * Core funnel items must register before the early active-trigger pass
+         * so their fluentcrm_funnel_arg_num_* filters are available at init
+         * priority 2. This lets core events fired by other init priority 10
+         * callbacks, such as LifterLMS user registration, enter funnels.
+         *
          * Pro integrations can register trigger arg-count filters before init priority 2.
          * Register those ready triggers early so events fired during init priority 10,
          * such as EDD manual order status updates, are not missed.
          *
-         * handle() still runs at init priority 10 so core triggers and benchmarks can
-         * register their fluentcrm_funnel_arg_num_* filters before the fallback pass.
-         *
          * The fallback pass at priority 20 preserves the existing behavior for triggers
          * whose arg-count filters are not available during the early pass.
          */
+        add_action('init', [$this, 'registerFunnelItems'], 1);
         add_action('init', [$this, 'registerEarlyActiveTriggers'], 2);
         add_action('init', [$this, 'handle'], 10);
         add_action('init', [$this, 'registerActiveTriggers'], 20);
+    }
+
+    /**
+     * Register core funnel actions, benchmarks, triggers, and free Pro placeholders once.
+     *
+     * This runs before registerEarlyActiveTriggers() so core trigger arg-count filters
+     * are present when active funnel listeners are attached before other init@10 callbacks.
+     *
+     * @return void
+     */
+    public function registerFunnelItems()
+    {
+        if ($this->funnelItemsRegistered) {
+            return;
+        }
+
+        $this->funnelItemsRegistered = true;
+
+        $this->initBlockActions();
+        $this->initBenchMarkBlocks();
+        $this->initTriggers();
+
+        if (!defined('FLUENTCAMPAIGN_DIR_FILE')) {
+            new \FluentCrm\App\Services\Funnel\ProFunnelItems();
+        }
     }
 
     public function registerEarlyActiveTriggers()
@@ -156,13 +186,7 @@ class FunnelHandler
 
     public function handle()
     {
-        $this->initBlockActions();
-        $this->initBenchMarkBlocks();
-        $this->initTriggers();
-
-        if (!defined('FLUENTCAMPAIGN_DIR_FILE')) {
-            new \FluentCrm\App\Services\Funnel\ProFunnelItems();
-        }
+        $this->registerFunnelItems();
 
         add_action('fluent_crm_process_automation', function () {
             if ($this->funnelFired) {

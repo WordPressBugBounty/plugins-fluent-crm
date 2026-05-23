@@ -4,6 +4,7 @@ namespace FluentCrm\App\Http\Controllers;
 
 use FluentCrm\App\Models\Template;
 use FluentCrm\App\Services\Helper;
+use FluentCrm\App\Services\Sanitize;
 use FluentCrm\Framework\Support\Arr;
 use FluentCrm\Framework\Http\Request\Request;
 
@@ -556,6 +557,9 @@ class TemplateController extends Controller
             'background_color' => 'transparent',
             'footer_padding'   => 20
         ]);
+
+        // Footer content is user-editable from a raw text mode; sanitize before persistence.
+        $footerSettings['footer_content'] = Sanitize::sanitizeFooterHtml(Arr::get($footerSettings, 'footer_content', ''));
 
         $footerSettings['disable_footer'] = $disableFooter;
         $footerSettings['custom_footer'] = $customFooter;

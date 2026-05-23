@@ -4,7 +4,7 @@ Tags: email marketing, newsletter, crm, email newsletter, subscribers
 Requires at least: 5.0
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 3.0.7
+Stable tag: 3.1.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -260,6 +260,31 @@ You can report any security bugs found in the source code of FluentCRM plugins t
 10. Pro Integrations
 
 == Changelog ==
+
+= 3.1.0 (Date: May 23, 2026) =
+- New: WordPress AI support added for WordPress 7.x.
+- New: SmartCode insert menu in Email Editor footer.
+- New: Added Visual/Text mode switch added to custom footer editor.
+- New: Font family selector added in custom footer editor.
+- Improvement: WP 7 Compatibility with editor and other components.
+- Improvement: Advanced filter dropdowns are now searchable in custom fields, tags, and lists.
+- Improvement: AI contact summaries now respect locale/language.
+- Improvement: Reliability and Performance in schedule email processing
+- Improvement: Caching and Gutenberg asset loading flow improved.
+- Improvement: Auto AI model issue fixed and gemini 3.5-flash added
+- Fixed: Footer disable toggle issue in editor.
+- Fixed: Product email block spacing in preview and sent emails.
+- Fixed: Some SmartCode URL rendering issues.
+- Fixed: Campaign recipients table column layout issue.
+- Fixed: WordPress admin menu visibility issue.
+- Fixed: Core automation trigger registration timing issue.
+- Fixed: Gutenberg editor canvas link color preset issue.
+- Fixed: Conditional block suppressing iframe/media-only content.
+- Fixed: Invalid Gutenberg block auto-recovery issue.
+- Fixed: Campaign A/B subject validation flow.
+- Fixed: Action dropdown placement and multi-select popover item spacing.
+- Fixed: Some UI Issues in Gutenberg editor
+- Other Improvement & Bug Fixes
 
 = 3.0.7 (Date: May 19, 2026) =
 - New: Added WP Media Library support to Email Editor footer

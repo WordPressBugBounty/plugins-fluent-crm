@@ -234,12 +234,30 @@ class Scheduler
     {
         (new Maintenance())->maybeProcessData();
 
-        fluentCrmDb()->table('fc_campaign_emails')
-            ->where('status', 'sent')
-            ->where('email_body', '!=', '')
-            ->update([
-                'email_body' => ''
-            ]);
+        // Clear email_body from historical 'sent' rows to reclaim disk space.
+        // Loop a LIMIT-bounded UPDATE so each statement's row-lock footprint
+        // stays small (an unbounded UPDATE on a multi-million-row table holds
+        // locks for minutes and stalls report/dashboard SELECTs) while still
+        // draining the full backlog in this tick. Going direct to $wpdb skips
+        // ORM overhead on what is effectively the same repeated statement.
+        try {
+            global $wpdb;
+            $table         = $wpdb->prefix . 'fc_campaign_emails';
+            $chunkSize     = 50000;
+            $maxIterations = 100; // safety cap — up to ~5M rows per weekly tick
+
+            for ($i = 0; $i < $maxIterations; $i++) {
+                $affected = (int) $wpdb->query(
+                    "UPDATE {$table} SET email_body = '' WHERE status = 'sent' AND email_body != '' LIMIT {$chunkSize}"
+                );
+
+                if ($affected < $chunkSize || fluentCrmIsMemoryExceeded()) {
+                    break;
+                }
+            }
+        } catch (\Exception $e) {
+            Helper::debugLog('processWeekly', 'email_body cleanup deferred: ' . $e->getMessage(), 'extended');
+        }
     }
 
     /**
@@ -270,11 +288,7 @@ class Scheduler
         try {
             fluentCrmSetOptionCache('_fcrm_last_five_minutes_run', time(), 60);
 
-            CampaignEmail::where('status', 'processing')
-                ->where('updated_at', '<', gmdate('Y-m-d H:i:s', (current_time('timestamp') - 100)))
-                ->update([
-                    'status' => 'pending'
-                ]);
+            self::resetStaleProcessingEmails(100, 'processFiveMinutes');
 
             $cutOutTime = gmdate('Y-m-d H:i:s', current_time('timestamp') + 360);
 
@@ -319,6 +333,61 @@ class Scheduler
             return $result;
         } finally {
             self::releaseLock('five_minute_scheduler');
+        }
+    }
+
+    /**
+     * Reset rows stuck in 'processing' back to 'pending' so they get re-claimed.
+     *
+     * An unbounded mass UPDATE on (status='processing' AND updated_at < cutoff)
+     * locks a wide range and deadlocks against the row-level SELECT ... FOR
+     * UPDATE claims that the mailer Handler / MultiThreadHandler hold while
+     * sending. We instead drain in bounded chunks by primary key.
+     *
+     * We deliberately do NOT order the SELECT: ORDER BY id would push MySQL
+     * onto PRIMARY (full id-walk looking for sparse matches on a multi-million
+     * row table) instead of the (status, scheduled_at) index, which contains
+     * only the small currently-'processing' slice. Each chunk drains rows out
+     * of the predicate, so the next iteration naturally finds different rows
+     * without an explicit order.
+     *
+     * Any deadlock that still slips through is harmless — remaining rows will
+     * be picked up on the next caller's tick.
+     *
+     * @param int    $maxAgeSeconds Rows older than this (in 'processing') get reset.
+     * @param string $callerContext Used in the deferred-log message.
+     * @return void
+     */
+    public static function resetStaleProcessingEmails($maxAgeSeconds = 100, $callerContext = '')
+    {
+        try {
+            $staleCutoff = gmdate('Y-m-d H:i:s', current_time('timestamp') - (int) $maxAgeSeconds);
+            $chunkSize   = 200;
+            $maxChunks   = 50; // up to 10k rows per call; subsequent calls drain the rest
+
+            for ($i = 0; $i < $maxChunks; $i++) {
+                $staleIds = CampaignEmail::where('status', 'processing')
+                    ->where('updated_at', '<', $staleCutoff)
+                    ->limit($chunkSize)
+                    ->pluck('id')
+                    ->toArray();
+
+                if (empty($staleIds)) {
+                    break;
+                }
+
+                CampaignEmail::whereIn('id', $staleIds)
+                    ->where('status', 'processing')
+                    ->update([
+                        'status' => 'pending'
+                    ]);
+
+                if (count($staleIds) < $chunkSize || fluentCrmIsMemoryExceeded()) {
+                    break;
+                }
+            }
+        } catch (\Exception $e) {
+            Helper::debugLog($callerContext ?: 'resetStaleProcessingEmails', 'Stale email reset deferred: ' . $e->getMessage(), 'extended');
         }
     }
 

@@ -1012,7 +1012,40 @@ class GutenbergEmailParser
             $class .= ' ' . $className;
         }
 
-        return "<a class='" . esc_attr($class) . "' id=\"" . esc_attr($elementId) . "\" style='" . esc_attr($styles) . "' href=\"" . esc_url($url) . "\">" . esc_html($text) . "</a>";
+        return "<a class='" . esc_attr($class) . "' id=\"" . esc_attr($elementId) . "\" style='" . esc_attr($styles) . "' href=\"" . $this->escapeButtonUrl($url) . "\">" . esc_html($text) . "</a>";
+    }
+
+    /**
+     * Escape button URLs without stripping smartcodes before the parser phase.
+     *
+     * Campaign smartcodes are parsed after Gutenberg blocks are rendered, so running
+     * esc_url() on a smartcode URL here removes the curly braces and makes the later
+     * parser miss it. Keep only smartcode-bearing safe-protocol URLs intact with
+     * esc_attr(); static URLs and unsafe protocols still go through esc_url().
+     */
+    private function escapeButtonUrl($url)
+    {
+        $url = (string)$url;
+
+        if (preg_match('/^http:\/\/(\{\{[^{}\r\n]+}}|##[^#\r\n]+##)$/i', trim($url), $matches)) {
+            $url = $matches[1];
+        }
+
+        if (!preg_match('/(\{\{[^{}\r\n]+}}|##[^#\r\n]+##)/', $url)) {
+            return esc_url($url);
+        }
+
+        if (!preg_match('/^([a-z][a-z0-9+.-]*):/i', ltrim($url), $matches)) {
+            return esc_attr($url);
+        }
+
+        $protocol = strtolower($matches[1]);
+
+        if (in_array($protocol, ['http', 'https', 'mailto', 'tel'], true)) {
+            return esc_attr($url);
+        }
+
+        return esc_url($url);
     }
 
     /**
@@ -1061,10 +1094,17 @@ class GutenbergEmailParser
             $this->collectInlineStyles($buttonElementId, $buttonAttrs, 'core/button');
         }
 
-        return WooProduct::renderProduct($buttonHtml, [
+        $html = WooProduct::renderProduct($buttonHtml, [
             'blockName' => 'fluentcrm/woo-product',
             'attrs'     => $attrs
         ]);
+
+        if (!$html) {
+            return '';
+        }
+
+        $attrs['td_id'] = $attrs['elem_id'] ?? '';
+        return $this->wrapInTable($html, $attrs);
     }
 
     /**
@@ -1134,10 +1174,17 @@ class GutenbergEmailParser
 
         $buttonHtml = '<a href="' . esc_url($buttonUrl) . '" style="' . esc_attr(implode(';', $buttonStyles) . ';') . '">' . esc_html($buttonText) . '</a>';
 
-        return CartProduct::renderProduct($buttonHtml, [
+        $html = CartProduct::renderProduct($buttonHtml, [
             'blockName' => 'fluent-crm/cart-product',
             'attrs'     => $attrs
         ]);
+
+        if (!$html) {
+            return '';
+        }
+
+        $attrs['td_id'] = $attrs['elem_id'] ?? '';
+        return $this->wrapInTable($html, $attrs);
     }
 
     /**

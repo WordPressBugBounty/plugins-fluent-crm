@@ -109,7 +109,7 @@ $align = $template === 'classic' ? 'left' : 'center';
                                             <table align="left" border="0" cellpadding="0" cellspacing="0" style="max-width: 100%;min-width: 100%;border-collapse: collapse;mso-table-lspace: 0pt;mso-table-rspace: 0pt;-ms-text-size-adjust: 100%;-webkit-text-size-adjust: 100%;color:inherit;" width="100%" class="fcTextContentContainer">
                                                 <tbody>
                                                 <tr>
-                                                    <td valign="top" class="fcTextContent" style="padding-top: 0;padding-right: 18px;padding-bottom: 9px;padding-left: 18px;mso-line-height-rule: exactly;-ms-text-size-adjust: 100%;-webkit-text-size-adjust: 100%;word-break: break-word;font-size: 12px;line-height: 150%;text-align: center;">
+                                                    <td valign="top" class="fcTextContent" style="padding: 0;mso-line-height-rule: exactly;-ms-text-size-adjust: 100%;-webkit-text-size-adjust: 100%;word-break: break-word;font-size: 12px;line-height: 150%;text-align: center;">
                                                         <?php echo $footer_text; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
                                                         <?php if (!defined('FLUENTCAMPAIGN')): ?>
                                                             <p>

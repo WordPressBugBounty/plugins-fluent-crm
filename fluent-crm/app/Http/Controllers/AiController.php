@@ -13,15 +13,17 @@ class AiController extends Controller
     private $credentialsOptionKey = '_fluent_ai_creds';
     private $writingSettingsOptionKey = '_ai_writing_settings';
     private $providerModels = [
-        'open_ai' => ['auto', 'gpt-5.5', 'gpt-5.4', 'gpt-5.4-mini', 'gpt-5.4-nano', 'gpt-4.1', 'gpt-4o', 'gpt-4o-mini', 'gpt-5-mini'],
+        'wordpress' => ['wordpress'],
+        'open_ai' => ['auto', 'gpt-5.5', 'gpt-5.4', 'gpt-5.4-mini', 'gpt-5.4-nano', 'gpt-4.1', 'gpt-4o', 'gpt-4o-mini'],
         'claude'  => ['auto', 'claude-opus-4-7', 'claude-sonnet-4-6', 'claude-haiku-4-5-20251001', 'claude-opus-4-6'],
-        'gemini'  => ['auto', 'gemini-3.1-pro-preview', 'gemini-3-flash-preview', 'gemini-3.1-flash-lite', 'gemini-2.5-flash', 'gemini-2.5-pro', 'gemini-2.5-flash-lite'],
+        'gemini'  => ['auto', 'gemini-3.5-flash', 'gemini-3.1-pro-preview', 'gemini-3-flash-preview', 'gemini-3.1-flash-lite', 'gemini-2.5-flash', 'gemini-2.5-pro', 'gemini-2.5-flash-lite'],
     ];
 
     private $autoProviderModels = [
-        'open_ai' => 'gpt-5-mini',
+        'open_ai' => 'gpt-5.4',
         'claude'  => 'claude-sonnet-4-6',
-        'gemini'  => 'gemini-2.5-flash',
+        'gemini'  => 'gemini-3.5-flash',
+        'wordpress' => 'wordpress',
     ];
 
     public function getSettings(Request $request)
@@ -33,8 +35,14 @@ class AiController extends Controller
             $settings['api_key'] = '****' . substr($settings['api_key'], -4);
         }
 
+        global $wp_version;
+        $hasWordPressAi = (intval(explode('.', $wp_version)[0]) >= 7);
+        $connectorsUrl = admin_url('options-connectors.php');
+
         return $this->sendSuccess([
             'settings' => $settings,
+            'has_wordpress_ai' => $hasWordPressAi,
+            'connectors_url' => $connectorsUrl,
         ]);
     }
 
@@ -50,6 +58,14 @@ class AiController extends Controller
 
         if ($isEnabled !== 'yes') {
             $isEnabled = 'no';
+        }
+
+        global $wp_version;
+        $hasWordPressAi = (intval(explode('.', $wp_version)[0]) >= 7);
+        if ($provider === 'wordpress' && !$hasWordPressAi) {
+            return $this->sendError([
+                'message' => __('WordPress AI is only supported in WordPress 7.0 or higher.', 'fluent-crm'),
+            ], 422);
         }
 
         if (!$model) {
@@ -136,7 +152,7 @@ class AiController extends Controller
             $apiKey = Arr::get($savedSettings, 'api_key', '');
         }
 
-        if (!$apiKey) {
+        if ($provider !== 'wordpress' && !$apiKey) {
             return $this->sendError([
                 'message' => __('Please enter an API key.', 'fluent-crm'),
             ], 422);
@@ -197,14 +213,14 @@ class AiController extends Controller
             ], 422);
         }
 
+        $provider = Arr::get($settings, 'provider', '');
         $apiKey = Arr::get($settings, 'api_key', '');
-        if (!$apiKey) {
+        if ($provider !== 'wordpress' && !$apiKey) {
             return $this->sendError([
                 'message' => __('AI API key is not configured. Please add it in Settings.', 'fluent-crm'),
             ], 422);
         }
 
-        $provider = Arr::get($settings, 'provider', '');
         $model = Arr::get($settings, 'model', '');
 
         $validProviders = array_keys($this->providerModels);
@@ -348,6 +364,7 @@ class AiController extends Controller
         $subscriberId = intval($request->get('subscriber_id', 0));
         $generate = $request->get('generate') == 'yes';
         $regenerate = $request->get('regenerate') == 'yes';
+        $locale = $this->getContactSummaryLocale();
 
         if (!$subscriberId) {
             return $this->sendError([
@@ -366,7 +383,7 @@ class AiController extends Controller
         $metaKey = '_ai_contact_summary';
         $cachedSummary = fluentcrm_get_subscriber_meta($subscriberId, $metaKey, []);
 
-        if (!$regenerate && !empty($cachedSummary['content'])) {
+        if (!$regenerate && $this->isCachedContactSummaryForLocale($cachedSummary, $locale)) {
             return $this->sendSuccess([
                 'summary' => $cachedSummary,
                 'cached'  => true,
@@ -388,14 +405,14 @@ class AiController extends Controller
             ], 422);
         }
 
+        $provider = Arr::get($settings, 'provider', '');
         $apiKey = Arr::get($settings, 'api_key', '');
-        if (!$apiKey) {
+        if ($provider !== 'wordpress' && !$apiKey) {
             return $this->sendError([
                 'message' => __('AI API key is not configured. Please add it in Settings.', 'fluent-crm'),
             ], 422);
         }
 
-        $provider = Arr::get($settings, 'provider', '');
         $model = Arr::get($settings, 'model', '');
 
         $validProviders = array_keys($this->providerModels);
@@ -418,13 +435,13 @@ class AiController extends Controller
             ], 422);
         }
 
-        $context = $this->buildContactSummaryContext($subscriber);
+        $context = $this->buildContactSummaryContext($subscriber, $locale);
         $result = $this->callProviderApi(
             $provider,
             $resolvedModel,
             $apiKey,
-            $this->buildContactSummaryPrompt($context),
-            $this->getContactSummarySystemPrompt($settings),
+            $this->buildContactSummaryPrompt($context, $locale),
+            $this->getContactSummarySystemPrompt($settings, $locale),
             45
         );
 
@@ -439,6 +456,7 @@ class AiController extends Controller
             'generated_at' => fluentCrmTimestamp(),
             'provider'     => $provider,
             'model'        => $model,
+            'locale'       => $locale,
             'counts'       => Arr::get($context, 'counts', []),
         ];
 
@@ -448,6 +466,66 @@ class AiController extends Controller
             'summary' => $summary,
             'cached'  => false,
         ]);
+    }
+
+    /**
+     * Resolve the WordPress site locale used for AI contact summaries.
+     *
+     * The contact summary must follow Settings > General > Site Language, not the
+     * current admin user's profile language. The fallback keeps cache comparison
+     * deterministic if WordPress returns an empty locale for any reason.
+     *
+     * @return string Sanitized WordPress locale, for example en_US or bn_BD.
+     */
+    private function getContactSummaryLocale()
+    {
+        $locale = sanitize_text_field((string) get_locale());
+
+        return $locale ?: 'en_US';
+    }
+
+    /**
+     * Check whether a cached AI contact summary can be reused for the site locale.
+     *
+     * New summaries store their generation locale and are reusable only when it
+     * matches the current site locale. Older cached summaries did not store a
+     * locale and were generated from English-only prompts, so they are treated as
+     * valid only while the current site locale is English.
+     *
+     * @param array  $summary Cached subscriber meta summary payload.
+     * @param string $locale  Current sanitized WordPress site locale.
+     *
+     * @return bool True when the cached summary can be shown without regenerating.
+     */
+    private function isCachedContactSummaryForLocale($summary, $locale)
+    {
+        if (!is_array($summary) || empty($summary['content'])) {
+            return false;
+        }
+
+        $cachedLocale = sanitize_text_field(Arr::get($summary, 'locale', ''));
+
+        if ($cachedLocale) {
+            return $cachedLocale === $locale;
+        }
+
+        // Legacy cached summaries were generated from English-only prompts.
+        return $this->isEnglishLocale($locale);
+    }
+
+    /**
+     * Determine whether a WordPress locale belongs to the English language family.
+     *
+     * Used only for legacy AI summary cache compatibility, where existing cached
+     * records have no explicit locale but were produced by English prompts.
+     *
+     * @param string $locale WordPress locale to inspect.
+     *
+     * @return bool True for locales beginning with en, such as en_US or en_GB.
+     */
+    private function isEnglishLocale($locale)
+    {
+        return strtolower(substr((string) $locale, 0, 2)) === 'en';
     }
 
     private function getSystemPrompt($tone = '', $settings = [])
@@ -501,12 +579,12 @@ class AiController extends Controller
             return new \WP_Error('ai_disabled', __('AI features are not enabled. Please configure AI in Settings.', 'fluent-crm'));
         }
 
+        $provider = Arr::get($settings, 'provider', '');
         $apiKey = Arr::get($settings, 'api_key', '');
-        if (!$apiKey) {
+        if ($provider !== 'wordpress' && !$apiKey) {
             return new \WP_Error('missing_api_key', __('AI API key is not configured. Please add it in Settings.', 'fluent-crm'));
         }
 
-        $provider = Arr::get($settings, 'provider', '');
         $model = Arr::get($settings, 'model', '');
 
         $validProviders = array_keys($this->providerModels);
@@ -650,13 +728,17 @@ class AiController extends Controller
         ];
     }
 
-    private function getContactSummarySystemPrompt($settings = [])
+    private function getContactSummarySystemPrompt($settings = [], $locale = '')
     {
         $prompt = 'You are a CRM assistant creating an internal contact summary for sales and support teams. '
             . 'Use only the supplied contact data. Do not invent purchases, courses, tickets, emails, dates, or recommendations. '
             . 'If a section has no data, say it is not available. '
             . 'Do not repeat basic contact details like name, email, status, or created date unless directly relevant to a decision. '
-            . 'Return markdown only. Use decision-focused headings, concise bullets, and a final "Suggested next action" section.';
+            . 'Return markdown only in the requested WordPress site language. Use decision-focused headings, concise bullets, and a final section equivalent to "Suggested next action" in that language.';
+
+        if ($locale) {
+            $prompt .= "\n\nRequested WordPress site locale: " . $locale . ". Write the entire summary in this site language.";
+        }
 
         $customSystemPrompt = trim(Arr::get($settings, 'custom_prompt', ''));
         if ($customSystemPrompt) {
@@ -668,24 +750,30 @@ class AiController extends Controller
          *
          * @param string $prompt   System prompt sent to the configured AI provider.
          * @param array  $settings Saved AI settings.
+         * @param string $locale   WordPress site locale requested for the summary output.
          */
-        return apply_filters('fluent_crm/ai_contact_summary_system_prompt', $prompt, $settings);
+        return apply_filters('fluent_crm/ai_contact_summary_system_prompt', $prompt, $settings, $locale);
     }
 
-    private function buildContactSummaryPrompt($context)
+    private function buildContactSummaryPrompt($context, $locale = '')
     {
-        $prompt = "Summarize this contact for a CRM user who already sees the basic profile on screen. Focus on what they should understand or do next. Include email engagement, purchase history, course or membership history when present, support ticket history when present, risk signals, opportunities, and suggested next action. Do not create a Contact Details section.\n\nContact context:\n" . wp_json_encode($context, JSON_PRETTY_PRINT);
+        $languageInstruction = $locale
+            ? 'Write the entire summary in the WordPress site language for locale ' . $locale . '. '
+            : 'Write the entire summary in the WordPress site language. ';
+
+        $prompt = "Summarize this contact for a CRM user who already sees the basic profile on screen. Focus on what they should understand or do next. Include email engagement, purchase history, course or membership history when present, support ticket history when present, risk signals, opportunities, and suggested next action. Do not create a Contact Details section. " . $languageInstruction . "Translate the explanatory prose and headings, but keep contact names, company names, product names, email subjects, URLs, IDs, tag names, list names, order numbers, and other source data values unchanged.\n\nContact context:\n" . wp_json_encode($context, JSON_PRETTY_PRINT);
 
         /**
          * Filter the AI contact summary user prompt.
          *
          * @param string $prompt  User prompt sent to the configured AI provider.
          * @param array  $context Structured contact context used for summary generation.
+         * @param string $locale  WordPress site locale requested for the summary output.
          */
-        return apply_filters('fluent_crm/ai_contact_summary_user_prompt', $prompt, $context);
+        return apply_filters('fluent_crm/ai_contact_summary_user_prompt', $prompt, $context, $locale);
     }
 
-    private function buildContactSummaryContext($subscriber)
+    private function buildContactSummaryContext($subscriber, $locale = '')
     {
         $context = [
             'contact' => [
@@ -696,6 +784,9 @@ class AiController extends Controller
                 'created_at' => $subscriber->created_at,
                 'lists'      => $this->pluckTitles($subscriber->lists),
                 'tags'       => $this->pluckTitles($subscriber->tags),
+            ],
+            'language'          => [
+                'site_locale' => $locale,
             ],
             'emails'            => $this->getEmailSummaryContext($subscriber->id),
             'purchase_history'  => $this->getPurchaseSummaryContext($subscriber),
@@ -858,9 +949,43 @@ class AiController extends Controller
                 return $this->callClaude($model, $apiKey, $userPrompt, $systemPrompt, $timeout);
             case 'gemini':
                 return $this->callGemini($model, $apiKey, $userPrompt, $systemPrompt, $timeout);
+            case 'wordpress':
+                return $this->callWordPress($model, $userPrompt, $systemPrompt, $timeout);
             default:
                 return new \WP_Error('invalid_provider', __('Invalid AI provider.', 'fluent-crm'));
         }
+    }
+
+    private function callWordPress($model, $userPrompt, $systemPrompt, $timeout)
+    {
+        $filtered = apply_filters('fluent_crm/wordpress_ai_generate', null, $userPrompt, $systemPrompt, $model, $timeout);
+        if ($filtered !== null) {
+            return $filtered;
+        }
+
+        if (function_exists('wp_ai_client_prompt')) {
+            $prompt = wp_ai_client_prompt($userPrompt);
+            if ($systemPrompt) {
+                $prompt->using_system_instruction($systemPrompt);
+            }
+            if ($prompt->is_supported_for_text_generation()) {
+                $result = $prompt->generate_text();
+                if (is_wp_error($result)) {
+                    return $result;
+                }
+                if (empty($result)) {
+                    return new \WP_Error('empty_response', __('No content generated by WordPress AI client. Please try again.', 'fluent-crm'));
+                }
+                return $result;
+            } else {
+                return new \WP_Error('not_supported', __('WordPress AI client is not configured or supported on this site.', 'fluent-crm'));
+            }
+        }
+
+        return new \WP_Error(
+            'wordpress_ai_not_supported',
+            __('WordPress AI Client functions are not available on this WordPress installation. Please ensure you have an AI provider plugin or WordPress AI Core features enabled.', 'fluent-crm')
+        );
     }
 
     private function callOpenAi($model, $apiKey, $userPrompt, $systemPrompt, $timeout)

@@ -2,6 +2,7 @@
 
 namespace FluentCrm\App\Hooks\Handlers;
 
+use FluentCrm\App\Services\Sanitize;
 use FluentCrm\App\Services\Libs\Emogrifier\Emogrifier;
 use FluentCrm\Framework\Support\Arr;
 
@@ -211,7 +212,7 @@ class EmailDesignTemplates
                     $style .= " background-color: {$safeBackgroundColor};";
                 }
                 $style .= " padding: {$safePadding}px;";
-                $templateData['footer_text'] = $footerConfig['footer_content'] ?? '';
+                $templateData['footer_text'] = Sanitize::sanitizeFooterHtml($footerConfig['footer_content'] ?? '');
             }
 
             if($templateData['footer_text']) {

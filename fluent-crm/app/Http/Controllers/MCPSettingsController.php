@@ -239,6 +239,7 @@ class MCPSettingsController extends Controller
                     'WP_API_URL'      => $endpoint,
                     'WP_API_USERNAME' => $usernamePlaceholder,
                     'WP_API_PASSWORD' => $passwordPlaceholder,
+                    'OAUTH_ENABLED'   => 'false',
                 ];
 
                 if ($isLocalDev) {
