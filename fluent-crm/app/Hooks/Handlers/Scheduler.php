@@ -50,25 +50,13 @@ class Scheduler
             self::process();
         });
 
-        // This is required to instantly send emails for regular email handler
+        // This is required to instantly send emails for regular email handler.
+        // The atomic lock inside Handler::isSystemOk() (acquired before any
+        // expensive work) is the authoritative guard against concurrent and
+        // duplicate sends, so we invoke the sender directly — a losing racer
+        // bails cheaply at the lock. No cron-timing pre-check is needed here.
         add_action('wp_ajax_nopriv_fluentcrm-post-campaigns-send-now', function () {
-            if (!get_option('fluentcrm_is_sending_emails')) {
-                $nextCron = as_next_scheduled_action('fluentcrm_scheduled_every_minute_tasks');
-                $willRun = !$nextCron || $nextCron == 1 || ($nextCron - time()) >= 3 || ($nextCron - time()) < -70;
-
-                if (!$willRun) {
-                    $lastCalled = (int)fluentcrm_get_option('fluentcrm_is_sending_emails_last_called');
-                    if ($lastCalled && (time() - $lastCalled) < 52) {
-                        $willRun = true;
-                    }
-                }
-
-                if ($willRun) {
-                    Helper::debugLog('AJAX: post-campaigns-send-now', 'Timing: ' . ($nextCron - time()), 'extended');
-                    $mailer = new \FluentCrm\App\Services\Libs\Mailer\Handler();
-                    $mailer->handle();
-                }
-            }
+            (new \FluentCrm\App\Services\Libs\Mailer\Handler())->handle();
 
             nocache_headers();
             wp_send_json_success([
@@ -77,25 +65,14 @@ class Scheduler
             ]);
         });
 
-        // For Multi Threaded Emails Internal Ajax
+        // For Multi Threaded Emails Internal Ajax. Same as above — the atomic
+        // lock inside MultiThreadHandler::isSystemOk() guards against concurrent
+        // runners, so we call the handler directly and let the loser bail at the
+        // lock. The experimental-flag check stays here to avoid constructing the
+        // handler at all when multi-threading is disabled.
         add_action('wp_ajax_nopriv_fluentcrm-post-multi-thread-send-now', function () {
-
-            if (!get_option('fluentcrm_is_sending_multi_emails')) {
-                $nextCron = as_next_scheduled_action('fluent_crm_send_multi_thread_emails');
-                $willRun = !$nextCron || $nextCron == 1 || ($nextCron - time()) >= 3 || ($nextCron - time()) < -70;
-
-                if (!$willRun) {
-                    $lastCalled = (int)fluentcrm_get_option('fluentcrm_is_sending_multi_emails_last_called');
-                    if ($lastCalled && (time() - $lastCalled) < 52) {
-                        $willRun = true;
-                    }
-                }
-
-                if ($willRun) {
-                    if (Helper::isExperimentalEnabled('multi_threading_emails')) {
-                        (new MultiThreadHandler())->handle();
-                    }
-                }
+            if (Helper::isExperimentalEnabled('multi_threading_emails')) {
+                (new MultiThreadHandler())->handle();
             }
 
             nocache_headers();
@@ -356,14 +333,23 @@ class Scheduler
      *
      * @param int    $maxAgeSeconds Rows older than this (in 'processing') get reset.
      * @param string $callerContext Used in the deferred-log message.
-     * @return void
+     * @return int Number of rows reset back to pending.
      */
     public static function resetStaleProcessingEmails($maxAgeSeconds = 100, $callerContext = '')
     {
         try {
+            // If a sender lock is still fresh, a batch is likely active or just
+            // yielded. Resetting 'processing' rows during that window risks
+            // requeueing work owned by the live sender and increases row-lock
+            // contention with SELECT ... FOR UPDATE / sent-status updates.
+            if (self::hasFreshEmailSenderLock($maxAgeSeconds)) {
+                return 0;
+            }
+
             $staleCutoff = gmdate('Y-m-d H:i:s', current_time('timestamp') - (int) $maxAgeSeconds);
             $chunkSize   = 200;
             $maxChunks   = 50; // up to 10k rows per call; subsequent calls drain the rest
+            $recovered   = 0;
 
             for ($i = 0; $i < $maxChunks; $i++) {
                 $staleIds = CampaignEmail::where('status', 'processing')
@@ -376,19 +362,71 @@ class Scheduler
                     break;
                 }
 
-                CampaignEmail::whereIn('id', $staleIds)
+                $updated = CampaignEmail::whereIn('id', $staleIds)
                     ->where('status', 'processing')
                     ->update([
                         'status' => 'pending'
                     ]);
 
+                if ($updated === false) {
+                    global $wpdb;
+                    Helper::debugLog($callerContext ?: 'resetStaleProcessingEmails', 'Stale email reset deferred: ' . $wpdb->last_error, 'extended');
+                    break;
+                }
+
+                $recovered += (int) $updated;
+
                 if (count($staleIds) < $chunkSize || fluentCrmIsMemoryExceeded()) {
                     break;
                 }
             }
+
+            if ($recovered) {
+                Helper::debugLog($callerContext ?: 'resetStaleProcessingEmails', 'Recovered ' . $recovered . ' stale processing emails older than ' . (int) $maxAgeSeconds . ' seconds', 'extended');
+            }
+
+            return $recovered;
         } catch (\Exception $e) {
             Helper::debugLog($callerContext ?: 'resetStaleProcessingEmails', 'Stale email reset deferred: ' . $e->getMessage(), 'extended');
+            return 0;
         }
+    }
+
+    /**
+     * Avoid stale-row recovery while a sender still appears active.
+     *
+     * Sender locks are refreshed by BaseHandler::refreshLock() between claimed
+     * batches. We check all sender lock keys because regular, multi-threaded,
+     * and CLI senders can all own rows in fc_campaign_emails.
+     *
+     * @param int $maxAgeSeconds
+     * @return bool
+     */
+    private static function hasFreshEmailSenderLock($maxAgeSeconds)
+    {
+        // Use at least 60 seconds so a very small caller-provided stale window
+        // does not make recovery race an otherwise healthy sender.
+        $freshWindow = max(60, (int) $maxAgeSeconds);
+
+        // Compare everything against one timestamp for consistent decisions
+        // across all sender lock keys checked below.
+        $now = time();
+
+        foreach (['fluentcrm_is_sending_emails', 'fluentcrm_is_sending_multi_emails', 'fluentcrm_is_sending_cli_emails'] as $lockKey) {
+            // Helper::getInstantOption() reads from the correct lock store:
+            // object-cache group when an external cache is active, wp_options
+            // otherwise. That mirrors BaseHandler::acquireLock()/refreshLock().
+            $lockedAt = (int) Helper::getInstantOption($lockKey);
+
+            // A non-empty timestamp inside the freshness window means a sender
+            // appears active, so stale recovery should defer to the next tick.
+            if ($lockedAt && ($now - $lockedAt) <= $freshWindow) {
+                return true;
+            }
+        }
+
+        // No fresh sender lock was found. Recovery may safely inspect stale rows.
+        return false;
     }
 
     /**

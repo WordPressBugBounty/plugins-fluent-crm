@@ -224,6 +224,7 @@ class ComposerStaticInit3ec9aaa182e9c7febe2801c6e81775d2
         'FluentCrm\\App\\Services\\ExternalIntegrations\\FluentCart\\Benchmarks\\OrderSuccessBenchmark' => __DIR__ . '/../..' . '/app/Services/ExternalIntegrations/FluentCart/Benchmarks/OrderSuccessBenchmark.php',
         'FluentCrm\\App\\Services\\ExternalIntegrations\\FluentCart\\CartHelper' => __DIR__ . '/../..' . '/app/Services/ExternalIntegrations/FluentCart/CartHelper.php',
         'FluentCrm\\App\\Services\\ExternalIntegrations\\FluentCart\\CartImporter' => __DIR__ . '/../..' . '/app/Services/ExternalIntegrations/FluentCart/CartImporter.php',
+        'FluentCrm\\App\\Services\\ExternalIntegrations\\FluentCart\\CheckoutSubscription' => __DIR__ . '/../..' . '/app/Services/ExternalIntegrations/FluentCart/CheckoutSubscription.php',
         'FluentCrm\\App\\Services\\ExternalIntegrations\\FluentCart\\FluentCart' => __DIR__ . '/../..' . '/app/Services/ExternalIntegrations/FluentCart/FluentCart.php',
         'FluentCrm\\App\\Services\\ExternalIntegrations\\FluentCart\\RevenueTracker' => __DIR__ . '/../..' . '/app/Services/ExternalIntegrations/FluentCart/RevenueTracker.php',
         'FluentCrm\\App\\Services\\ExternalIntegrations\\FluentCart\\SmartCode\\SmartCodeParser' => __DIR__ . '/../..' . '/app/Services/ExternalIntegrations/FluentCart/SmartCode/SmartCodeParser.php',

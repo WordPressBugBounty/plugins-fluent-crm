@@ -351,6 +351,7 @@ $router->prefix('setting')->withPolicy('SettingsPolicy')->group(function ($route
     $router->get('experiments/campaigns', [SettingsController::class, 'getCampaigns']);
 
     $router->get('system-logs', [SystemLogController::class, 'index']);
+    $router->get('system-logs/export', [SystemLogController::class, 'export']);
     $router->delete('system-logs/reset', [SystemLogController::class, 'deleteAll']);
 
     // will be added in future

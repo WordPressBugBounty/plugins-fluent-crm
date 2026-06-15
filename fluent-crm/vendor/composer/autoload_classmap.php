@@ -194,6 +194,7 @@ return array(
     'FluentCrm\\App\\Services\\ExternalIntegrations\\FluentCart\\Benchmarks\\OrderSuccessBenchmark' => $baseDir . '/app/Services/ExternalIntegrations/FluentCart/Benchmarks/OrderSuccessBenchmark.php',
     'FluentCrm\\App\\Services\\ExternalIntegrations\\FluentCart\\CartHelper' => $baseDir . '/app/Services/ExternalIntegrations/FluentCart/CartHelper.php',
     'FluentCrm\\App\\Services\\ExternalIntegrations\\FluentCart\\CartImporter' => $baseDir . '/app/Services/ExternalIntegrations/FluentCart/CartImporter.php',
+    'FluentCrm\\App\\Services\\ExternalIntegrations\\FluentCart\\CheckoutSubscription' => $baseDir . '/app/Services/ExternalIntegrations/FluentCart/CheckoutSubscription.php',
     'FluentCrm\\App\\Services\\ExternalIntegrations\\FluentCart\\FluentCart' => $baseDir . '/app/Services/ExternalIntegrations/FluentCart/FluentCart.php',
     'FluentCrm\\App\\Services\\ExternalIntegrations\\FluentCart\\RevenueTracker' => $baseDir . '/app/Services/ExternalIntegrations/FluentCart/RevenueTracker.php',
     'FluentCrm\\App\\Services\\ExternalIntegrations\\FluentCart\\SmartCode\\SmartCodeParser' => $baseDir . '/app/Services/ExternalIntegrations/FluentCart/SmartCode/SmartCodeParser.php',

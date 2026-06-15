@@ -485,6 +485,11 @@ class SettingsController extends Controller
             $data['woo_checkout_settings'] = $autoSubscribeService->getWooCheckoutSettings();
         }
 
+        if (defined('FLUENTCART_VERSION')) {
+            $data['fluent_cart_checkout_fields'] = $autoSubscribeService->getFluentCartCheckoutFields();
+            $data['fluent_cart_checkout_settings'] = $autoSubscribeService->getFluentCartCheckoutSettings();
+        }
+
         return $data;
     }
 
@@ -515,6 +520,13 @@ class SettingsController extends Controller
             $wooCheckoutSettings = $request->get('woo_checkout_settings');
             fluentcrm_update_option('woo_checkout_form_subscribe_settings', $wooCheckoutSettings);
             fluentCrmSetCache('woo_checkout_form_subscribe_settings', $wooCheckoutSettings, 86400);
+        }
+
+        if (defined('FLUENTCART_VERSION')) {
+            $fluentCartCheckoutSettings = (new AutoSubscribe())->sanitizeFluentCartCheckoutSettings(
+                $request->get('fluent_cart_checkout_settings', [])
+            );
+            fluentcrm_update_option('fluent_cart_checkout_form_subscribe_settings', $fluentCartCheckoutSettings);
         }
 
         return [
