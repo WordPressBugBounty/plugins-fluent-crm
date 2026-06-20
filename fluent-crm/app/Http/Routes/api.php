@@ -335,6 +335,9 @@ $router->prefix('setting')->withPolicy('SettingsPolicy')->group(function ($route
     $router->get('cron_status', [SettingsController::class, 'getCronStatus']);
     $router->post('run_cron', [SettingsController::class, 'runCron']);
 
+    $router->get('db-index-health', [SettingsController::class, 'getDbIndexHealth']);
+    $router->post('db-index-health/repair', [SettingsController::class, 'repairDbIndexes']);
+
     $router->get('rest-keys', [SettingsController::class, 'getRestKeys']);
     $router->post('rest-keys', [SettingsController::class, 'createRestKey']);
     $router->delete('rest-keys', [SettingsController::class, 'deleteRestKey']);

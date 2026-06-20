@@ -190,6 +190,7 @@ return array(
     'FluentCrm\\App\\Services\\CrmMigrator\\DripMigrator' => $baseDir . '/app/Services/CrmMigrator/DripMigrator.php',
     'FluentCrm\\App\\Services\\CrmMigrator\\MailChimpMigrator' => $baseDir . '/app/Services/CrmMigrator/MailChimpMigrator.php',
     'FluentCrm\\App\\Services\\CrmMigrator\\MailerLiteMigrator' => $baseDir . '/app/Services/CrmMigrator/MailerLiteMigrator.php',
+    'FluentCrm\\App\\Services\\DbPerformanceService' => $baseDir . '/app/Services/DbPerformanceService.php',
     'FluentCrm\\App\\Services\\ExternalIntegrations\\BricksBuilderIntegration' => $baseDir . '/app/Services/ExternalIntegrations/BricksBuilderIntegration.php',
     'FluentCrm\\App\\Services\\ExternalIntegrations\\FluentCart\\Benchmarks\\OrderSuccessBenchmark' => $baseDir . '/app/Services/ExternalIntegrations/FluentCart/Benchmarks/OrderSuccessBenchmark.php',
     'FluentCrm\\App\\Services\\ExternalIntegrations\\FluentCart\\CartHelper' => $baseDir . '/app/Services/ExternalIntegrations/FluentCart/CartHelper.php',

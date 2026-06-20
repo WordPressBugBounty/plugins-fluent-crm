@@ -1788,6 +1788,7 @@
             'resources/v3app/src/Modules/Settings/DeveloperWebhooks/_IncomingWebhooks.vue',
             'resources/v3app/src/Modules/Settings/SystemAdminTools/_CronJobMonitor.vue',
             'resources/v3app/src/Modules/Settings/SystemAdminTools/_DataCleanupPage.vue',
+            'resources/v3app/src/Modules/Settings/SystemAdminTools/_DatabaseHealth.vue',
             'resources/v3app/src/Modules/Settings/SystemAdminTools/_DatabaseReset.vue',
             'resources/v3app/src/Modules/Settings/_Managers.vue',
             'resources/v3app/src/Modules/Settings/_ComplianceSettings.vue',
@@ -2476,6 +2477,18 @@
             '_vendor.js',
             '_fc-bits-ui.js',
             '_SettingsHeader.js'
+        ]
+    ],
+    'resources/v3app/src/Modules/Settings/SystemAdminTools/_DatabaseHealth.vue' => [
+        'file' => 'v3app/src/Modules/Settings/SystemAdminTools/_DatabaseHealth.js',
+        'name' => '_DatabaseHealth',
+        'src' => 'resources/v3app/src/Modules/Settings/SystemAdminTools/_DatabaseHealth.vue',
+        'isDynamicEntry' => true,
+        'imports' => [
+            '_vendor-element-plus.js',
+            '_vendor.js',
+            '_SettingsHeader.js',
+            '_fc-bits-ui.js'
         ]
     ],
     'resources/v3app/src/Modules/Settings/SystemAdminTools/_DatabaseReset.vue' => [

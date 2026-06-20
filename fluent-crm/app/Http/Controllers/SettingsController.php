@@ -9,6 +9,7 @@ use FluentCrm\App\Models\CampaignEmail;
 use FluentCrm\App\Models\CampaignUrlMetric;
 use FluentCrm\App\Models\SystemLog;
 use FluentCrm\App\Services\AutoSubscribe;
+use FluentCrm\App\Services\DbPerformanceService;
 use FluentCrm\App\Services\Helper;
 use FluentCrm\App\Services\RoleBasedTagging;
 use FluentCrm\Framework\Support\Arr;
@@ -598,6 +599,82 @@ class SettingsController extends Controller
         return [
             'message' => __('Selected CRON Event successfully ran', 'fluent-crm')
         ];
+    }
+
+    /**
+     * Return the health of the critical DB indexes for the settings UI.
+     *
+     * Cheap by default: serves the cached snapshot unless ?fresh=1 is passed
+     * (e.g. to re-verify right after a repair).
+     *
+     * @param Request $request
+     * @return array
+     */
+    public function getDbIndexHealth(Request $request)
+    {
+        $fromDb = $request->getSafe('fresh', 'sanitize_text_field') === '1';
+
+        return $this->sendSuccess([
+            'indexes' => array_values(DbPerformanceService::getIndexHealth($fromDb))
+        ]);
+    }
+
+    /**
+     * Repair any missing/broken critical DB indexes.
+     *
+     * Runs inline (the ALTERs are idempotent and prefer a non-blocking online
+     * build) behind a short transient lock so concurrent admin tabs/users can't
+     * trigger overlapping ALTERs on the same tables. If a repair is already in
+     * flight we report that rather than stacking a second one.
+     *
+     * @param Request $request
+     * @return array
+     */
+    public function repairDbIndexes(Request $request)
+    {
+        // Re-check from the live DB so a stale "ok" cache can't make us skip a
+        // genuinely needed repair (and a stale "broken" cache can't force a
+        // pointless ALTER pass).
+        if (!DbPerformanceService::hasBrokenIndex(true)) {
+            return $this->sendSuccess([
+                'message' => __('All database indexes are healthy.', 'fluent-crm'),
+                'indexes' => array_values(DbPerformanceService::getIndexHealth(false))
+            ]);
+        }
+
+        $lockKey = 'fc_db_index_repairing';
+        if (get_transient($lockKey)) {
+            // Not an error — another tab/request is already repairing. Report it
+            // as a benign "pending" success so the client doesn't surface a
+            // false failure notice while the other request finishes the work.
+            return $this->sendSuccess([
+                'pending' => true,
+                'message' => __('A database index repair is already running.', 'fluent-crm'),
+                'indexes' => array_values(DbPerformanceService::getIndexHealth(false))
+            ]);
+        }
+
+        set_transient($lockKey, 1, 5 * MINUTE_IN_SECONDS);
+
+        try {
+            $result = DbPerformanceService::repairBrokenIndexes();
+        } finally {
+            delete_transient($lockKey);
+        }
+
+        if ($result['failed']) {
+            return $this->sendError([
+                'message' => __('Some database indexes could not be repaired. Please check your database user privileges or contact your host.', 'fluent-crm'),
+                'failed'  => $result['failed'],
+                'indexes' => array_values($result['health'])
+            ], 422);
+        }
+
+        return $this->sendSuccess([
+            'message'  => __('Database indexes repaired successfully.', 'fluent-crm'),
+            'repaired' => $result['repaired'],
+            'indexes'  => array_values($result['health'])
+        ]);
     }
 
     public function getOldLogDetails(Request $request)

@@ -4,7 +4,7 @@ Tags: email marketing, newsletter, crm, email newsletter, subscribers
 Requires at least: 5.0
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 3.1.5
+Stable tag: 3.1.6
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -260,6 +260,10 @@ You can report any security bugs found in the source code of FluentCRM plugins t
 10. Pro Integrations
 
 == Changelog ==
+
+= 3.1.6 (Date: June 21, 2026) =
+- Fix: Db index migration failed issue
+- Improvement: Added Support for months unit for wait times in automation.
 
 = 3.1.5 (Date: June 15, 2026) =
 - New: Added FluentCart checkout subscription opt-in for assigning lists, tags, and double opt-in from checkout.

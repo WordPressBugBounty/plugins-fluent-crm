@@ -138,6 +138,39 @@ class Scheduler
         return true;
     }
 
+    /**
+     * Browser-ping fallback for the every-minute task.
+     *
+     * Triggered from the admin app's periodic ping (ReportingController::ping,
+     * fired ~every 50s while any CRM page is open). It is a TRUE last-resort
+     * fallback: it only takes over when Action Scheduler (and the WP-Cron
+     * fallback) have stalled, detected by the same _fcrm_last_scheduler
+     * freshness signal the WP-Cron fallback in register() uses. When AS is
+     * healthy this returns after a single option read, so it is safe to call on
+     * every ping and for every admin who has the dashboard open — it does NOT
+     * run cron more often than once per minute on a healthy site.
+     *
+     * All concurrency safety lives in process(): its atomic cross-process lock
+     * means that even with many tabs/users pinging at once, at most one runner
+     * sends emails, and the _fcrm_last_scheduler stamp written there throttles
+     * takeovers to roughly once per minute. This only advances the minute task
+     * (the email-sending pipeline); the heavier hourly/five-minute tasks keep
+     * their own WP-Cron/AS schedules.
+     *
+     * @return bool True if it took over and ran the minute task, false otherwise.
+     */
+    public static function maybeProcessFromBrowserPing()
+    {
+        // Action Scheduler owns this task; only step in when it has actually
+        // stalled. Same 70s threshold as the WP-Cron fallback in register().
+        $lastScheduler = fluentCrmGetOptionCache('_fcrm_last_scheduler');
+        if ($lastScheduler && (time() - $lastScheduler) <= 70) {
+            return false;
+        }
+
+        return self::process();
+    }
+
     public static function processForSubscriber($subscriber)
     {
         if (!is_object($subscriber) || empty($subscriber->id)) {
