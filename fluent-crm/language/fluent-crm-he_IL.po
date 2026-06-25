@@ -515,12 +515,8 @@ msgstr ""
 msgid "Activate Fluent Support"
 msgstr ""
 
-#: app/Services/TransStrings.php:76
-msgid "Activate Fluent Toolkit"
-msgstr ""
-
-#: app/Http/Controllers/DocsController.php:67
-msgid "Activate FluentKit"
+#: app/Services/TransStrings.php:76 app/Http/Controllers/DocsController.php:67
+msgid "Activate FluentHub"
 msgstr ""
 
 #: app/Services/TransStrings.php:77 app/Services/Helper.php:1830
@@ -4268,8 +4264,7 @@ msgstr ""
 
 #: app/Http/Controllers/MCPSettingsController.php:142
 msgid ""
-"Could not install Fluent Toolkit automatically. Please install Fluent "
-"Toolkit manually, then reload this page."
+"Could not install FluentHub automatically. Please install FluentHub manually, then reload this page."
 msgstr ""
 
 #: app/Http/Controllers/FunnelController.php:1473
@@ -7535,52 +7530,52 @@ msgstr ""
 msgid "Fluent Support plugin has been installed and activated successfully"
 msgstr ""
 
-#: app/Services/TransStrings.php:1218
-msgid "Fluent Toolkit"
+#: app/Services/TransStrings.php:1218 app/Http/Controllers/DocsController.php:135
+msgid "FluentHub"
 msgstr ""
 
 #: app/Services/TransStrings.php:1219
 #, php-format
-msgid "Fluent Toolkit %s"
+msgid "FluentHub %s"
 msgstr ""
 
 #: app/Services/TransStrings.php:1220
 #, php-format
-msgid "Fluent Toolkit %s (bundled adapter)"
+msgid "FluentHub %s (bundled adapter)"
 msgstr ""
 
 #: app/Services/TransStrings.php:1221
-msgid "Fluent Toolkit (bundled adapter)"
+msgid "FluentHub (bundled adapter)"
 msgstr ""
 
 #: app/Http/Controllers/MCPSettingsController.php:136
 msgid ""
-"Fluent Toolkit installed and activated. Reload the page to register "
+"FluentHub installed and activated. Reload the page to register "
 "FluentCRM MCP tools."
 msgstr ""
 
 #: app/Services/TransStrings.php:1222
 msgid ""
-"Fluent Toolkit is active, but this version does not include the bundled MCP "
-"adapter yet. Update Fluent Toolkit when the MCP-ready build is available."
+"FluentHub is active, but this version does not include the bundled MCP "
+"adapter yet. Update FluentHub when the MCP-ready build is available."
 msgstr ""
 
 #: app/Http/Controllers/MCPSettingsController.php:138
 msgid ""
-"Fluent Toolkit is installed and active, but this version does not include "
-"the bundled MCP adapter yet. Please update Fluent Toolkit when the MCP-ready "
+"FluentHub is installed and active, but this version does not include "
+"the bundled MCP adapter yet. Please update FluentHub when the MCP-ready "
 "build is available, then reload this page."
 msgstr ""
 
 #: app/Http/Controllers/MCPSettingsController.php:140
 msgid ""
-"Fluent Toolkit is installed but could not be activated automatically. Please "
-"activate Fluent Toolkit from the Plugins page, then reload this page."
+"FluentHub is installed but could not be activated automatically. Please "
+"activate FluentHub from the Plugins page, then reload this page."
 msgstr ""
 
 #: app/Services/TransStrings.php:1223
 msgid ""
-"Fluent Toolkit is installed but not active. Activate it to use the bundled "
+"FluentHub is installed but not active. Activate it to use the bundled "
 "MCP adapter."
 msgstr ""
 
@@ -7729,20 +7724,12 @@ msgstr ""
 #: app/Services/TransStrings.php:1226
 msgid ""
 "FluentCRM ships AI agent tools, but they only become available once an MCP "
-"adapter is installed and active. FluentCampaign Pro can install Fluent "
-"Toolkit, which includes the bundled adapter."
+"adapter is installed and active. FluentCampaign Pro can install FluentHub, which includes the bundled adapter."
 msgstr ""
 
-#: app/Services/TransStrings.php:1225
+#: app/Services/TransStrings.php:1225 app/Http/Controllers/DocsController.php:143
 msgid ""
-"FluentCRM ships AI agent tools, but they only become available once Fluent "
-"Toolkit is installed and active."
-msgstr ""
-
-#: app/Http/Controllers/DocsController.php:143
-msgid ""
-"FluentCRM ships AI agent tools, but they only become available once "
-"FluentKit is installed and active."
+"FluentCRM ships AI agent tools, but they only become available once FluentHub is installed and active."
 msgstr ""
 
 #: app/Services/ExternalIntegrations/BricksBuilderIntegration.php:47
@@ -7757,10 +7744,6 @@ msgstr ""
 
 #: app/Services/ExternalIntegrations/FluentForm/FluentFormInit.php:88
 msgid "FluentForm Subscriptions"
-msgstr ""
-
-#: app/Http/Controllers/DocsController.php:135
-msgid "FluentKit"
 msgstr ""
 
 #: app/Services/TransStrings.php:1231
@@ -8160,11 +8143,11 @@ msgid "Get Email Subscription Management Link"
 msgstr ""
 
 #: app/Services/TransStrings.php:1288
-msgid "Get Fluent Toolkit"
+msgid "Get FluentHub"
 msgstr ""
 
-#: app/Services/TransStrings.php:1289
-msgid "Get Fluent Toolkit from GitHub"
+#: app/Services/TransStrings.php:1289 app/Http/Controllers/DocsController.php:64
+msgid "Get FluentHub from GitHub"
 msgstr ""
 
 #: app/Services/TransStrings.php:1290
@@ -8177,10 +8160,6 @@ msgstr ""
 
 #: app/Services/TransStrings.php:1292
 msgid "Get FluentCRM Pro Now"
-msgstr ""
-
-#: app/Http/Controllers/DocsController.php:64
-msgid "Get FluentKit from GitHub"
 msgstr ""
 
 #: app/Services/TransStrings.php:1234
@@ -9147,18 +9126,14 @@ msgstr ""
 msgid "Install Fluent Support"
 msgstr ""
 
-#: app/Services/TransStrings.php:1402
-msgid "Install Fluent Toolkit"
+#: app/Services/TransStrings.php:1402 app/Http/Controllers/DocsController.php:67
+msgid "Install FluentHub"
 msgstr ""
 
 #: app/Services/TransStrings.php:1403
 msgid ""
 "Install FluentCart to sell products, subscriptions, and digital downloads "
 "without leaving your CRM."
-msgstr ""
-
-#: app/Http/Controllers/DocsController.php:67
-msgid "Install FluentKit"
 msgstr ""
 
 #: app/Services/TransStrings.php:2954
@@ -11796,7 +11771,7 @@ msgid "Open Count"
 msgstr ""
 
 #: app/Services/TransStrings.php:1731
-msgid "Open Fluent Toolkit MCP settings"
+msgid "Open FluentHub MCP settings"
 msgstr ""
 
 #. %s: link to WP user profile application passwords section
@@ -12439,7 +12414,7 @@ msgstr ""
 
 #: app/Http/Controllers/MCPSettingsController.php:115
 msgid ""
-"Please install Fluent Toolkit from GitHub, then reload this page to connect "
+"Please install FluentHub from GitHub, then reload this page to connect "
 "FluentCRM with AI agents."
 msgstr ""
 
@@ -18638,7 +18613,7 @@ msgid "Update Field"
 msgstr ""
 
 #: app/Services/TransStrings.php:2608
-msgid "Update Fluent Toolkit"
+msgid "Update FluentHub"
 msgstr ""
 
 #: app/Services/TransStrings.php:2615

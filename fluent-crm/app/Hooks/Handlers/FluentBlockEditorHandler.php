@@ -1360,6 +1360,13 @@ class FluentBlockEditorHandler
         $availableDesigns = array_filter($availableDesigns, function ($design) {
             return !empty($design['use_gutenberg']);
         });
+        $designPresetPayloads = [];
+        foreach ($availableDesigns as $designKey => $design) {
+            $designPresetPayloads[$designKey] = $design;
+            $designPresetPayloads[$designKey]['config'] = [
+                'design_template' => Arr::get($design, 'id', $designKey)
+            ];
+        }
 
         $blockEditorConfig = [
             'modules'                 => [
@@ -1375,7 +1382,9 @@ class FluentBlockEditorHandler
             'fontSizes'               => BlockEditorHelper::getDefaultPreset('font-size'),
             'spacingPresets'          => BlockEditorHelper::getDefaultPreset('spacing'),
             'defaultDesignConfig'     => Helper::getTemplateConfig(false),
-            'designTemplatePresets'   => $availableDesigns,
+            // Keep the shared design metadata intact for legacy consumers while ensuring
+            // Gutenberg preset clicks only change the selected design template.
+            'designTemplatePresets'   => $designPresetPayloads,
             'default_design_template' => Helper::getDefaultEmailTemplate()
         ];
 

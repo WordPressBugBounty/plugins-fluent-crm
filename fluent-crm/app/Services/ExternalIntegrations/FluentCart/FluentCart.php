@@ -36,7 +36,6 @@ class FluentCart
         SmartCodeRegister::push();
 
         (new RevenueTracker())->init();
-        (new CheckoutSubscription())->init();
     }
 
     public function addAutomations()
@@ -47,7 +46,7 @@ class FluentCart
         new OrderRefundedTrigger();
         new OrderCanceledTrigger();
 
-        // new OrderStatusChangedTrigger(); // Disabled for now as will be available in future
+        // new OrderStatusChangedTrigger();
         new SubscriptionExpiredTrigger();
 
         //subscription activated
@@ -270,7 +269,7 @@ class FluentCart
         $html .= '<h3 class="history_title">' . __('Purchased Products', 'fluent-crm') . '</h3>';
         $html .= '<div class="fc_history_widget"><ul class="fc_full_listed max_height_550">';
         foreach ($items as $item) {
-            $orderUrl = admin_url('admin.php?page=fluent-crm#/orders/' . $item['order_id'] . '/view');
+            $orderUrl = admin_url('admin.php?page=fluent-cart#/orders/' . $item['order_id'] . '/view');
             $badges = '<span class="el-tag el-tag--primary">' . esc_html(Helper::toDecimal($item['price'])) . '</span>';
             $badges .= '<span class="el-tag el-tag--primary"><a target="_blank" rel="noopener" href="' . esc_url($orderUrl) . '">' . date_i18n(get_option('date_format'), strtotime($item['created_at'])) . '</a></span>';
             $html .= '<li class="fc_product_name">' . esc_html($item['name']) . ' ' . $badges . '</li>';

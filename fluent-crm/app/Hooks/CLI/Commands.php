@@ -1055,6 +1055,9 @@ class Commands
     /*
      * Send Pending Emails parallelly via CLI
      * use it with caution
+     * Requires the "Multi-threaded email sending" experimental feature to be
+     * enabled — it is a parallel sender and shares the cross-process rate budget
+     * that only exists in multi-thread mode. No-ops when the flag is off.
      * basic usage: wp fluent_crm cli_send
      * advanced usage: wp fluent_crm cli_send --force=yes --option_key=fluentcrm_is_sending_cli_emails --run_time=50 --offset=200 --min_pending=300 --silent=yes
      */
@@ -1066,6 +1069,24 @@ class Commands
 
         if (\WP_CLI\Utils\get_flag_value($assoc_args, 'force') == 'yes') {
             $interactive = false;
+        }
+
+        // The CLI sender is a PARALLEL sender — it works from an offset so it can
+        // run alongside the cron Handler, and shares the install's per-second rate
+        // budget with it. That budget is only coordinated across processes (via
+        // GlobalRateLimiter's DB path) when multi-threading is enabled; with the
+        // flag off the cron Handler paces in memory and would have no idea this
+        // process is also sending, so the combined rate could exceed the cap and
+        // trip the provider's throttle. Gate the command on the same flag so the
+        // flag stays the single source of truth for "is parallel sending active".
+        if (!Helper::isExperimentalEnabled('multi_threading_emails')) {
+            // Exit NON-ZERO in both modes. A scripted `--silent` cron wrapper that
+            // checks $? must see failure, not a silent success that sends nothing
+            // and leaves the queue stranded without tripping monitoring.
+            if ($showLogs) {
+                \WP_CLI::error('Multi-threaded email sending is disabled, so the CLI sender is a no-op. It runs in parallel with the cron sender and needs the "Multi-threaded email sending" experimental feature enabled (Settings → Experimental Features) so the per-second rate stays coordinated across both.');
+            }
+            \WP_CLI::halt(1);
         }
 
         $pendingEmails = Helper::getUpcomingEmailCount();

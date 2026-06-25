@@ -493,18 +493,15 @@ class Helper
     {
         $defaultDesignConfig = BlockEditorHelper::getDefaultPrefConfig();
 
-
         if (defined('FLUENTCAMPAIGN')) {
             $defaultDesignConfig['disable_footer'] = 'no';
-            $classicConfig['disable_footer'] = 'no';
         }
 
         $plainConfig = $defaultDesignConfig;
         $plainConfig['body_bg_color'] = '#FFFFFF';
+        $plainConfig['design_template'] = 'plain';
 
         $classicConfig = $plainConfig;
-
-        $plainConfig['design_template'] = 'plain';
         $classicConfig['design_template'] = 'classic';
 
         $emptyConfig = [

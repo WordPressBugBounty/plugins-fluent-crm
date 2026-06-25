@@ -4,7 +4,7 @@ Tags: email marketing, newsletter, crm, email newsletter, subscribers
 Requires at least: 5.0
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 3.1.6
+Stable tag: 3.1.7
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -260,6 +260,24 @@ You can report any security bugs found in the source code of FluentCRM plugins t
 10. Pro Integrations
 
 == Changelog ==
+
+= 3.1.7 (Date: June 25, 2026) = 
+= Improvement: Email Sending Cap Centralized
+- Improvement: Automation contact list table ui/ux synced with other tables
+- Improvement: Added Created At and Updated At sorting in the funnels table.
+- Fixed: FluentCart checkout subscription opt-in missing in modal checkout.
+- Fixed: FluentCart checkout opt-in selected lists showing IDs instead of names.
+- Fixed: FluentCart purchase history order links opening the wrong admin screen.
+- Fixed: WooCommerce single product email preview button text issue.
+- Fixed: Striped Gutenberg table style rendering issue in email
+- Fixed: Email design preset switch resetting global email styles.
+- Fixed: Contact growth report list and tag selector search issue.
+- Fixed: Email footer disabled state reset issue when using Send Email.
+- Fixed: Raw HTML template import not updating the campaign body editor.
+- Fixed: Sequence email action menu popover issue.
+- Fixed: Missing Contact Type field in CSV import mapping.
+- Fixed: Contact profile support section table layout issue.
+- Fixed: Gutenberg editor next button render issue in some cases
 
 = 3.1.6 (Date: June 21, 2026) =
 - Fix: Db index migration failed issue

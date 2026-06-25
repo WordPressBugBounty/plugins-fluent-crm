@@ -380,7 +380,7 @@ class EmailTools
         if (method_exists(Helper::class, 'maybeDisableEmojiOnEmail')) {
             Helper::maybeDisableEmojiOnEmail();
         }
-        $result = Mailer::send($data, $subscriber);
+        $result = Mailer::send($data, $subscriber, null, true);
 
         remove_action('wp_mail_failed', $mailErrorListener, 10);
 

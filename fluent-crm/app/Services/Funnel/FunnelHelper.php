@@ -223,6 +223,8 @@ class FunnelHelper
             $funnel->conditions = $funnelConditions;
         }
         $funnel->status = Arr::get($data, 'status');
+        // Always write updated_at so it reflects when sequences were last saved
+        $funnel->updated_at = current_time('mysql');
         $funnel->save();
 
         if ($funnelDescription = Arr::get($data, 'funnel_description')) {

@@ -280,6 +280,7 @@ class ComposerStaticInit3ec9aaa182e9c7febe2801c6e81775d2
         'FluentCrm\\App\\Services\\Libs\\Mailer\\BaseHandler' => __DIR__ . '/../..' . '/app/Services/Libs/Mailer/BaseHandler.php',
         'FluentCrm\\App\\Services\\Libs\\Mailer\\CampaignEmailIterator' => __DIR__ . '/../..' . '/app/Services/Libs/Mailer/CampaignEmailIterator.php',
         'FluentCrm\\App\\Services\\Libs\\Mailer\\CliSendingHandler' => __DIR__ . '/../..' . '/app/Services/Libs/Mailer/CliSendingHandler.php',
+        'FluentCrm\\App\\Services\\Libs\\Mailer\\GlobalRateLimiter' => __DIR__ . '/../..' . '/app/Services/Libs/Mailer/GlobalRateLimiter.php',
         'FluentCrm\\App\\Services\\Libs\\Mailer\\Handler' => __DIR__ . '/../..' . '/app/Services/Libs/Mailer/Handler.php',
         'FluentCrm\\App\\Services\\Libs\\Mailer\\Mailer' => __DIR__ . '/../..' . '/app/Services/Libs/Mailer/Mailer.php',
         'FluentCrm\\App\\Services\\Libs\\Mailer\\MultiThreadHandler' => __DIR__ . '/../..' . '/app/Services/Libs/Mailer/MultiThreadHandler.php',

@@ -1413,6 +1413,8 @@
             '_vendor-element-plus.js',
             '_vendor.js',
             '_PaginationBar.js',
+            '_DataTable.js',
+            '_FloatingBulkActionShell.js',
             '__IndividualProgress.js',
             '__eChart.js',
             '_fc-bits-ui.js',
@@ -1636,6 +1638,7 @@
             '_vendor-element-plus.js',
             '_vendor.js',
             '_PaginationBar.js',
+            '_DataTable.js',
             '_fc-bits-ui.js'
         ]
     ],

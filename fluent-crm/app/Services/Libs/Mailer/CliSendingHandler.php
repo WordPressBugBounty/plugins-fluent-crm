@@ -40,7 +40,6 @@ class CliSendingHandler extends BaseHandler
 
         try {
             $this->handleFailedLog();
-            $this->startedAt = microtime(true);
             $result = $this->processBatchEmails();
 
             if (is_wp_error($result)) {

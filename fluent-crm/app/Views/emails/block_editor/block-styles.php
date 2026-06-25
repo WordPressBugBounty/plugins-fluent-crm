@@ -90,6 +90,10 @@ if (fluentcrm_is_rtl()) {
         background: <?php echo esc_attr($bodBgyColor); ?>;
         background-color: <?php echo esc_attr($bodBgyColor); ?>;
     }
+    .fc_block_template_body.template_classic {
+        padding-left: 20px !important;
+        padding-right: 20px !important;
+    }
 
     .fc_block_template {
         background: <?php echo esc_attr($bodBgyColor); ?>;

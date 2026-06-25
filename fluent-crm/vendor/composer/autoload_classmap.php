@@ -250,6 +250,7 @@ return array(
     'FluentCrm\\App\\Services\\Libs\\Mailer\\BaseHandler' => $baseDir . '/app/Services/Libs/Mailer/BaseHandler.php',
     'FluentCrm\\App\\Services\\Libs\\Mailer\\CampaignEmailIterator' => $baseDir . '/app/Services/Libs/Mailer/CampaignEmailIterator.php',
     'FluentCrm\\App\\Services\\Libs\\Mailer\\CliSendingHandler' => $baseDir . '/app/Services/Libs/Mailer/CliSendingHandler.php',
+    'FluentCrm\\App\\Services\\Libs\\Mailer\\GlobalRateLimiter' => $baseDir . '/app/Services/Libs/Mailer/GlobalRateLimiter.php',
     'FluentCrm\\App\\Services\\Libs\\Mailer\\Handler' => $baseDir . '/app/Services/Libs/Mailer/Handler.php',
     'FluentCrm\\App\\Services\\Libs\\Mailer\\Mailer' => $baseDir . '/app/Services/Libs/Mailer/Mailer.php',
     'FluentCrm\\App\\Services\\Libs\\Mailer\\MultiThreadHandler' => $baseDir . '/app/Services/Libs/Mailer/MultiThreadHandler.php',

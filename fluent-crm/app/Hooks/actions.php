@@ -76,7 +76,16 @@ $app->addAction('wp_ajax_fluentcrm_save_campaign_email_body', 'FunnelHandler@sav
 
 (new \FluentCrm\App\Hooks\Handlers\FunnelHandler())->register();
 
-// External Integrations
+// FluentCart's modal checkout fires fluent_cart/before_payment_methods and calls die()
+// during init at priority 10, before a priority-10 callback can register. Only
+// CheckoutSubscription needs to be early — everything else in FluentCart::init() is fine at 10.
+add_action('init', function () {
+    if (defined('FLUENTCART_VERSION')) {
+        (new \FluentCrm\App\Services\ExternalIntegrations\FluentCart\CheckoutSubscription())->init();
+    }
+}, 1);
+
+// All external integrations (FluentCart::init() runs here too, minus CheckoutSubscription)
 add_action('init', function () {
     (new \FluentCrm\App\Hooks\Handlers\Integrations())->register();
 }, 10);

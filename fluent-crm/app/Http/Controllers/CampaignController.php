@@ -1070,7 +1070,7 @@ class CampaignController extends Controller
         ];
 
         Helper::maybeDisableEmojiOnEmail();
-        $result = Mailer::send($data, $subscriber);
+        $result = Mailer::send($data, $subscriber, null, true);
 
         return [
             'message' => sprintf(

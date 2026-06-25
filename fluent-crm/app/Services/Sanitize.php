@@ -160,6 +160,12 @@ class Sanitize
             }
         }
 
+        if (isset($data['contact_type'])) {
+            if (!array_key_exists($data['contact_type'], fluentcrm_contact_types())) {
+                unset($data['contact_type']);
+            }
+        }
+
         return $data;
     }
 

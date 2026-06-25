@@ -49,9 +49,10 @@ class TagsController extends Controller
             $formattedTags = [];
             foreach ($allTags as $tag) {
                 $formattedTags[] = [
-                    'id'    => strval($tag->id),
-                    'title' => $tag->title,
-                    'slug'  => $tag->slug
+                    'id'          => strval($tag->id),
+                    'title'       => $tag->title,
+                    'slug'        => $tag->slug,
+                    'description' => $tag->description
                 ];
             }
             $data['all_tags'] = $formattedTags;

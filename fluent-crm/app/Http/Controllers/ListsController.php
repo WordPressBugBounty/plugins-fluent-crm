@@ -57,9 +57,10 @@ class ListsController extends Controller
             $formattedLists = [];
             foreach ($allLists as $list) {
                 $formattedLists[] = [
-                    'id'    => strval($list->id),
-                    'title' => $list->title,
-                    'slug'  => $list->slug
+                    'id'          => strval($list->id),
+                    'title'       => $list->title,
+                    'slug'        => $list->slug,
+                    'description' => $list->description
                 ];
             }
             $data['all_lists'] = $formattedLists;

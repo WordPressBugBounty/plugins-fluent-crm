@@ -56,7 +56,6 @@ class Handler extends BaseHandler
 
         try {
             $this->handleFailedLog();
-            $this->startedAt = microtime(true);
             $result = $this->processBatchEmails();
 
             if (is_wp_error($result)) {
@@ -332,7 +331,7 @@ class Handler extends BaseHandler
         ];
 
         Helper::maybeDisableEmojiOnEmail();
-        Mailer::send($data, $subscriber);
+        Mailer::send($data, $subscriber, null, true); // want to send without any rate-limiting checking
         return true;
     }
 

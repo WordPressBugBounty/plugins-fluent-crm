@@ -1288,7 +1288,31 @@ class GutenbergEmailParser
             }
         }
 
-        $buttonAttrs = $this->getFirstButtonBlockAttrs($block);
+        $buttonBlock = $this->getFirstButtonBlock($block);
+        $buttonAttrs = Arr::get($buttonBlock, 'attrs', []);
+        $buttonInnerHTML = Arr::get($buttonBlock, 'innerHTML', '');
+
+        if (!empty($buttonInnerHTML)) {
+            if (preg_match('/<a[^>]*href=["\']([^"\']+)["\'][^>]*>/i', $buttonInnerHTML, $urlMatch)) {
+                $buttonUrl = $urlMatch[1];
+            }
+
+            if (preg_match('/<a[^>]*>(.*?)<\/a>/is', $buttonInnerHTML, $textMatch)) {
+                $parsedText = trim(wp_strip_all_tags($textMatch[1]));
+                if ($parsedText) {
+                    $buttonText = $parsedText;
+                }
+            }
+        }
+
+        if (!empty($buttonAttrs['url'])) {
+            $buttonUrl = $buttonAttrs['url'];
+        }
+
+        if (!empty($buttonAttrs['text'])) {
+            $buttonText = $buttonAttrs['text'];
+        }
+
         $buttonElementId = uniqid('block-', false);
         $buttonAttrs['elem_id'] = $buttonElementId;
 
@@ -1317,20 +1341,20 @@ class GutenbergEmailParser
     }
 
     /**
-     * Find the first nested Gutenberg button attrs inside product blocks.
+     * Find the first nested Gutenberg button block inside product blocks.
      */
-    private function getFirstButtonBlockAttrs($block)
+    private function getFirstButtonBlock($block)
     {
         $innerBlocks = Arr::get($block, 'innerBlocks', []);
 
         foreach ($innerBlocks as $innerBlock) {
             if (Arr::get($innerBlock, 'blockName') === 'core/button') {
-                return Arr::get($innerBlock, 'attrs', []);
+                return $innerBlock;
             }
 
-            $buttonAttrs = $this->getFirstButtonBlockAttrs($innerBlock);
-            if ($buttonAttrs) {
-                return $buttonAttrs;
+            $buttonBlock = $this->getFirstButtonBlock($innerBlock);
+            if ($buttonBlock) {
+                return $buttonBlock;
             }
         }
 
@@ -1368,20 +1392,20 @@ class GutenbergEmailParser
             }
         }
 
-        $buttonStyles = [];
-        $buttonColor = isset($attrs['buttonColor']) && $attrs['buttonColor'] !== '' ? $attrs['buttonColor'] : '#ffffff';
-        if (!empty($buttonColor)) {
-            $buttonStyles[] = 'color:' . sanitize_text_field($buttonColor);
-        }
-        if (!empty($attrs['buttonBG'])) {
-            $buttonStyles[] = 'background:' . sanitize_text_field($attrs['buttonBG']);
-        }
-        $buttonStyles[] = 'text-decoration:none';
-        $buttonStyles[] = 'display:inline-block';
-        $buttonStyles[] = 'padding:12px 18px';
-        $buttonStyles[] = 'border-radius:4px';
+        $buttonAttrs = $this->getFirstButtonBlockAttrs($block);
+        $buttonElementId = uniqid('block-', false);
+        $buttonAttrs['elem_id'] = $buttonElementId;
 
-        $buttonHtml = '<a href="' . esc_url($buttonUrl) . '" style="' . esc_attr(implode(';', $buttonStyles) . ';') . '">' . esc_html($buttonText) . '</a>';
+        $buttonHtml = $this->renderButton(
+            '<a href="' . esc_url($buttonUrl) . '">' . esc_html($buttonText) . '</a>',
+            $buttonAttrs
+        );
+
+        if (!$buttonHtml) {
+            $buttonHtml = '<a href="' . esc_url($buttonUrl) . '">' . esc_html($buttonText) . '</a>';
+        } else {
+            $this->collectInlineStyles($buttonElementId, $buttonAttrs, 'core/button');
+        }
 
         $html = CartProduct::renderProduct($buttonHtml, [
             'blockName' => 'fluent-crm/cart-product',
@@ -2188,6 +2212,55 @@ class GutenbergEmailParser
     }
 
     /**
+     * Append inline CSS to an opening HTML tag without dropping existing styles.
+     */
+    private function appendInlineStyleToTag($tag, $style)
+    {
+        if (preg_match('/\sstyle=(["\'])(.*?)\1/i', $tag, $matches)) {
+            $quote = $matches[1];
+            $existingStyle = rtrim(trim($matches[2]), ';');
+            $newStyle = $existingStyle ? $existingStyle . '; ' . $style : $style;
+
+            // Use str_replace (not preg_replace) so existing style content cannot be
+            // misread as a regex backreference in the replacement string.
+            return str_replace($matches[0], ' style=' . $quote . $newStyle . $quote, $tag);
+        }
+
+        return preg_replace('/>$/', ' style="' . $style . '">', $tag, 1);
+    }
+
+    /**
+     * Apply email-safe stripe backgrounds to table body rows.
+     */
+    private function applyTableStripeStyles($tableContent, $stripeColor = '#f0f0f0')
+    {
+        return preg_replace_callback('/<tbody\b([^>]*)>(.*?)<\/tbody>/is', function ($tbodyMatches) use ($stripeColor) {
+            $rowIndex = 0;
+            $tbodyContent = preg_replace_callback('/<tr\b([^>]*)>(.*?)<\/tr>/is', function ($rowMatches) use (&$rowIndex, $stripeColor) {
+                $rowIndex++;
+
+                if ($rowIndex % 2 === 0) {
+                    return $rowMatches[0];
+                }
+
+                $rowContent = preg_replace_callback('/<(td|th)\b([^>]*)>/i', function ($cellMatches) use ($stripeColor) {
+                    $tag = $this->appendInlineStyleToTag($cellMatches[0], 'background-color: ' . $stripeColor . ';');
+
+                    if (stripos($tag, ' bgcolor=') === false) {
+                        $tag = preg_replace('/>$/', ' bgcolor="' . $stripeColor . '">', $tag, 1);
+                    }
+
+                    return $tag;
+                }, $rowMatches[2]);
+
+                return '<tr' . $rowMatches[1] . '>' . $rowContent . '</tr>';
+            }, $tbodyMatches[2]);
+
+            return '<tbody' . $tbodyMatches[1] . '>' . $tbodyContent . '</tbody>';
+        }, $tableContent);
+    }
+
+    /**
      * Render table block
      */
     private function renderTable($content, $attrs)
@@ -2197,6 +2270,8 @@ class GutenbergEmailParser
             !empty(Arr::get($borderConfig, 'style')) ||
             !empty(Arr::get($borderConfig, 'color')) ||
             !empty(Arr::get($attrs, 'borderColor'));
+        $className = (string)Arr::get($attrs, 'className', '');
+        $isStriped = strpos($className, 'is-style-stripes') !== false;
 
         if ($hasCustomBorder) {
             $borderWidth = Arr::get($borderConfig, 'width', '1px');
@@ -2221,15 +2296,27 @@ class GutenbergEmailParser
         if (preg_match('/<table[^>]*>(.*?)<\/table>/s', $content, $matches)) {
             $tableContent = $matches[1];
             // Add styles to table cells
-            $tableContent = preg_replace('/<td([^>]*)>/', '<td$1 style="' . $cellStyles . '">', $tableContent);
-            $tableContent = preg_replace('/<th([^>]*)>/', '<th$1 style="' . $cellStyles . ' font-weight: bold;">', $tableContent);
+            $tableContent = preg_replace_callback('/<td\b([^>]*)>/i', function ($matches) use ($cellStyles) {
+                return $this->appendInlineStyleToTag($matches[0], $cellStyles);
+            }, $tableContent);
+            $tableContent = preg_replace_callback('/<th\b([^>]*)>/i', function ($matches) use ($cellStyles) {
+                return $this->appendInlineStyleToTag($matches[0], $cellStyles . ' font-weight: bold;');
+            }, $tableContent);
+
+            if ($isStriped) {
+                $tableContent = $this->applyTableStripeStyles($tableContent);
+            }
         } else {
             return '';
         }
 
         $id = $attrs['elem_id'] ?? '';
+        $tableClass = 'fc_table';
+        if ($isStriped) {
+            $tableClass .= ' fc_table_striped';
+        }
 
-        return $this->wrapInTable("<table id='$id' class='fc_table' style=\"{$styles}\">{$tableContent}</table>", $attrs);
+        return $this->wrapInTable("<table id='$id' class='{$tableClass}' style=\"{$styles}\">{$tableContent}</table>", $attrs);
     }
 
     /**

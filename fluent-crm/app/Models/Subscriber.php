@@ -734,6 +734,7 @@ class Subscriber extends Model
             'last_name'      => __('Last Name', 'fluent-crm'),
             'full_name'      => __('Full Name', 'fluent-crm'),
             'email'          => __('Email', 'fluent-crm'),
+            'contact_type'   => __('Contact Type', 'fluent-crm'),
             'timezone'       => __('Timezone', 'fluent-crm'),
             'address_line_1' => __('Address Line 1', 'fluent-crm'),
             'address_line_2' => __('Address Line 2', 'fluent-crm'),
