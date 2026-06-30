@@ -249,59 +249,28 @@ abstract class BaseHandler
      */
     protected function acquireLock()
     {
-        $now = time();
+        // Single atomic conditional UPDATE on wp_options (Helper::acquireDbLock)
+        // on every environment. We no longer take a wp_cache_add() fast path when
+        // an external object cache is active: that primitive is only atomic if the
+        // drop-in implements it against the shared backend, and some do not —
+        // notably LiteSpeed Object Cache, whose add() checks only the per-process
+        // in-memory array and then writes unconditionally. Under it, concurrent
+        // senders all acquired the lock and ran at once, overshooting the provider
+        // rate limit. The DB row lock has no such gap. See Helper::acquireDbLock().
         $lockTimeout = $this->maximumProcessingTime + 30;
 
-        if (wp_using_ext_object_cache()) {
-            // wp_cache_add() is atomic — only succeeds if key doesn't exist.
-            // TTL handles auto-expiry of stuck locks.
-            if (wp_cache_add($this->optionKey, $now, 'fc_instant_options', $lockTimeout)) {
-                return true;
-            }
-
-            // Key exists — check if the lock has expired (process died)
-            $existing = wp_cache_get($this->optionKey, 'fc_instant_options');
-            if ($existing && ($now - (int)$existing) > $lockTimeout) {
-                // Delete stale key, then re-acquire atomically via wp_cache_add()
-                wp_cache_delete($this->optionKey, 'fc_instant_options');
-                if (wp_cache_add($this->optionKey, $now, 'fc_instant_options', $lockTimeout)) {
-                    return true;
-                }
-            }
-
-            return false;
-        }
-
-        // Database path: single atomic UPDATE on wp_options
-        global $wpdb;
-
-        // Ensure the option row exists (INSERT IGNORE is idempotent)
-        $wpdb->query($wpdb->prepare(
-            "INSERT IGNORE INTO {$wpdb->options} (option_name, option_value, autoload) VALUES (%s, %s, %s)",
-            $this->optionKey, '', 'no'
-        ));
-
-        // Atomic: claim lock only if free (empty value) or expired (old timestamp)
-        $affected = $wpdb->query($wpdb->prepare(
-            "UPDATE {$wpdb->options} SET option_value = %s WHERE option_name = %s AND (option_value = '' OR option_value < %d)",
-            (string)$now, $this->optionKey, $now - $lockTimeout
-        ));
-
-        if ($affected > 0) {
-            wp_cache_delete($this->optionKey, 'options');
-            return true;
-        }
-
-        return false;
+        return Helper::acquireDbLock($this->optionKey, $lockTimeout);
     }
 
     /**
      * Refresh the lock timestamp (heartbeat) to prevent stuck-lock detection.
+     *
+     * Writes to the same wp_options row acquireLock() claims, so the heartbeat
+     * and the stale-detection read share one source of truth.
      */
     protected function refreshLock()
     {
-        $lockTimeout = $this->maximumProcessingTime + 30;
-        Helper::setInstantOption($this->optionKey, time(), $lockTimeout);
+        Helper::refreshDbLock($this->optionKey);
         $this->lastLockRefreshAt = microtime(true);
     }
 
@@ -332,10 +301,6 @@ abstract class BaseHandler
      */
     protected function releaseLock()
     {
-        if (wp_using_ext_object_cache()) {
-            wp_cache_delete($this->optionKey, 'fc_instant_options');
-        } else {
-            update_option($this->optionKey, '', false);
-        }
+        Helper::releaseDbLock($this->optionKey);
     }
 }

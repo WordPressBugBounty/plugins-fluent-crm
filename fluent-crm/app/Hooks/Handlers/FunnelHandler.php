@@ -246,54 +246,21 @@ class FunnelHandler
         }
     }
 
+    /**
+     * Claim the funnel-processor lock so two runners can't process the same
+     * queue concurrently. Backed by an atomic conditional UPDATE on wp_options
+     * (Helper::acquireDbLock) on every environment — not wp_cache_add(), which
+     * is not atomic under all object-cache drop-ins (e.g. LiteSpeed) and would
+     * let concurrent runners all acquire the lock. See Helper::acquireDbLock().
+     */
     private function acquireFunnelProcessorLock()
     {
-        $now = time();
-
-        if (wp_using_ext_object_cache()) {
-            if (wp_cache_add($this->lockKey, $now, 'fc_instant_options', $this->lockTimeout)) {
-                return true;
-            }
-
-            $existing = wp_cache_get($this->lockKey, 'fc_instant_options');
-            if ($existing && ($now - (int)$existing) > $this->lockTimeout) {
-                wp_cache_delete($this->lockKey, 'fc_instant_options');
-                if (wp_cache_add($this->lockKey, $now, 'fc_instant_options', $this->lockTimeout)) {
-                    return true;
-                }
-            }
-
-            return false;
-        }
-
-        global $wpdb;
-
-        $wpdb->query($wpdb->prepare(
-            "INSERT IGNORE INTO {$wpdb->options} (option_name, option_value, autoload) VALUES (%s, %s, %s)",
-            $this->lockKey, '', 'no'
-        ));
-
-        $affected = $wpdb->query($wpdb->prepare(
-            "UPDATE {$wpdb->options} SET option_value = %s WHERE option_name = %s AND (option_value = '' OR option_value < %d)",
-            (string)$now, $this->lockKey, $now - $this->lockTimeout
-        ));
-
-        if ($affected > 0) {
-            wp_cache_delete($this->lockKey, 'options');
-            return true;
-        }
-
-        return false;
+        return Helper::acquireDbLock($this->lockKey, $this->lockTimeout);
     }
 
     private function releaseFunnelProcessorLock()
     {
-        if (wp_using_ext_object_cache()) {
-            wp_cache_delete($this->lockKey, 'fc_instant_options');
-            return;
-        }
-
-        update_option($this->lockKey, '', false);
+        Helper::releaseDbLock($this->lockKey);
     }
 
     public function resetFunnelIndexes()

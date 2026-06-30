@@ -2095,7 +2095,6 @@ class Helper
             'width'           => [],
             'height'          => [],
             'src'             => [],
-            'srcdoc'          => [],
             'title'           => [],
             'frameborder'     => [],
             'allow'           => [],
@@ -2104,8 +2103,6 @@ class Helper
             'allowfullscreen' => [],
             'style'           => [],
         ];
-        //button
-        $tags['button']['onclick'] = [];
 
         //svg
         if (empty($tags['svg'])) {
@@ -2830,6 +2827,114 @@ class Helper
         }
 
         return get_option($optionKey);
+    }
+
+    /**
+     * Acquire a cross-process mutex via a single atomic conditional UPDATE on
+     * wp_options, keyed off a stored timestamp.
+     *
+     * Why DB and not wp_cache_add(): wp_cache_add() is only atomic if the active
+     * object-cache drop-in implements it against the shared backend. Some do NOT
+     * — notably LiteSpeed Object Cache, whose add() only checks the per-process
+     * in-memory array and then unconditionally writes (no Memcached ADD / Redis
+     * SET NX). Under that drop-in every concurrent worker "wins" the lock, so the
+     * mailer ran multiple senders at once and overshot the provider rate limit.
+     * A single-row conditional UPDATE is atomic via the InnoDB row lock on every
+     * backend, mirroring the CAS used by GlobalRateLimiter.
+     *
+     * The UPDATE claims the lock only if it is free (empty value) or stale
+     * (stored timestamp older than $ttl), so a crashed holder self-recovers after
+     * the TTL.
+     *
+     * @param string $key wp_options option_name holding the lock timestamp.
+     * @param int    $ttl Seconds before a held lock is treated as abandoned.
+     * @return bool True if this process acquired the lock.
+     */
+    public static function acquireDbLock($key, $ttl)
+    {
+        global $wpdb;
+        $now = time();
+
+        // Ensure the row exists so the conditional UPDATE has a row to claim.
+        $wpdb->query($wpdb->prepare(
+            "INSERT IGNORE INTO {$wpdb->options} (option_name, option_value, autoload) VALUES (%s, %s, %s)",
+            $key, '', 'no'
+        ));
+
+        // Atomic: claim only if free or expired. Empty string casts to 0, so the
+        // explicit '' check is what frees a cleanly released lock.
+        $affected = $wpdb->query($wpdb->prepare(
+            "UPDATE {$wpdb->options} SET option_value = %s WHERE option_name = %s AND (option_value = '' OR option_value < %d)",
+            (string)$now, $key, $now - $ttl
+        ));
+
+        if ($affected > 0) {
+            wp_cache_delete($key, 'options');
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
+     * Heartbeat a held lock: push its timestamp to now so the TTL-based stale
+     * detection in acquireDbLock() cannot steal it mid-run. Caller must already
+     * hold the lock.
+     *
+     * @param string $key wp_options option_name holding the lock timestamp.
+     * @return void
+     */
+    public static function refreshDbLock($key)
+    {
+        global $wpdb;
+        $wpdb->query($wpdb->prepare(
+            "UPDATE {$wpdb->options} SET option_value = %s WHERE option_name = %s",
+            (string)time(), $key
+        ));
+        wp_cache_delete($key, 'options');
+    }
+
+    /**
+     * Release a lock by clearing its timestamp so the next acquireDbLock() wins
+     * immediately instead of waiting out the TTL. Safe to call even if this
+     * process does not hold the lock (worst case frees the slot a tick early).
+     *
+     * @param string $key wp_options option_name holding the lock timestamp.
+     * @return void
+     */
+    public static function releaseDbLock($key)
+    {
+        global $wpdb;
+        $wpdb->query($wpdb->prepare(
+            "UPDATE {$wpdb->options} SET option_value = '' WHERE option_name = %s",
+            $key
+        ));
+        wp_cache_delete($key, 'options');
+    }
+
+    /**
+     * Read the timestamp a lock was last (re)acquired with, straight from the
+     * wp_options row that acquireDbLock()/refreshDbLock() write to.
+     *
+     * Reads via raw SQL — NOT getInstantOption() — so it returns the live lock
+     * value regardless of external-object-cache mode. getInstantOption() reads
+     * the `fc_instant_options` cache group when an object cache is active, but
+     * the DB locks never write there, so it would always miss a held lock on
+     * those sites. Mirrors GlobalRateLimiter's direct-read approach.
+     *
+     * @param string $key wp_options option_name holding the lock timestamp.
+     * @return int Unix timestamp of the last (re)acquire, or 0 if free/absent.
+     */
+    public static function getDbLockTimestamp($key)
+    {
+        global $wpdb;
+
+        $value = $wpdb->get_var($wpdb->prepare(
+            "SELECT option_value FROM {$wpdb->options} WHERE option_name = %s",
+            $key
+        ));
+
+        return (int) $value;
     }
 
 }

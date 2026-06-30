@@ -4,7 +4,7 @@ Tags: email marketing, newsletter, crm, email newsletter, subscribers
 Requires at least: 5.0
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 3.1.7
+Stable tag: 3.1.8
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -260,6 +260,13 @@ You can report any security bugs found in the source code of FluentCRM plugins t
 10. Pro Integrations
 
 == Changelog ==
+
+= 3.1.8 (Date: June 30, 2026) =
+- Improvement: Email sending now respects the configured maximum sending cap.
+- Fixed: Abandon cart totals and provider-specific recovery notices.
+- Fixed: FluentCart abandon cart coupon fallback and built-in template smartcodes.
+- Fixed: LearnPress course completion tags not being applied with deprecated hooks.
+- Fixed: Reflected XSS issues in admin flows.
 
 = 3.1.7 (Date: June 25, 2026) = 
 = Improvement: Email Sending Cap Centralized

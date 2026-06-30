@@ -446,10 +446,13 @@ class Scheduler
         $now = time();
 
         foreach (['fluentcrm_is_sending_emails', 'fluentcrm_is_sending_multi_emails', 'fluentcrm_is_sending_cli_emails'] as $lockKey) {
-            // Helper::getInstantOption() reads from the correct lock store:
-            // object-cache group when an external cache is active, wp_options
-            // otherwise. That mirrors BaseHandler::acquireLock()/refreshLock().
-            $lockedAt = (int) Helper::getInstantOption($lockKey);
+            // Read the lock straight from its wp_options row. BaseHandler's
+            // acquireLock()/refreshLock() store the timestamp there via
+            // Helper::acquireDbLock()/refreshDbLock() on every environment, so we
+            // must NOT use getInstantOption() here: on object-cache sites it reads
+            // the fc_instant_options group, which the DB lock never writes to, and
+            // would miss a live sender — letting recovery reset its rows.
+            $lockedAt = Helper::getDbLockTimestamp($lockKey);
 
             // A non-empty timestamp inside the freshness window means a sender
             // appears active, so stale recovery should defer to the next tick.
@@ -562,13 +565,13 @@ class Scheduler
      * same critical section concurrently (e.g. Action Scheduler + WP-Cron
      * minute ticks landing in the same second).
      *
-     * Uses wp_cache_add() when an external object cache is available, otherwise
-     * a conditional UPDATE on wp_options keyed off a timestamp. The UPDATE
-     * succeeds only if the row is unclaimed or its stored timestamp is older
-     * than $ttl, so a crashed runner's lock self-recovers after the TTL.
-     *
-     * Mirrors BaseHandler::acquireLock() / FunnelHandler::acquireFunnelProcessorLock().
-     * Kept local instead of extracted to a shared helper to limit blast radius.
+     * Backed by a conditional UPDATE on wp_options keyed off a timestamp
+     * (Helper::acquireDbLock). The UPDATE succeeds only if the row is unclaimed
+     * or its stored timestamp is older than $ttl, so a crashed runner's lock
+     * self-recovers after the TTL. This is used on every environment — we no
+     * longer take a wp_cache_add() fast path, because that primitive is not
+     * atomic under all object-cache drop-ins (e.g. LiteSpeed), which let
+     * concurrent runners all acquire the same lock. See Helper::acquireDbLock().
      *
      * @param string $name Lock identifier appended to the option key.
      * @param int    $ttl  Seconds before a held lock is considered abandoned.
@@ -576,43 +579,7 @@ class Scheduler
      */
     private static function acquireLock($name, $ttl)
     {
-        $key = '_fluentcrm_lock_' . $name;
-        $now = time();
-
-        if (wp_using_ext_object_cache()) {
-            if (wp_cache_add($key, $now, 'fc_instant_options', $ttl)) {
-                return true;
-            }
-
-            $existing = wp_cache_get($key, 'fc_instant_options');
-            if ($existing && ($now - (int)$existing) > $ttl) {
-                wp_cache_delete($key, 'fc_instant_options');
-                if (wp_cache_add($key, $now, 'fc_instant_options', $ttl)) {
-                    return true;
-                }
-            }
-
-            return false;
-        }
-
-        global $wpdb;
-
-        $wpdb->query($wpdb->prepare(
-            "INSERT IGNORE INTO {$wpdb->options} (option_name, option_value, autoload) VALUES (%s, %s, %s)",
-            $key, '', 'no'
-        ));
-
-        $affected = $wpdb->query($wpdb->prepare(
-            "UPDATE {$wpdb->options} SET option_value = %s WHERE option_name = %s AND (option_value = '' OR option_value < %d)",
-            (string)$now, $key, $now - $ttl
-        ));
-
-        if ($affected > 0) {
-            wp_cache_delete($key, 'options');
-            return true;
-        }
-
-        return false;
+        return Helper::acquireDbLock('_fluentcrm_lock_' . $name, $ttl);
     }
 
     /**
@@ -622,12 +589,6 @@ class Scheduler
      */
     private static function releaseLock($name)
     {
-        $key = '_fluentcrm_lock_' . $name;
-
-        if (wp_using_ext_object_cache()) {
-            wp_cache_delete($key, 'fc_instant_options');
-        } else {
-            update_option($key, '', false);
-        }
+        Helper::releaseDbLock('_fluentcrm_lock_' . $name);
     }
 }

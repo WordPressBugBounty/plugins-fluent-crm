@@ -38,8 +38,32 @@ class OptionsController extends Controller
             $response = [];
 
             foreach ($options as $method) {
-                if (method_exists($this, $method)) {
-                    $result = $this->{$method}();
+                // Only invoke this controller's own zero-argument option providers.
+                // Gating on method_exists() alone let the `fields` param call ANY
+                // method on the controller: ones that require a Request argument
+                // (getAjaxOptions/getTaxonomyTerms/getCascadeSelections) fataled with
+                // an ArgumentCountError, inherited framework helpers ran unintentionally,
+                // and `index` recursed into itself. Restricting by shape (public,
+                // non-static, no required args, declared on this class) admits every
+                // legitimate option getter — current or future — without an explicit
+                // name list, so no caller can be silently broken.
+                if ($method === 'index' || !method_exists($this, $method)) {
+                    continue;
+                }
+
+                $reflection = new \ReflectionMethod($this, $method);
+
+                if (
+                    !$reflection->isPublic() ||
+                    $reflection->isStatic() ||
+                    $reflection->getNumberOfRequiredParameters() > 0 ||
+                    $reflection->getDeclaringClass()->getName() !== self::class
+                ) {
+                    continue;
+                }
+
+                $result = $this->{$method}();
+                if (is_array($result)) {
                     $response = array_merge($response, $result);
                 }
             }

@@ -40,7 +40,12 @@ class CampaignController extends Controller
         $order = in_array($order, ['ASC', 'DESC'], true) ? $order : 'DESC';
 
         $orderBy = sanitize_key($request->get('sort_by', ''));
-        $with = array_map('sanitize_key', $request->get('with', []));
+        // Re-key `with` to a flat, integer-indexed list and sanitize each value.
+        // Legitimate callers always send a plain list of names (e.g. with[]=stats);
+        // discarding any caller-supplied string keys closes the relation-name
+        // injection (a request shaped like with[<html>]=stats) without restricting
+        // which names are allowed, so no existing core/add-on caller is affected.
+        $with = array_values(array_map('sanitize_key', (array) $request->get('with', [])));
 
         $labels = $request->get('labels', []);
         $labels = is_array($labels) ? array_map('intval', $labels) : [];
@@ -248,7 +253,17 @@ class CampaignController extends Controller
             return $this->sendSuccess(['campaign' => $campaign, 'emails' => $emails]);
         }
 
-        $with = array_map('sanitize_key', $request->get('with', []));
+        // Re-key `with` to a flat, integer-indexed list and sanitize each value
+        // before it reaches Campaign::with(). The vulnerability was that a request
+        // shaped like with[<html>]=subjects put attacker input in the array KEY,
+        // which array_map('sanitize_key', ...) never touched, so it flowed into
+        // with() as a relation name and surfaced verbatim in the reflected
+        // "relationship not found" exception (XSS). Discarding keys with array_values
+        // closes that path, and sanitize_key keeps each value to [a-z0-9_-] so a
+        // value can't carry markup either. This keeps the exact value-sanitization the
+        // endpoint already had and does not restrict which relations are allowed, so
+        // no core/add-on caller is broken.
+        $with = array_values(array_map('sanitize_key', (array) $request->get('with', [])));
         if ($with) {
             $campaign = Campaign::with($with)->find($id);
         } else {
