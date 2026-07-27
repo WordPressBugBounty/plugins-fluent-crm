@@ -511,7 +511,8 @@ class ReportingController extends Controller
                         ->where('fc_funnels.type', '=', 'funnels');
                 })
                 ->groupBy('fc_funnel_subscribers.funnel_id', 'fc_funnels.title', 'fc_funnels.trigger_name')
-                ->selectRaw('fc_funnel_subscribers.funnel_id, fc_funnels.title, fc_funnels.trigger_name, COUNT(*) as trigger_count')
+                ->select('fc_funnel_subscribers.funnel_id', 'fc_funnels.title', 'fc_funnels.trigger_name')
+                ->selectRaw('COUNT(*) as trigger_count')
                 ->orderByDesc('trigger_count')
                 ->limit(5)
                 ->get()
@@ -529,14 +530,20 @@ class ReportingController extends Controller
             // Overview totals are GLOBAL (they're presented as such), not sums of the
             // current page. COUNT(DISTINCT funnel_id, subscriber_id) preserves the
             // per-funnel-unique enrollment semantics of the old per-funnel counts.
+            // These aggregates have to name the pivot table explicitly (`status`
+            // is ambiguous across the join), and raw fragments bypass the query
+            // grammar — so the prefix is resolved by hand.
+            global $wpdb;
+            $funnelSubscribersTable = $wpdb->prefix . 'fc_funnel_subscribers';
+
             $globalAggregate = FunnelSubscriber::join('fc_funnels', function ($join) {
                     $join->on('fc_funnel_subscribers.funnel_id', '=', 'fc_funnels.id')
                         ->where('fc_funnels.status', '=', 'published')
                         ->where('fc_funnels.type', '=', 'funnels');
                 })
-                ->selectRaw('COUNT(DISTINCT fc_funnel_subscribers.funnel_id, fc_funnel_subscribers.subscriber_id) as subscribers')
-                ->selectRaw("SUM(CASE WHEN fc_funnel_subscribers.status = 'completed' THEN 1 ELSE 0 END) as completed")
-                ->selectRaw("SUM(CASE WHEN fc_funnel_subscribers.status = 'active' THEN 1 ELSE 0 END) as in_progress")
+                ->selectRaw("COUNT(DISTINCT `{$funnelSubscribersTable}`.`funnel_id`, `{$funnelSubscribersTable}`.`subscriber_id`) as subscribers")
+                ->selectRaw("SUM(CASE WHEN `{$funnelSubscribersTable}`.`status` = 'completed' THEN 1 ELSE 0 END) as completed")
+                ->selectRaw("SUM(CASE WHEN `{$funnelSubscribersTable}`.`status` = 'active' THEN 1 ELSE 0 END) as in_progress")
                 ->first();
 
             $overviewStats = [

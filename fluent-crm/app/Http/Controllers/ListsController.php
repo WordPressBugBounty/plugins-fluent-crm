@@ -48,6 +48,11 @@ class ListsController extends Controller
 
             $counts = [];
             if ($listIds) {
+                // Raw expressions bypass the query grammar, so the subscribers
+                // table has to be prefixed by hand here.
+                global $wpdb;
+                $subscribersTable = $wpdb->prefix . 'fc_subscribers';
+
                 $countRows = fluentCrmDb()->table('fc_subscriber_pivot')
                     ->where('fc_subscriber_pivot.object_type', 'FluentCrm\App\Models\Lists')
                     ->whereIn('fc_subscriber_pivot.object_id', $listIds)
@@ -56,7 +61,7 @@ class ListsController extends Controller
                     ->select([
                         'fc_subscriber_pivot.object_id',
                         fluentCrmDb()->raw('COUNT(*) as total_count'),
-                        fluentCrmDb()->raw("SUM(CASE WHEN fc_subscribers.status = 'subscribed' THEN 1 ELSE 0 END) as subscribed_count")
+                        fluentCrmDb()->raw("SUM(CASE WHEN `{$subscribersTable}`.`status` = 'subscribed' THEN 1 ELSE 0 END) as subscribed_count")
                     ])
                     ->get();
 

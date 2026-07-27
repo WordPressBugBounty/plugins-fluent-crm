@@ -3032,6 +3032,7 @@ class TransStrings
             'lists' => __('lists', 'fluent-crm'),
             'logo' => __('logo', 'fluent-crm'),
             'max_email_per_second_desc' => __('Set the rate limit for sending emails to prevent server overload and comply with SMTP restrictions.', 'fluent-crm'),
+            'max_email_per_second_note' => __('This is the maximum sending rate, not a guaranteed one. Actual email sending speed also depends on your cron frequency, server resources and your email service provider.', 'fluent-crm'),
             'maybeRemove' => __('May be remove', 'fluent-crm'),
             'minute' => __('minute', 'fluent-crm'),
             'minutes' => __('minutes', 'fluent-crm'),

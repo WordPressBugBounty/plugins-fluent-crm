@@ -2253,7 +2253,7 @@ class Helper
             'company_module'          => 'no',
             'company_auto_logo'       => 'no',
             'disable_visual_ai'       => 'no',
-            'multi_threading_emails'  => 'no',
+            'multi_threading_emails'  => 'yes',
             'system_logs'             => 'no',
             'event_tracking'          => 'no',
             'abandoned_cart'          => 'no',

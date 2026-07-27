@@ -531,6 +531,15 @@ class Scheduler
             return false;
         }
 
+        // Which continuation to fire is DECIDED inside the lock but ACTED ON
+        // after it is released. Both continuations are loopback requests whose
+        // receiver races for a lock on arrival — fireCampaignProcessingChain in
+        // particular re-enters this very method and takes this same
+        // per-campaign lock. Firing while still holding it means a fast-booting
+        // successor can lose the race and bail, silently ending the chain and
+        // stalling materialization until the five-minute scheduler notices.
+        $continuation = '';
+
         try {
             if (function_exists('set_time_limit')) {
                 @set_time_limit(120);
@@ -557,14 +566,75 @@ class Scheduler
             }
 
             if ($campaign && $campaign->status == 'processing') {
-                self::fireCampaignProcessingChain($campaignId);
-                return true;
+                $continuation = 'chain';
+            } elseif ($campaign && $campaign->status == 'scheduled' && self::isCampaignDue($campaign)) {
+                // Materialization just finished: CampaignProcessor flipped the
+                // last chunk from 'scheduling' to 'scheduled', so the rows are
+                // claimable right now. Without a kick the processing chain
+                // simply stops and the first email waits for the next
+                // every-minute scheduler tick — up to ~60s of dead time on an
+                // instant campaign the user just pressed "send" on. A cancelled
+                // campaign lands on 'draft' and is skipped.
+                $continuation = 'send';
             }
-
-            return false;
         } finally {
             self::releaseLock($lockName);
         }
+
+        if ($continuation == 'chain') {
+            self::fireCampaignProcessingChain($campaignId);
+            return true;
+        }
+
+        if ($continuation == 'send') {
+            self::fireSendNowRequest();
+        }
+
+        return false;
+    }
+
+    /**
+     * Whether a campaign's materialized rows are claimable by a sender yet.
+     *
+     * Future-dated campaigns are materialized up to ~6 minutes ahead of their
+     * send time, and senders only claim rows with scheduled_at <= now, so a kick
+     * for one of those would pay for a full PHP bootstrap and find nothing to
+     * do.
+     *
+     * @param \FluentCrm\App\Models\Campaign $campaign
+     * @return bool
+     */
+    private static function isCampaignDue($campaign)
+    {
+        if (!$campaign->scheduled_at) {
+            return true;
+        }
+
+        return strtotime($campaign->scheduled_at) <= strtotime(current_time('mysql'));
+    }
+
+    /**
+     * Fire a non-blocking AJAX request that starts an email sending cycle
+     * immediately instead of waiting for the next scheduler tick.
+     *
+     * Safe to call speculatively: the receiving handler acquires the atomic
+     * sending lock in isSystemOk() before doing any real work, so a kick that
+     * races an in-flight sender bails after one cheap bootstrap. It always
+     * targets the primary Handler — that handler is what spawns the
+     * multi-threaded worker when the queue is large enough, so this single
+     * entry point covers both single- and multi-threaded sending.
+     */
+    public static function fireSendNowRequest()
+    {
+        $url = add_query_arg([
+            'action' => 'fluentcrm-post-campaigns-send-now',
+            'time'   => time()
+        ], admin_url('admin-ajax.php'));
+
+        Handler::fireNonBlockingRequest($url, [
+            'campaign_id' => null,
+            'retry'       => 1
+        ]);
     }
 
     /**

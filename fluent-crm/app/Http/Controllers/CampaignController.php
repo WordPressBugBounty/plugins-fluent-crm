@@ -1485,6 +1485,11 @@ class CampaignController extends Controller
             if (strtotime($campaign->scheduled_at) < strtotime(current_time('mysql'))) {
                 $campaign->status = 'working';
                 $campaign->save();
+
+                // A scheduled campaign has just come due while its screen is
+                // open. Fires once — the transition is guarded by the status
+                // write above, so the surrounding poll cannot repeat it.
+                \FluentCrm\App\Hooks\Handlers\Scheduler::fireSendNowRequest();
             }
         }
 
@@ -1714,6 +1719,11 @@ class CampaignController extends Controller
                 'status'       => 'scheduled',
                 'scheduled_at' => current_time('mysql')
             ]);
+
+        // Past-due rows are claimable the moment the flip above commits, so
+        // start a sending cycle now rather than leaving the user watching an
+        // idle "working" campaign until the next scheduler tick.
+        \FluentCrm\App\Hooks\Handlers\Scheduler::fireSendNowRequest();
 
         return [
             'message'  => __('Campaign has been successfully resumed', 'fluent-crm'),
