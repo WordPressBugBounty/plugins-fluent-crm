@@ -39,9 +39,36 @@ class ListsController extends Controller
         $lists = $paginatedLists->items();
 
         if (!$request->get('exclude_counts')) {
+            // One grouped pivot-join query for the whole page instead of two
+            // COUNT queries per list.
+            $listIds = [];
             foreach ($lists as $list) {
-                $list->totalCount = $list->totalCount();
-                $list->subscribersCount = $list->countByStatus('subscribed');
+                $listIds[] = $list->id;
+            }
+
+            $counts = [];
+            if ($listIds) {
+                $countRows = fluentCrmDb()->table('fc_subscriber_pivot')
+                    ->where('fc_subscriber_pivot.object_type', 'FluentCrm\App\Models\Lists')
+                    ->whereIn('fc_subscriber_pivot.object_id', $listIds)
+                    ->leftJoin('fc_subscribers', 'fc_subscribers.id', '=', 'fc_subscriber_pivot.subscriber_id')
+                    ->groupBy('fc_subscriber_pivot.object_id')
+                    ->select([
+                        'fc_subscriber_pivot.object_id',
+                        fluentCrmDb()->raw('COUNT(*) as total_count'),
+                        fluentCrmDb()->raw("SUM(CASE WHEN fc_subscribers.status = 'subscribed' THEN 1 ELSE 0 END) as subscribed_count")
+                    ])
+                    ->get();
+
+                foreach ($countRows as $countRow) {
+                    $counts[$countRow->object_id] = $countRow;
+                }
+            }
+
+            foreach ($lists as $list) {
+                $countRow = isset($counts[$list->id]) ? $counts[$list->id] : null;
+                $list->totalCount = $countRow ? (int)$countRow->total_count : 0;
+                $list->subscribersCount = $countRow ? (int)$countRow->subscribed_count : 0;
             }
         }
 

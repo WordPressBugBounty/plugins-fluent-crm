@@ -244,24 +244,46 @@ class Scheduler
     {
         (new Maintenance())->maybeProcessData();
 
-        // Clear email_body from historical 'sent' rows to reclaim disk space.
-        // Loop a LIMIT-bounded UPDATE so each statement's row-lock footprint
-        // stays small (an unbounded UPDATE on a multi-million-row table holds
-        // locks for minutes and stalls report/dashboard SELECTs) while still
-        // draining the full backlog in this tick. Going direct to $wpdb skips
-        // ORM overhead on what is effectively the same repeated statement.
+        // Clear email_body from rows in terminal statuses (sent / cancelled /
+        // failed) to reclaim disk space. Safe for all three: campaign resends
+        // re-render from the campaign row, and getEmailBody() has a recovery
+        // branch for cleared-but-parsed rows. The live pipeline already clears
+        // bodies inline (mark-sent and contact-cancel both write ''), so this
+        // sweep only ever finds pre-upgrade rows and third-party writes.
+        //
+        // Shape: an advancing primary-key cursor. The previous LIMIT-bounded
+        // UPDATE re-entered the status index ranges from the top on every
+        // iteration, rescanning the already-cleared prefix (quadratic across a
+        // large backlog) — and, being a locking statement, contended with the
+        // senders' mark-sent updates even when it changed nothing. Here a
+        // non-locking SELECT finds the next batch of dirty ids from the cursor
+        // forward, a PK-targeted UPDATE clears exactly those rows, and the
+        // cursor jumps past everything scanned — each row is visited at most
+        // once per weekly tick, and the steady-state pass takes no row locks.
         try {
             global $wpdb;
             $table         = $wpdb->prefix . 'fc_campaign_emails';
-            $chunkSize     = 50000;
-            $maxIterations = 100; // safety cap — up to ~5M rows per weekly tick
+            $chunkSize     = 2000;
+            $maxIterations = 2500; // safety cap — up to ~5M dirty rows per weekly tick
+            $cursor        = 0;
 
             for ($i = 0; $i < $maxIterations; $i++) {
-                $affected = (int) $wpdb->query(
-                    "UPDATE {$table} SET email_body = '' WHERE status = 'sent' AND email_body != '' LIMIT {$chunkSize}"
-                );
+                $ids = $wpdb->get_col($wpdb->prepare(
+                    "SELECT id FROM {$table} WHERE id > %d AND status IN ('sent', 'cancelled', 'failed') AND email_body != '' ORDER BY id ASC LIMIT %d",
+                    $cursor, $chunkSize
+                ));
 
-                if ($affected < $chunkSize || fluentCrmIsMemoryExceeded()) {
+                if (!$ids) {
+                    break;
+                }
+
+                $idList = implode(',', array_map('intval', $ids));
+                // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared -- ids are intval()'d above
+                $wpdb->query("UPDATE {$table} SET email_body = '' WHERE id IN ({$idList})");
+
+                $cursor = (int) end($ids);
+
+                if (count($ids) < $chunkSize || fluentCrmIsMemoryExceeded()) {
                     break;
                 }
             }
@@ -300,6 +322,13 @@ class Scheduler
 
             self::resetStaleProcessingEmails(100, 'processFiveMinutes');
 
+            // Automation processing must not starve while a large campaign is
+            // sending (funnel wait steps used to slip up to ~an hour during a
+            // send). The funnel processor holds its own atomic lock and time
+            // budget, so fire it on every tick — not only when the campaign
+            // queue is empty.
+            do_action('fluent_crm_process_automation');
+
             $cutOutTime = gmdate('Y-m-d H:i:s', current_time('timestamp') + 360);
 
             $campaigns = Campaign::whereIn('status', ['pending-scheduled', 'processing'])
@@ -311,7 +340,12 @@ class Scheduler
                 ->get();
 
             if ($campaigns->isEmpty()) {
-                do_action('fluent_crm_process_automation');
+                // Opportunistic housekeeping: no campaign needs this tick, so spend
+                // the idle capacity on the hourly tasks (archiving, CSV cleanup,
+                // third-party listeners). "Hourly" is the guaranteed MINIMUM cadence
+                // (WP-cron/Action Scheduler); running more often on idle sites is
+                // intended — listeners must be idempotent. Concurrent overlap is
+                // still prevented by processHourly's own lock.
                 do_action('fluentcrm_scheduled_hourly_tasks');
                 return false;
             }
@@ -445,18 +479,25 @@ class Scheduler
         // across all sender lock keys checked below.
         $now = time();
 
-        foreach (['fluentcrm_is_sending_emails', 'fluentcrm_is_sending_multi_emails', 'fluentcrm_is_sending_cli_emails'] as $lockKey) {
-            // Read the lock straight from its wp_options row. BaseHandler's
-            // acquireLock()/refreshLock() store the timestamp there via
-            // Helper::acquireDbLock()/refreshDbLock() on every environment, so we
-            // must NOT use getInstantOption() here: on object-cache sites it reads
-            // the fc_instant_options group, which the DB lock never writes to, and
-            // would miss a live sender — letting recovery reset its rows.
-            $lockedAt = Helper::getDbLockTimestamp($lockKey);
+        global $wpdb;
 
+        // Discover sender locks by PREFIX instead of a hardcoded key list:
+        // every sender lock — cron, multi-thread, default CLI, and custom
+        // --option_key CLI workers (cli_send normalizes those onto this
+        // prefix) — lives in wp_options as fluentcrm_is_sending_*. A fixed
+        // list left custom-key workers invisible here, so their claimed rows
+        // could be stale-reset mid-batch during long rate-limit waits.
+        // Reading straight from the table is deliberate: the DB CAS lock
+        // never writes to the object-cache/instant-options layers, which
+        // would miss a live sender — letting recovery reset its rows.
+        $lockValues = $wpdb->get_col(
+            "SELECT option_value FROM {$wpdb->options} WHERE option_name LIKE 'fluentcrm\\_is\\_sending\\_%'"
+        );
+
+        foreach ((array) $lockValues as $lockedAt) {
             // A non-empty timestamp inside the freshness window means a sender
             // appears active, so stale recovery should defer to the next tick.
-            if ($lockedAt && ($now - $lockedAt) <= $freshWindow) {
+            if ($lockedAt && ($now - (int) $lockedAt) <= $freshWindow) {
                 return true;
             }
         }
@@ -500,7 +541,10 @@ class Scheduler
                 return false;
             }
 
-            $campaignProcessingChunk = (int)apply_filters('fluent_crm/five_minute_campaign_processing_chunk', 20, $campaign);
+            // 50 per chunk since materialization moved to one bulk INSERT per
+            // chunk (no per-row LONGTEXT copy) — the old 20 was sized for
+            // 20 single-row inserts carrying full body copies.
+            $campaignProcessingChunk = (int)apply_filters('fluent_crm/five_minute_campaign_processing_chunk', 50, $campaign);
             if ($campaignProcessingChunk < 1) {
                 $campaignProcessingChunk = 1;
             }
