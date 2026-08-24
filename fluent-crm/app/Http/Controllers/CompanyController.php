@@ -545,41 +545,6 @@ class CompanyController extends Controller
         return $url;
     }
 
-    /**
-     * Returns true only if the URL resolves to a public, routable IP address.
-     * Blocks private/reserved ranges to prevent SSRF attacks.
-     */
-    private function isSSRFSafeUrl($url)
-    {
-        $parsed = wp_parse_url($url);
-        if (!$parsed || empty($parsed['host'])) {
-            return false;
-        }
-
-        $scheme = strtolower($parsed['scheme'] ?? '');
-        if (!in_array($scheme, ['http', 'https'])) {
-            return false;
-        }
-
-        $host = $parsed['host'];
-        // Strip IPv6 brackets if present
-        $host = trim($host, '[]');
-
-        // If it looks like a raw IP, validate directly; otherwise resolve the hostname
-        if (filter_var($host, FILTER_VALIDATE_IP)) {
-            $ip = $host;
-        } else {
-            $ip = gethostbyname($host);
-            // gethostbyname() returns the original string on failure
-            if ($ip === $host && !filter_var($ip, FILTER_VALIDATE_IP)) {
-                return false;
-            }
-        }
-
-        // Reject private, loopback, link-local, and other reserved ranges
-        return (bool) filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE);
-    }
-
     private function getLogoWebsiteUrl($url)
     {
         if (!$url) {
@@ -587,114 +552,95 @@ class CompanyController extends Controller
         }
 
         $url = $this->makeHttpUrl($url);
-
-        if (!$this->isSSRFSafeUrl($url)) {
+        $requestArgs = [
+            'sslverify'           => false,
+            'timeout'             => 5,
+            'redirection'         => 2,
+            'limit_response_size' => 1024 * 1024,
+            'user-agent'          => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3'
+        ];
+        $response = wp_safe_remote_get($url, $requestArgs);
+        if (is_wp_error($response) || !$this->isSuccessfulRemoteResponse($response)) {
             return NULL;
         }
 
-        $response = wp_remote_get($url, [
-            'sslverify'  => false, // Disable SSL verification to avoid 403 Forbidden error
-            'timeout'    => 10, // Set a timeout of 10 seconds
-            'user-agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3' // Set a User-Agent header to avoid 403 Forbidden error
-        ]);
-
-        // Check for errors in the response
-        if (is_wp_error($response)) {
-            return NULL;
-        }
-
-        // Extract the HTML content from the response
         $html = wp_remote_retrieve_body($response);
+        if (!is_string($html) || strlen($html) > 1024 * 1024) {
+            return NULL;
+        }
 
         preg_match('/<link rel="apple-touch-icon"(?:.*?)href="([^"]+)"/i', $html, $matches);
-        // Use regular expressions to find the logo image URL
         if (!isset($matches[1])) {
             preg_match('/<link rel="(?:shortcut|icon)"(?:.*?)href="([^"]+)"/i', $html, $matches);
         }
+        if (empty($matches[1])) {
+            return NULL;
+        }
+        $logoUrl = \WP_Http::make_absolute_url(html_entity_decode($matches[1], ENT_QUOTES), $url);
 
-        // If a logo URL is found, download the image to the uploads directory
-        if (isset($matches[1])) {
-            $logoUrl = $matches[1];
-
-            // Resolve relative URLs against the base domain
-            if (!preg_match('/^https?:\/\//i', $logoUrl)) {
-                $parsedBase = wp_parse_url($url);
-                $baseOrigin = ($parsedBase['scheme'] ?? 'https') . '://' . ($parsedBase['host'] ?? '');
-                $logoUrl = $baseOrigin . '/' . ltrim($logoUrl, '/');
-            }
-
-            $extension = strtolower(substr($logoUrl, strrpos($logoUrl, '.') + 1));
-            if (!in_array($extension, ['png', 'jpg', 'jpeg', 'gif', 'ico'])) {
-                return NULL;
-            }
-
-            // Block SSRF on the logo URL too (the link tag href may point to a different host)
-            if (!$this->isSSRFSafeUrl($logoUrl)) {
-                return NULL;
-            }
-
-            $uploadDir = wp_upload_dir(); // Get the uploads directory
-
-            $filename = md5($url . time()) . '-' . basename($logoUrl); // Get the filename from the URL
-            $filepath = $uploadDir['basedir'] . '/fluentcrm/' . $filename; // Combine the uploads directory path with the filename
-
-            // Download the image using wp_remote_get() and save it to the uploads directory
-            $image = wp_remote_get($logoUrl, [
-                'timeout'   => 10, // Set a timeout of 10 seconds
-                'sslverify' => false // Disable SSL verification to avoid 403 Forbidden error
-            ]);
-
-            if (!is_wp_error($image)) {
-                // Check if the downloaded file is actually an image
-                $headers = wp_remote_retrieve_headers($image);
-                $imageBody = wp_remote_retrieve_body($image);
-                if (defined('FILEINFO_MIME_TYPE') && class_exists('\finfo')) {
-                    $finfo = new \finfo(FILEINFO_MIME_TYPE);
-                    $content_type = $finfo->buffer($imageBody);
-                } else {
-                    $content_type = wp_remote_retrieve_header($headers, 'content-type');
-                    if (!$content_type) {
-                        $content_type = Arr::get($headers, 'content-type');
-                    }
-
-                    if (strpos($content_type, 'image/') !== 0) {
-                        return null;
-                    }
-
-                    // Temporary file to validate the image
-                    $tmpFilePath = tempnam(sys_get_temp_dir(), 'tmpimg');
-                    file_put_contents($tmpFilePath, $imageBody);
-                    $imgSize = getimagesize($tmpFilePath);
-                    wp_delete_file($tmpFilePath);
-                    if (!$imgSize) {
-                        return null;
-                    }
-                }
-
-                if (strpos($content_type, 'image/') === 0) {
-                    global $wp_filesystem;
-                    if (!$wp_filesystem) {
-                        require_once(ABSPATH . '/wp-admin/includes/file.php');
-                        WP_Filesystem();
-                    }
-
-                    FileSystem::setCustomUploadDir([
-                        'baseurl' => $uploadDir['baseurl'],
-                        'basedir' => $uploadDir['basedir'],
-                    ]);
-
-                    $wp_filesystem->put_contents($filepath, $imageBody);
-                    // Return the URL of the saved image
-                    return $uploadDir['baseurl'] . FLUENTCRM_UPLOAD_DIR . '/' . $filename;
-                } else {
-                    // If the downloaded file is not an image, delete the file and return null
-                    wp_delete_file($filepath);
-                }
-            }
+        $image = wp_safe_remote_get($logoUrl, array_merge($requestArgs, [
+            'limit_response_size' => 5 * 1024 * 1024,
+        ]));
+        if (is_wp_error($image) || !$this->isSuccessfulRemoteResponse($image)) {
+            return NULL;
         }
 
-        // If no logo URL is found, or if an error occurs, or if the downloaded file is not an image, return null
-        return NULL;
+        $imageBody = wp_remote_retrieve_body($image);
+        if (!is_string($imageBody) || $imageBody === '' || strlen($imageBody) > 5 * 1024 * 1024) {
+            return NULL;
+        }
+
+        $imageInfo = @getimagesizefromstring($imageBody);
+        if (!$imageInfo || empty($imageInfo[2])) {
+            return NULL;
+        }
+
+        $extensions = [
+            IMAGETYPE_GIF  => 'gif',
+            IMAGETYPE_JPEG => 'jpg',
+            IMAGETYPE_PNG  => 'png',
+        ];
+        if (defined('IMAGETYPE_ICO')) {
+            $extensions[IMAGETYPE_ICO] = 'ico';
+        }
+        $extension = Arr::get($extensions, $imageInfo[2]);
+        if (!$extension) {
+            return NULL;
+        }
+
+        $uploadDir = wp_upload_dir();
+        if (!empty($uploadDir['error'])) {
+            return NULL;
+        }
+
+        FileSystem::setCustomUploadDir([
+            'baseurl' => $uploadDir['baseurl'],
+            'basedir' => $uploadDir['basedir'],
+        ]);
+
+        global $wp_filesystem;
+        if (!$wp_filesystem) {
+            require_once(ABSPATH . '/wp-admin/includes/file.php');
+            WP_Filesystem();
+        }
+        if (!$wp_filesystem) {
+            return NULL;
+        }
+
+        $filename = 'company-logo-' . strtolower(wp_generate_uuid4()) . '.' . $extension;
+        $filepath = $uploadDir['basedir'] . FLUENTCRM_UPLOAD_DIR . '/' . $filename;
+        if (!$wp_filesystem->put_contents($filepath, $imageBody)) {
+            wp_delete_file($filepath);
+            return NULL;
+        }
+
+        return $uploadDir['baseurl'] . FLUENTCRM_UPLOAD_DIR . '/' . $filename;
+    }
+
+    private function isSuccessfulRemoteResponse(array $response)
+    {
+        $responseCode = wp_remote_retrieve_response_code($response);
+        return $responseCode >= 200 && $responseCode < 300;
     }
 
     public function getNotes()

@@ -8,7 +8,7 @@ class EmailPatternPolicy extends BasePolicy
 {
     public function verifyRequest(Request $request)
     {
-        if ($request->method() == 'GET') {
+        if ($this->requestMethod($request) == 'GET') {
             return $this->currentUserCan('fcrm_read_emails');
         }
 

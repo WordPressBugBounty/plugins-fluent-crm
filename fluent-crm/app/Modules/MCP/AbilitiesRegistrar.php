@@ -529,7 +529,7 @@ class AbilitiesRegistrar
                 ],
                 'execute_callback'    => [ContactTools::class, 'deleteContactNote'],
                 'permission_callback' => function () {
-                    return PermissionManager::currentUserCan('fcrm_manage_contacts');
+                    return PermissionManager::currentUserCan('fcrm_manage_contacts_delete');
                 },
                 'annotations' => ['destructive' => true, 'openWorldHint' => false],
             ],

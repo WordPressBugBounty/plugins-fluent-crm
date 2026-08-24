@@ -152,6 +152,9 @@ class AdminMenu
                 array($this, 'render')
             );
 
+        }
+
+        if (in_array('fcrm_read_emails', $permissions) || in_array('fcrm_manage_email_templates', $permissions)) {
             add_submenu_page(
                 'fluentcrm-admin',
                 __('Email Templates', 'fluent-crm'),
@@ -320,6 +323,12 @@ class AdminMenu
         });
     }
 
+    /**
+     * Build capability-filtered FluentCRM navigation for the current user.
+     *
+     * @param string|null $urlBase
+     * @return array
+     */
     public function getMenuItems($urlBase = null)
     {
         if (!$urlBase) {
@@ -406,11 +415,14 @@ class AdminMenu
             $menuItems[] = $contactMenu;
         }
 
-        if (in_array('fcrm_read_emails', $permissions)) {
+        $canReadEmails = in_array('fcrm_read_emails', $permissions);
+        $canManageTemplates = in_array('fcrm_manage_email_templates', $permissions);
+
+        if ($canReadEmails || $canManageTemplates) {
             $campaignMenu = [
                 'key'          => 'campaigns',
                 'label'        => __('Emails', 'fluent-crm'),
-                'permalink'    => $urlBase . 'email/campaigns',
+                'permalink'    => $urlBase . ($canReadEmails ? 'email/campaigns' : 'email/templates'),
                 'layout_class' => 'fc_1_col_menu'
             ];
 
@@ -446,7 +458,7 @@ class AdminMenu
                     'key'         => 'email_templates',
                     'label'       => __('Templates', 'fluent-crm'),
                     'permalink'   => $urlBase . 'email/templates',
-                    'description' => __('Create email templates to use as a starting point in your emails', 'fluent-crm'),
+                    'description' => __('Browse reusable email templates for your emails', 'fluent-crm'),
                     'icon'        => '<svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
                         <path d="M4.75 7H15.25V4.75H4.75V7ZM11.5 15.25V8.5H4.75V15.25H11.5ZM13 15.25H15.25V8.5H13V15.25ZM4 3.25H16C16.1989 3.25 16.3897 3.32902 16.5303 3.46967C16.671 3.61032 16.75 3.80109 16.75 4V16C16.75 16.1989 16.671 16.3897 16.5303 16.5303C16.3897 16.671 16.1989 16.75 16 16.75H4C3.80109 16.75 3.61032 16.671 3.46967 16.5303C3.32902 16.3897 3.25 16.1989 3.25 16V4C3.25 3.80109 3.32902 3.61032 3.46967 3.46967C3.61032 3.32902 3.80109 3.25 4 3.25V3.25Z" fill="currentColor"/>
                         </svg>'
@@ -470,6 +482,15 @@ class AdminMenu
                         </svg>'
                 ]
             ];
+
+            // Email readers may browse templates; template CRUD remains separately capability-scoped.
+            $campaignMenu['sub_items'] = array_values(array_filter($campaignMenu['sub_items'], function ($item) use ($canReadEmails, $canManageTemplates) {
+                if ($item['key'] === 'email_templates') {
+                    return $canReadEmails || $canManageTemplates;
+                }
+
+                return $canReadEmails;
+            }));
 
             $menuItems[] = $campaignMenu;
         }

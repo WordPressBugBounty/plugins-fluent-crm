@@ -434,7 +434,7 @@ $router->prefix('import')->withPolicy('ImportUserPolicy')->group(function ($rout
     $router->post('csv-upload', [CsvController::class, 'upload']);
     $router->post('csv-import', [CsvController::class, 'import']);
 
-    $router->post('users', [UsersController::class, 'import']);
+    $router->post('users', [UsersController::class, 'importUsers']);
 
     $router->get('drivers', [ImporterController::class, 'getDrivers']);
     $router->get('drivers/{driver}', [ImporterController::class, 'getDriver'])->alphaNumDash('driver');

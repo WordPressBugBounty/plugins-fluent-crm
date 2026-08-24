@@ -259,6 +259,7 @@ return array(
     'FluentCrm\\App\\Services\\Libs\\Parser\\Parser' => $baseDir . '/app/Services/Libs/Parser/Parser.php',
     'FluentCrm\\App\\Services\\Libs\\Parser\\ShortcodeParser' => $baseDir . '/app/Services/Libs/Parser/ShortcodeParser.php',
     'FluentCrm\\App\\Services\\PermissionManager' => $baseDir . '/app/Services/PermissionManager.php',
+    'FluentCrm\\App\\Services\\RemoteTemplateFetcher' => $baseDir . '/app/Services/RemoteTemplateFetcher.php',
     'FluentCrm\\App\\Services\\Reporting' => $baseDir . '/app/Services/Reporting.php',
     'FluentCrm\\App\\Services\\ReportingHelperTrait' => $baseDir . '/app/Services/ReportingHelperTrait.php',
     'FluentCrm\\App\\Services\\RoleBasedTagging' => $baseDir . '/app/Services/RoleBasedTagging.php',

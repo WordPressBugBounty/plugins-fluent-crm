@@ -2,9 +2,9 @@
 Contributors: techjewel,adreastrian,heera,wpmanageninja
 Tags: email marketing, newsletter, crm, email newsletter, subscribers
 Requires at least: 5.0
-Tested up to: 7.0
+Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 3.1.10
+Stable tag: 3.1.13
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -260,6 +260,10 @@ You can report any security bugs found in the source code of FluentCRM plugins t
 10. Pro Integrations
 
 == Changelog ==
+
+= 3.1.13 (Date: August 24, 2026) =
+- Internal Changes for Messaging Platforms Features
+- Route Policies Improvements for Roles and Permissions
 
 = 3.1.10 (Date: July 27, 2026) =
 - Improvement: Campaigns start sending immediately instead of waiting for the next cron tick.

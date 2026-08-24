@@ -42,4 +42,37 @@ class CustomFieldsPolicy extends BasePolicy
     {
         return !empty(PermissionManager::currentUserPermissions());
     }
+
+    /**
+     * Authorize global label creation for settings or email managers.
+     *
+     * @param Request $request
+     * @return bool
+     */
+    public function create(Request $request)
+    {
+        return $this->verifyRequest($request) || $this->currentUserCan('fcrm_manage_emails');
+    }
+
+    /**
+     * Authorize global label updates for settings or email managers.
+     *
+     * @param Request $request
+     * @return bool
+     */
+    public function update(Request $request)
+    {
+        return $this->verifyRequest($request) || $this->currentUserCan('fcrm_manage_emails');
+    }
+
+    /**
+     * Authorize global label deletion for settings or email delete managers.
+     *
+     * @param Request $request
+     * @return bool
+     */
+    public function delete(Request $request)
+    {
+        return $this->verifyRequest($request) || $this->currentUserCan('fcrm_manage_email_delete');
+    }
 }

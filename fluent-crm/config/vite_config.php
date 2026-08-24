@@ -699,6 +699,10 @@
         'file' => 'data_config.js',
         'name' => 'data_config'
     ],
+    '_emailPermissions.js' => [
+        'file' => 'emailPermissions.js',
+        'name' => 'emailPermissions'
+    ],
     '_fc-bits-ui.js' => [
         'file' => 'fc-bits-ui.js',
         'name' => 'fc-bits-ui',
@@ -760,13 +764,13 @@
             'flags@2x.webp'
         ]
     ],
-    'node_modules/.pnpm/intl-tel-input@26.9.2/node_modules/intl-tel-input/build/img/flags.webp' => [
+    'node_modules/.pnpm/intl-tel-input@26.9.1/node_modules/intl-tel-input/build/img/flags.webp' => [
         'file' => 'flags.webp',
-        'src' => 'node_modules/.pnpm/intl-tel-input@26.9.2/node_modules/intl-tel-input/build/img/flags.webp'
+        'src' => 'node_modules/.pnpm/intl-tel-input@26.9.1/node_modules/intl-tel-input/build/img/flags.webp'
     ],
-    'node_modules/.pnpm/intl-tel-input@26.9.2/node_modules/intl-tel-input/build/img/flags@2x.webp' => [
+    'node_modules/.pnpm/intl-tel-input@26.9.1/node_modules/intl-tel-input/build/img/flags@2x.webp' => [
         'file' => 'flags@2x.webp',
-        'src' => 'node_modules/.pnpm/intl-tel-input@26.9.2/node_modules/intl-tel-input/build/img/flags@2x.webp'
+        'src' => 'node_modules/.pnpm/intl-tel-input@26.9.1/node_modules/intl-tel-input/build/img/flags@2x.webp'
     ],
     'resources/admin/Modules/Dashboard/Dashboard.vue' => [
         'file' => 'admin/Modules/Dashboard/Dashboard.js',
@@ -827,6 +831,7 @@
             'resources/v3app/src/Modules/Contacts/Filter/FilterPopover.vue',
             'resources/v3app/src/Modules/Contacts/Filter/ActiveFiltersBar.vue',
             '_Badge.js',
+            '_emailPermissions.js',
             '_PreviewIframeBuilder.js'
         ]
     ],
@@ -878,6 +883,7 @@
             '_Confirm.js',
             '_PaginationBar.js',
             '_InlineDoc.js',
+            '_emailPermissions.js',
             '_fc-bits-ui.js',
             '_EmailPreview.js',
             '_TopNav.js',
@@ -953,7 +959,8 @@
             '_TopNav.js',
             '_PageHeader.js',
             '_DataTable.js',
-            '_FloatingBulkActionShell.js'
+            '_FloatingBulkActionShell.js',
+            '_emailPermissions.js'
         ]
     ],
     'resources/admin/Modules/Email/EmailSequences/EditEmail.vue' => [
@@ -1013,6 +1020,7 @@
             '_PageHeader.js',
             '_fc-bits-ui.js',
             '_BaseCard.js',
+            '_emailPermissions.js',
             '_PaginationBar.js',
             '_Confirm.js',
             'resources/admin/Modules/Email/Campaigns/_components/EmailPreview.vue',
@@ -1041,6 +1049,7 @@
             '_FloatingBulkActionShell.js',
             '_Confirm.js',
             '_Badge.js',
+            '_emailPermissions.js',
             '_PageHeader.js',
             '_fc-bits.js'
         ]
@@ -1094,6 +1103,7 @@
             '_vendor.js',
             '_EmailPreview.js',
             '_PaginationBar.js',
+            '_emailPermissions.js',
             '_fc-bits-ui.js',
             '_PreviewIframeBuilder.js',
             '_TestEmail.js',
@@ -1118,6 +1128,7 @@
             '__LinkMetrics.js',
             '_ReadableRecipientTagger.js',
             '_PageHeader.js',
+            '_emailPermissions.js',
             '_input-popover-dropdown.js',
             '__FormBuilder2.js',
             '_PhotoWidget.js',
@@ -1181,6 +1192,7 @@
             '_Confirm.js',
             '_PaginationBar.js',
             '_DataTable.js',
+            '_emailPermissions.js',
             '_fc-bits-ui.js',
             '_TopNav.js',
             '_Badge.js',
@@ -1218,6 +1230,7 @@
             '_vendor-element-plus.js',
             '_vendor.js',
             '_TestEmail.js',
+            '_emailPermissions.js',
             '_fc-bits-ui.js'
         ]
     ],
@@ -2332,7 +2345,8 @@
             '_fc-bits-ui.js',
             '_PageHeader.js',
             'resources/v3app/src/Modules/Contacts/Filter/FilterPopover.vue',
-            'resources/v3app/src/Modules/Contacts/Filter/ActiveFiltersBar.vue'
+            'resources/v3app/src/Modules/Contacts/Filter/ActiveFiltersBar.vue',
+            '_emailPermissions.js'
         ]
     ],
     'resources/v3app/src/Modules/SMS/Campaigns/Campaigns.vue' => [
@@ -2353,7 +2367,8 @@
             '_Badge.js',
             'resources/v3app/src/Modules/Contacts/Filter/FilterPopover.vue',
             'resources/v3app/src/Modules/Contacts/Filter/ActiveFiltersBar.vue',
-            '_PageHeader.js'
+            '_PageHeader.js',
+            '_emailPermissions.js'
         ]
     ],
     'resources/v3app/src/Modules/SMS/Campaigns/CreateFlow.vue' => [
@@ -2395,6 +2410,7 @@
             '_vendor-element-plus.js',
             '_vendor.js',
             '_ReadableRecipientTagger.js',
+            '_emailPermissions.js',
             '_fc-bits-ui.js',
             '_PaginationBar.js',
             '_DataTable.js',

@@ -11,7 +11,7 @@ class ComposerStaticInit3ec9aaa182e9c7febe2801c6e81775d2
     );
 
     public static $prefixLengthsPsr4 = array (
-        'F' =>
+        'F' => 
         array (
             'FluentCrm\\Includes\\' => 19,
             'FluentCrm\\Framework\\' => 20,
@@ -20,16 +20,16 @@ class ComposerStaticInit3ec9aaa182e9c7febe2801c6e81775d2
     );
 
     public static $prefixDirsPsr4 = array (
-        'FluentCrm\\Includes\\' =>
+        'FluentCrm\\Includes\\' => 
         array (
             0 => __DIR__ . '/../..' . '/includes',
         ),
-        'FluentCrm\\Framework\\' =>
+        'FluentCrm\\Framework\\' => 
         array (
             0 => __DIR__ . '/..' . '/wpfluent/framework/src/WPFluent',
             1 => __DIR__ . '/..' . '/wpfluent/framework/src/WPFluent',
         ),
-        'FluentCrm\\App\\' =>
+        'FluentCrm\\App\\' => 
         array (
             0 => __DIR__ . '/../..' . '/app',
         ),
@@ -289,6 +289,7 @@ class ComposerStaticInit3ec9aaa182e9c7febe2801c6e81775d2
         'FluentCrm\\App\\Services\\Libs\\Parser\\Parser' => __DIR__ . '/../..' . '/app/Services/Libs/Parser/Parser.php',
         'FluentCrm\\App\\Services\\Libs\\Parser\\ShortcodeParser' => __DIR__ . '/../..' . '/app/Services/Libs/Parser/ShortcodeParser.php',
         'FluentCrm\\App\\Services\\PermissionManager' => __DIR__ . '/../..' . '/app/Services/PermissionManager.php',
+        'FluentCrm\\App\\Services\\RemoteTemplateFetcher' => __DIR__ . '/../..' . '/app/Services/RemoteTemplateFetcher.php',
         'FluentCrm\\App\\Services\\Reporting' => __DIR__ . '/../..' . '/app/Services/Reporting.php',
         'FluentCrm\\App\\Services\\ReportingHelperTrait' => __DIR__ . '/../..' . '/app/Services/ReportingHelperTrait.php',
         'FluentCrm\\App\\Services\\RoleBasedTagging' => __DIR__ . '/../..' . '/app/Services/RoleBasedTagging.php',

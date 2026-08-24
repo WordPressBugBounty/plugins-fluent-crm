@@ -55,7 +55,7 @@ class UsersController extends Controller
         ]);
     }
 
-    public function import(Request $request)
+    public function importUsers(Request $request)
     {
         $inputs = $request->only([
             'map', 'tags', 'lists', 'roles', 'update', 'new_status', 'double_optin_email', 'import_silently'

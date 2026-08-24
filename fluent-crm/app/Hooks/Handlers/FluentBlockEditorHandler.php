@@ -1067,7 +1067,7 @@ class FluentBlockEditorHandler
     }
 
     /**
-     * Get editor feature flags based on content type.
+     * Get editor feature flags based on content type and current-user permissions.
      * This is the single source of truth for which UI elements show per context.
      *
      * @param string $context  block_type: campaign, template, email_pattern, recurring_campaign, sequence_mail, email_body_in_funnel
@@ -1116,8 +1116,15 @@ class FluentBlockEditorHandler
         ];
 
         $features = isset($presets[$context]) ? $presets[$context] : $emailDefaults;
+        $features = apply_filters('fluent_crm/block_editor_features', $features, $context);
 
-        return apply_filters('fluent_crm/block_editor_features', $features, $context);
+        // Template CRUD has its own capability, but preview renders through CampaignPolicy endpoints.
+        // Publish this restriction in the iframe boot data so Gutenberg never exposes a forbidden action.
+        if ($context === 'template' && !PermissionManager::currentUserCan('fcrm_manage_emails')) {
+            $features['email_preview'] = false;
+        }
+
+        return $features;
     }
 
     private function getAiWritingConfig()
