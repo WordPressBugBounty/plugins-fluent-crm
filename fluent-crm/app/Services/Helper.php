@@ -5,6 +5,7 @@ namespace FluentCrm\App\Services;
 use FluentCrm\App\Models\Campaign;
 use FluentCrm\App\Models\Lists;
 use FluentCrm\App\Models\Subscriber;
+use FluentCrm\App\Models\SubscriberMeta;
 use FluentCrm\App\Models\SubscriberPivot;
 use FluentCrm\App\Models\SystemLog;
 use FluentCrm\App\Models\Tag;
@@ -12,6 +13,7 @@ use FluentCrm\App\Models\Template;
 use FluentCrm\App\Models\UrlStores;
 use FluentCrm\App\Models\Webhook;
 use FluentCrm\App\Services\BlockRender\BlockEditorHelper;
+use FluentCrm\Framework\Http\Request\Request;
 use FluentCrm\Framework\Support\Arr;
 use FluentCrm\Framework\Support\Str;
 
@@ -66,6 +68,61 @@ class Helper
         }
 
         return $default;
+    }
+
+    /**
+     * Normalize a request-supplied sort column or direction into a single
+     * identifier the query builder will accept, falling back to a
+     * caller-chosen default.
+     *
+     * Every consumer of this value is orderBy($column, $direction), which
+     * rejects anything outside /^[a-zA-Z0-9_\.]+$/ with a LogicException. Three
+     * separate shapes of request input used to reach it and produce an HTTP 500
+     * instead of the intended default sort:
+     *
+     *   - junk        sanitize_sql_orderby() returns `false` (not '', not the
+     *                 input), and `false` was passed straight through
+     *   - an array    sort_by[]=a&sort_by[]=b reached preg_match() inside
+     *                 sanitize_sql_orderby() and raised a TypeError
+     *   - a clause    sanitize_sql_orderby() *accepts* 'id DESC',
+     *                 'first_name ASC, id DESC' and 'RAND()' and returns them
+     *                 verbatim — all three the builder then rejects
+     *
+     * The last one is why sanitize_sql_orderby() alone is not enough here: it
+     * validates a whole ORDER BY clause, while the builder wants one column.
+     * Anything carrying a space, comma or parenthesis therefore falls back to
+     * the default rather than reaching orderBy(). Nothing can depend on the old
+     * behaviour, because every such value raised a 500.
+     *
+     * This is a robustness guard, not a security boundary. The builder's own
+     * identifier check is what keeps hostile input out of SQL — it never
+     * reached MySQL before this change either — and it remains in place.
+     *
+     * @param mixed $value Raw request value; arrays, objects and null are rejected.
+     * @param string $default Column or direction to use when $value is unusable.
+     * @return string
+     */
+    public static function sanitizeOrderBy($value, $default = 'id')
+    {
+        if (!is_scalar($value)) {
+            return $default;
+        }
+
+        $value = trim((string)$value);
+        if ($value === '') {
+            return $default;
+        }
+
+        $sanitized = sanitize_sql_orderby($value);
+
+        // sanitize_sql_orderby() validates a clause; orderBy() wants a single
+        // identifier. Re-check against the builder's own rule so a value it
+        // would throw on can never leave this method.
+        if (!is_string($sanitized) || !preg_match('/^[a-zA-Z0-9_\.]+$/', $sanitized)) {
+            return $default;
+        }
+
+        return $sanitized;
     }
 
     /**
@@ -211,6 +268,171 @@ class Helper
         return wp_generate_uuid4();
     }
 
+    /**
+     * Resolved managed hashes for this process, keyed by contact id.
+     *
+     * The managed hash is stable for the life of the contact (rotated only by
+     * Cleanup::handleUserPasswordChanged), so caching it per process is safe.
+     */
+    private static $managedHashes = [];
+
+    /**
+     * Contact ids announced by primeManagedHashes() but not resolved yet.
+     *
+     * Holding ids here rather than reading them immediately keeps priming free:
+     * a batch that never asks for a hash (a transactional campaign, or a site
+     * that filters the List-Unsubscribe header off) issues no query and creates
+     * no rows.
+     */
+    private static $pendingManagedHashes = [];
+
+    /**
+     * Announce the contact ids a batch is about to render emails for, so their
+     * managed hashes can be resolved in one round trip instead of one per email.
+     *
+     * Runs NO query itself. The first getManagedHash() call for any announced id
+     * resolves the whole announced set together — one SELECT, plus one bulk
+     * INSERT for whichever contacts still need a hash.
+     *
+     * REPLACES the announced set rather than adding to it, and callers must
+     * clear it when their batch ends (clearPendingManagedHashes). Announced ids
+     * are only ever a hint about what is about to be asked for, so they must not
+     * outlive the batch that announced them: a batch that asks for no hash at
+     * all — a transactional campaign, or a site filtering the List-Unsubscribe
+     * header off — would otherwise leave its ids queued for whatever asks next,
+     * and a single later lookup would create rows for every contact those
+     * batches deliberately skipped.
+     *
+     * @param array|\FluentCrm\Framework\Support\Collection $contactIds
+     * @return void
+     */
+    public static function primeManagedHashes($contactIds)
+    {
+        self::$pendingManagedHashes = [];
+
+        foreach ($contactIds as $contactId) {
+            $contactId = (int)$contactId;
+
+            if (!$contactId || isset(self::$managedHashes[$contactId])) {
+                continue;
+            }
+
+            self::$pendingManagedHashes[$contactId] = true;
+        }
+    }
+
+    /**
+     * Discard any announced-but-unresolved ids.
+     *
+     * Called when a batch ends, so nothing it announced can be resolved — and
+     * created — on behalf of an unrelated later lookup in the same process.
+     * Already-resolved hashes stay cached; only the pending hint is dropped.
+     *
+     * @return void
+     */
+    public static function clearPendingManagedHashes()
+    {
+        self::$pendingManagedHashes = [];
+    }
+
+    /**
+     * The contact's managed hash, creating one if it does not exist yet.
+     *
+     * Backs fluentCrmGetContactManagedHash(). The hash authenticates
+     * List-Unsubscribe and manage-subscription links, so it must stay stable
+     * however long an email sits in an inbox — it is rotated only on an explicit
+     * security event (a WordPress password change).
+     *
+     * @param int $contactId
+     * @return string
+     */
+    public static function getManagedHash($contactId)
+    {
+        $contactId = (int)$contactId;
+
+        if (isset(self::$managedHashes[$contactId])) {
+            return self::$managedHashes[$contactId];
+        }
+
+        // Resolve this contact together with everything the current batch
+        // announced. When nothing was primed this is exactly the old
+        // one-contact SELECT (+ INSERT), so unbatched callers cost the same.
+        self::resolveManagedHashes(array_merge(array_keys(self::$pendingManagedHashes), [$contactId]));
+
+        return isset(self::$managedHashes[$contactId]) ? self::$managedHashes[$contactId] : '';
+    }
+
+    /**
+     * Read the stored hashes for $contactIds and create the missing ones.
+     *
+     * The SELECT sits immediately before the INSERT, exactly as the
+     * single-contact path always has, so batching does not widen the window in
+     * which two processes can both decide a contact needs a new hash. A
+     * duplicate row is not a broken link either way — hashes are validated by
+     * value lookup (Contacts::getContactByManagedSecureHash), so both resolve to
+     * the same contact.
+     *
+     * @param array $contactIds
+     * @return void
+     */
+    private static function resolveManagedHashes($contactIds)
+    {
+        $contactIds = array_values(array_unique(array_filter(array_map('intval', $contactIds))));
+
+        // Every announced id is handled by this call, whether or not it turns
+        // out to need a new row. Clear the queue first so an unexpected failure
+        // cannot leave ids pending forever.
+        self::$pendingManagedHashes = [];
+
+        $contactIds = array_values(array_filter($contactIds, function ($contactId) {
+            return !isset(self::$managedHashes[$contactId]);
+        }));
+
+        if (!$contactIds) {
+            return;
+        }
+
+        $existing = SubscriberMeta::where('key', '_secure_managed_hash')
+            ->whereIn('subscriber_id', $contactIds)
+            ->get();
+
+        foreach ($existing as $meta) {
+            self::$managedHashes[(int)$meta->subscriber_id] = $meta->value;
+        }
+
+        $now = current_time('mysql');
+        $newRows = [];
+
+        foreach ($contactIds as $contactId) {
+            if (isset(self::$managedHashes[$contactId])) {
+                continue;
+            }
+
+            $hash = md5(wp_generate_uuid4() . '_' . $contactId . '_' . '_' . time()) . '__' . $contactId;
+
+            $newRows[] = [
+                'subscriber_id' => $contactId,
+                'created_by'    => 0,
+                'key'           => '_secure_managed_hash',
+                'object_type'   => 'option',
+                'value'         => $hash,
+                'created_at'    => $now,
+                'updated_at'    => $now
+            ];
+
+            self::$managedHashes[$contactId] = $hash;
+        }
+
+        if ($newRows) {
+            // One bulk INSERT. Safe to bypass the ORM here: SubscriberMeta
+            // registers no creating/created hooks, timestamps are set
+            // explicitly, and the only mutator on this table
+            // (setValueAttribute -> maybe_serialize) is a no-op for the plain
+            // string these rows carry.
+            SubscriberMeta::insert($newRows);
+        }
+    }
+
     public static function injectTrackerPixel($emailBody, $hash, $emailId = null)
     {
         if (!$hash) {
@@ -265,14 +487,6 @@ class Helper
                 'handler' => 'route'
             ],
         ];
-
-        if (apply_filters('fluent_crm/sms_moudle_enabled', false)) {
-            $sections['subscriber_sms'] = [
-                'name'    => 'subscriber_sms',
-                'title'   => __('SMS', 'fluent-crm'),
-                'handler' => 'route'
-            ];
-        }
 
         if (self::getPurchaseHistoryProviders()) {
             $sections['subscriber_purchases'] = [
@@ -1164,23 +1378,36 @@ class Helper
         return null;
     }
 
+    /**
+     * Resolve the active theme's editor color palette for both classic and block themes.
+     *
+     * Block themes expose their palette through WordPress' merged global settings
+     * (`wp_get_global_settings()`), which correctly accounts for parent/child theme.json
+     * overrides and Full Site Editor user customizations. Classic themes register their
+     * palette via `add_theme_support('editor-color-palette')`. Reading theme.json directly
+     * with file_get_contents() (the previous approach) bypassed this merge and missed
+     * child-theme and FSE colors, so it is no longer used.
+     *
+     * @return array List of palette items, each shaped as ['name','slug','color'].
+     *               Empty array when the theme provides no palette.
+     */
     public static function getThemeColorPalette()
     {
-        $color_palette = current((array)get_theme_support('editor-color-palette'));
-        $theme_json_path = get_theme_file_path('theme.json');
+        // Block themes: use WordPress' merged global settings (theme.json + child theme + FSE).
+        if (function_exists('wp_is_block_theme') && wp_is_block_theme() && function_exists('wp_get_global_settings')) {
+            $palette = wp_get_global_settings(['color', 'palette']);
 
-        if (file_exists($theme_json_path)) {
-            $theme_json = json_decode(file_get_contents($theme_json_path), true);
-
-            if (isset($theme_json['settings']['color']['palette'])) {
-                $color_palette = $theme_json['settings']['color']['palette'];
+            // wp_get_global_settings returns ['theme'=>..., 'default'=>..., 'custom'=>...];
+            // only the theme sub-key holds the active theme's own colors.
+            if (!empty($palette['theme'])) {
+                return (array)$palette['theme'];
             }
         }
-        if (!$color_palette) {
-            $color_palette = [];
-        }
 
-        return (array)$color_palette;
+        // Classic themes: palette registered via add_theme_support('editor-color-palette').
+        $color_palette = current((array)get_theme_support('editor-color-palette'));
+
+        return $color_palette ? (array)$color_palette : [];
     }
 
     public static function getThemeFontSizes()
@@ -1233,6 +1460,9 @@ class Helper
         $themeColors = self::getThemeColorPalette();
         if (!empty($themeColors)) {
             foreach ($themeColors as $themeColor) {
+                if (empty($themeColor['slug']) || empty($themeColor['color'])) {
+                    continue;
+                }
                 $color = $themeColor['color'];
 
                 // Converts 'palette1' to 'palette-1'
@@ -1243,8 +1473,10 @@ class Helper
 
                 $css .= ".fc_email_body .has-{$originalSlug}-background-color { background-color: {$color};}";
                 $css .= ".fc_email_body .has-{$originalSlug}-color { color: {$color};}";
+                $css .= ".fc_email_body .has-{$originalSlug}-border-color { border-color: {$color};}";
                 $css .= ".fc_email_body .has-{$slug}-background-color { background-color: {$color};}";
                 $css .= ".fc_email_body .has-{$slug}-color { color: {$color};}";
+                $css .= ".fc_email_body .has-{$slug}-border-color { border-color: {$color};}";
             }
         }
 
@@ -1262,7 +1494,7 @@ class Helper
         return $color_css;
     }
 
-    private static function normalizeColorSlug($slug)
+    public static function normalizeColorSlug($slug)
     {
         // Normalize the slug
         $slug = strtolower($slug);
@@ -1358,15 +1590,18 @@ class Helper
     {
         $currency = strtolower($currency);
         $existing = fluentcrm_get_campaign_meta($campaignId, '_campaign_revenue');
-        $data = ['orderIds' => []];
+        $data = ($existing && is_array($existing->value)) ? $existing->value : [];
 
-        if ($existing && isset($existing->value['orderIds']) && $existing->value['orderIds']) {
-            $data['orderIds'] = $existing->value['orderIds'];
-            $data[$currency] = $existing->value[$currency];
-        } else {
+        if (!isset($data['orderIds']) || !is_array($data['orderIds'])) {
+            $data['orderIds'] = [];
+        }
+
+        if (!isset($data[$currency]) || !is_numeric($data[$currency])) {
             $data[$currency] = 0;
         }
-        if (!in_array($orderId, $data['orderIds'])) {
+
+        $isRecordedOrder = in_array($orderId, $data['orderIds']);
+        if (!$isRecordedOrder) {
             $data['orderIds'][] = $orderId;
         }
 
@@ -1380,9 +1615,7 @@ class Helper
                 }
             }
         } else {
-            if ($existing && isset($existing->value['orderIds']) && in_array($orderId, $existing->value['orderIds'])) {
-                $data[$currency] = $existing->value[$currency];
-            } else {
+            if (!$isRecordedOrder) {
                 $data[$currency] += $amount;
             }
         }
@@ -1500,7 +1733,9 @@ class Helper
             $contactIds = (array)$contactIds;
         }
 
-        $subscribers = Subscriber::whereIn('id', $contactIds)->where('status', 'pending')->get();
+        // Any non-subscribed contact can be re-invited: the admin picked these rows,
+        // and only the confirmation click actually changes a status.
+        $subscribers = Subscriber::whereIn('id', $contactIds)->where('status', '!=', 'subscribed')->get();
         foreach ($subscribers as $subscriber) {
             $subscriber->sendDoubleOptinEmail();
         }
@@ -2225,6 +2460,46 @@ class Helper
         return site_url($path, $scheme);
     }
 
+    /**
+     * Format a datetime using FluentCRM's global date/time display preference.
+     *
+     * @param string $dateTime Site-local MySQL datetime.
+     * @return string
+     */
+    public static function formatDateTime($dateTime)
+    {
+        if (!$dateTime) {
+            return '';
+        }
+
+        $timestamp = strtotime($dateTime);
+
+        if (!$timestamp) {
+            return $dateTime;
+        }
+
+        if (self::isExperimentalEnabled('classic_date_time')) {
+            return date_i18n(get_option('date_format') . ' ' . get_option('time_format'), $timestamp);
+        }
+
+        $currentTimestamp = current_time('timestamp');
+        $diff = human_time_diff($timestamp, $currentTimestamp);
+
+        if ($timestamp > $currentTimestamp) {
+            return sprintf(
+                /* translators: %s: Human-readable time difference. */
+                __('in %s', 'fluent-crm'),
+                $diff
+            );
+        }
+
+        return sprintf(
+            /* translators: %s: Human-readable time difference. */
+            _x('%s ago', '%s = human-readable time difference', 'fluent-crm'),
+            $diff
+        );
+    }
+
     public static function isExperimentalEnabled($module)
     {
         $settings = self::getExperimentalSettings();
@@ -2258,7 +2533,7 @@ class Helper
             'event_tracking'          => 'no',
             'abandoned_cart'          => 'no',
             'activity_log'            => 'no',
-            'sms_module'              => 'no',
+            'messaging_module'        => 'no',
         ];
 
         $settings = get_option('_fluentcrm_experimental_settings', []);
@@ -3326,6 +3601,31 @@ class Helper
         ));
 
         return (int) $value;
+    }
+
+    /**
+     * Which companion plugins a setup-wizard request is asking to install.
+     *
+     * SetupController::CompleteWizard() and SettingsPolicy::CompleteWizard() must
+     * read these flags identically. When the policy's idea of "this request
+     * installs a plugin" is narrower than the controller's, a settings-only
+     * manager slips past the `install_plugins` gate: a boolean `true` satisfied
+     * the controller's loose `==` comparison while failing the policy's strict
+     * `===` one. A single reader is what keeps the two sides from drifting apart.
+     *
+     * The wizard posts the literal strings `yes` and `no` (the el-checkbox
+     * true-value/false-value pair in Setup.vue), so the match is strict — any
+     * other value means "do not install".
+     *
+     * @param Request $request
+     * @return array<string,bool> Keyed by plugin: `fluentform`, `fluentcart`.
+     */
+    public static function getWizardPluginInstallFlags(Request $request)
+    {
+        return [
+            'fluentform' => $request->get('install_fluentform', 'no') === 'yes',
+            'fluentcart' => $request->get('install_fluentcart', 'no') === 'yes',
+        ];
     }
 
 }

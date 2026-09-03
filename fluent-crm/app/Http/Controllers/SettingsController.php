@@ -26,6 +26,13 @@ use FluentCrm\Framework\Http\Request\Request;
  */
 class SettingsController extends Controller
 {
+    /**
+     * Number of campaigns returned to the Campaign Archive selector in one response,
+     * matching the archive's own 200-campaign ceiling. A caller may request fewer with
+     * an explicit limit, never more. Past this the selector relies on its search box.
+     */
+    const MAX_SELECTOR_CAMPAIGNS = 200;
+
     public function get(Request $request)
     {
         $existingSettings = get_option(FLUENTCRM . '-global-settings');
@@ -248,6 +255,12 @@ class SettingsController extends Controller
             return $this->sendError([
                 'message' => __('Email Body need to contains activation link', 'fluent-crm')
             ]);
+        }
+
+        // Delegated CRM settings managers do not automatically receive WordPress'
+        // unfiltered HTML authority for a public confirmation page.
+        if (!current_user_can('unfiltered_html')) {
+            $settings['after_confirm_message'] = wp_kses_post($settings['after_confirm_message']);
         }
 
         if ($listId) {
@@ -1177,16 +1190,94 @@ class SettingsController extends Controller
             \FluentCrmMigrations\ActivityLogsMigrator::migrate();
         }
 
+        // Merge over what is stored instead of replacing it. The option holds
+        // every experimental flag in one row, so a request carrying only some of
+        // them — a screen that owns a single switch, or a client whose GET failed
+        // and left it with an empty snapshot — would otherwise drop every flag it
+        // did not send, silently reverting those modules to their defaults.
+        // The raw option is merged rather than Helper::getExperimentalSettings()
+        // so that defaults and filtered values are not persisted as a side effect.
+        $stored = get_option('_fluentcrm_experimental_settings', []);
+
+        if (!$stored || !is_array($stored)) {
+            $stored = [];
+        }
+
+        $data = array_merge($stored, $data);
+
         update_option('_fluentcrm_experimental_settings', $data, 'yes');
+
+        /**
+         * Fires after the experimental module switches have been saved.
+         *
+         * The migrations above cover core's own modules. Modules that live in an
+         * add-on cannot be reached from here, so they hook this to create their
+         * tables when their switch has just been turned on.
+         *
+         * @since 3.1.12
+         *
+         * @param array $data The full settings as saved, which for a partial
+         *                    request includes the stored flags it did not carry.
+         */
+        do_action('fluent_crm/experimental_settings_saved', $data);
 
         return [
             'message' => __('Settings has been updated', 'fluent-crm')
         ];
     }
 
+    /**
+     * Campaign list for the Campaign Archive selector.
+     *
+     * Only the columns the selector renders are selected: whole campaign rows carry
+     * email_body (LONGTEXT), which made the payload ~33x larger than it needs to be.
+     *
+     * The list is bounded newest-first rather than returned whole, because the
+     * selector renders one DOM node per option — an unbounded list would degrade on a
+     * site with a long sending history. MAX_SELECTOR_CAMPAIGNS is both the default and
+     * the ceiling: an explicit $limit can only ask for fewer. Anything past that bound
+     * stays reachable through $searchBy, which the selector sends as the admin types.
+     *
+     * $includeIds are appended even when they fall outside the bound or the search, so
+     * campaigns already saved in the setting always resolve to a title instead of
+     * rendering as a bare numeric id. They are capped the same way, so they cannot be
+     * used to sidestep the bound.
+     */
     public function getCampaigns(Request $request)
     {
-        $campaigns = Campaign::orderBy('id', 'DESC')->get();
+        $columns = ['id', 'title', 'email_subject', 'status'];
+        $search = sanitize_text_field($request->get('searchBy', ''));
+        // Bounded like the page itself: without this cap a caller could bypass $limit
+        // entirely by naming every campaign here.
+        $includeIds = array_slice(
+            array_unique(array_filter(array_map('intval', (array) $request->get('include_ids', [])))),
+            0,
+            self::MAX_SELECTOR_CAMPAIGNS
+        );
+
+        // A caller-supplied limit may only narrow the page; anything absent, invalid
+        // or above the ceiling falls back to it, so the query stays bounded.
+        $limit = intval($request->get('limit', 0));
+        if ($limit <= 0 || $limit > self::MAX_SELECTOR_CAMPAIGNS) {
+            $limit = self::MAX_SELECTOR_CAMPAIGNS;
+        }
+
+        $campaigns = Campaign::select($columns)
+            ->when($search, function ($query) use ($search) {
+                // Escape LIKE wildcards (%, _) so the term matches literally.
+                global $wpdb;
+                return $query->where('title', 'LIKE', '%' . $wpdb->esc_like($search) . '%');
+            })
+            ->orderBy('id', 'DESC')
+            ->limit($limit)
+            ->get();
+
+        $missingIds = array_diff($includeIds, $campaigns->pluck('id')->toArray());
+        if ($missingIds) {
+            $campaigns = $campaigns->merge(
+                Campaign::select($columns)->whereIn('id', $missingIds)->get()
+            );
+        }
 
         return [
             'campaigns' => $campaigns

@@ -171,10 +171,26 @@ class Reporting
             ->distinct()
             ->count('subscriber_id');
 
+        /*
+         * COUNT per sequence is this query's primary output, so the two benchmark
+         * columns must be aggregated rather than added to the GROUP BY: grouping
+         * by them as well would split one sequence across several rows and make
+         * every count wrong. Selecting them unaggregated — as this did — is
+         * rejected outright under ONLY_FULL_GROUP_BY, which MySQL 8 enables by
+         * default, so the automation step report returned a 500 on most managed
+         * hosting.
+         *
+         * MAX() suits how both values are actually consumed below: benchmark_value
+         * is only tested for being greater than zero ("did this step earn
+         * anything"), and benchmark_currency only supplies a display label for the
+         * report. MAX(benchmark_value) answers the first question correctly even
+         * when only some rows in the group carry revenue, which the previous
+         * planner-chosen row did not.
+         */
         $items = FunnelMetric::select([
             'sequence_id',
-            'benchmark_currency',
-            'benchmark_value',
+            fluentCrmDb()->raw('MAX(benchmark_currency) AS benchmark_currency'),
+            fluentCrmDb()->raw('MAX(benchmark_value) AS benchmark_value'),
             fluentCrmDb()->raw('COUNT(sequence_id) AS count'),
         ])
             ->groupBy('sequence_id')

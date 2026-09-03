@@ -34,6 +34,7 @@ use FluentCrm\App\Modules\AbandonCart\SettingsController as AbandonCartSettingsC
 use FluentCrm\App\Http\Controllers\AiController;
 use FluentCrm\App\Http\Controllers\EmailPatternController;
 use FluentCrm\App\Http\Controllers\MCPSettingsController;
+// WhatsApp routes are registered by the Pro plugin's Messaging module.
 
 /*
  * /tags endpoints
@@ -236,6 +237,8 @@ $router->prefix('funnels')->withPolicy('FunnelPolicy')->group(function ($router)
 
     $router->post('funnel/save-funnel-sequences', [FunnelController::class, 'saveSequencesFallback']);
     $router->post('funnel/save-email-action-fallback', [FunnelController::class, 'saveEmailActionFallback']);
+
+    $router->post('{id}/export', [FunnelController::class, 'exportFunnel'])->int('id');
 
     $router->get('{id}', [FunnelController::class, 'getFunnel'])->int('id');
     $router->post('{id}/clone', [FunnelController::class, 'cloneFunnel'])->int('id');
@@ -488,6 +491,11 @@ $router->prefix('migrators')->withPolicy('SettingsPolicy')->group(function ($rou
     $router->post('/summary', [MigratorController::class, 'getImportSummary']);
     $router->post('/import', [MigratorController::class, 'handleImport']);
 });
+
+// The conversation inbox (`messaging/threads`) and its one-shot legacy
+// migration (`messaging/migration`) are registered by FluentCampaign Pro, in
+// app/Modules/Messaging/Http/messaging_api.php. Messaging has no free channel
+// to send on, so the models, controllers and routes live with the channels.
 
 $router->prefix('companies')->withPolicy('CompanyPolicy')->group(function ($router) {
     $router->get('/', [CompanyController::class, 'index']);

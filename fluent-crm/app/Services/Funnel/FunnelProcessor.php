@@ -76,17 +76,16 @@ class FunnelProcessor
             if (!$subscriber) {
                 return false;
             }
-        } elseif (Arr::get($subscriberData, 'status') === 'pending' && !in_array($subscriber->status, ['subscribed', 'pending'])) {
-            // This trigger runs the double opt-in flow and the contact just took the
-            // triggering action, so whatever their current status (unsubscribed,
-            // bounced, …) they re-enter the opt-in pipeline as 'pending' — that status
-            // decision belongs to this flow, and ONLY the confirmation click makes them
-            // 'subscribed'. updateStatus() (not a raw save) so transition hooks fire.
-            $subscriber->updateStatus('pending');
         }
 
-        if ($subscriber->status == 'pending') {
-            // The opt-in email itself is strictly gated on 'pending' (and throttled).
+        // This trigger runs the double opt-in flow and the contact just took the
+        // triggering action, so re-invite them whatever their current status
+        // (unsubscribed, bounced, …). No status write — only the confirmation click
+        // makes them 'subscribed'.
+        $isOptinReinvite = Arr::get($subscriberData, 'status') === 'pending'
+            && $subscriber->status != 'subscribed';
+
+        if ($isOptinReinvite) {
             $subscriber->sendDoubleOptinEmail();
         }
 
@@ -96,7 +95,15 @@ class FunnelProcessor
             // processing. Suppressed contacts on normal (non-opt-in) triggers enter as
             // 'draft' so non-email actions (tagging, notifications) still run — the
             // send-time sendable-status guard blocks any actual email to them.
-            'status' => ($subscriber->status == 'pending' || $subscriber->status == 'unsubscribed') ? 'pending' : 'draft'
+            //
+            // An opt-in re-invite ALWAYS parks, whatever status the contact retains.
+            // We just asked them to confirm, so no automation step may run until they
+            // do — previously this was implicit because the flow wrote 'pending' onto
+            // the contact first; now that it deliberately does not, bounced and
+            // complained contacts would otherwise enter as 'draft' and start running.
+            'status' => ($isOptinReinvite
+                || $subscriber->status == 'pending'
+                || $subscriber->status == 'unsubscribed') ? 'pending' : 'draft'
         ];
 
         if ($funnelSubArgs) {
@@ -511,6 +518,9 @@ class FunnelProcessor
         }
     }
 
+    /**
+     * Execute the matched conditional branch and resume the parent-level sequence flow.
+     */
     public function initChildSequences($parent, $isMatched, $subscriber, $funnelSubscriberId, $funnelMetric)
     {
         $conditionType = 'no';
@@ -582,12 +592,11 @@ class FunnelProcessor
             return false;
         }
 
-        $funnelSubscriber->last_sequence_id = $parent->id;
-        FunnelHelper::changeFunnelSubSequenceStatus($funnelSubscriberId, $parent->id);
         $funnel = $this->getFunnel($parent->funnel_id);
 
-        // we don't have next sequence so we have to loop back to the parent
-        $sequencePoints = new SequencePoints($funnel, $funnelSubscriber);
+        // Resume traversal from the conditional parent without replacing the
+        // actual child action persisted as the subscriber's latest action.
+        $sequencePoints = new SequencePoints($funnel, $funnelSubscriber, $parent->id);
 
         if ($waitTimes && $currentNextSequences = $sequencePoints->getCurrentSequences()) {
             $nextSequence = $currentNextSequences[0];

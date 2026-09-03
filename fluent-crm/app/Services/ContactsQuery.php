@@ -25,7 +25,6 @@ class ContactsQuery
             'tags'               => [],
             'lists'              => [],
             'statuses'           => [],
-            'sms_statuses'           => [],
             'has_commerce'       => false,
             'custom_fields'      => false,
             'limit'              => false,
@@ -122,15 +121,6 @@ class ContactsQuery
                 $statuses = array_intersect($statuses, fluentcrm_subscriber_statuses());
 
                 $subscribersQuery->filterByStatues($statuses);
-            }
-
-            if ($sms_statuses = $this->args['sms_statuses']) {
-                $sms_statuses = (array) $sms_statuses;
-                $subscribersQuery->where(function ($query) use ($sms_statuses) {
-                    foreach ($sms_statuses as $sms_status) {
-                        $query->orWhere('sms_status', $sms_status);
-                    }
-                });
             }
         }
 

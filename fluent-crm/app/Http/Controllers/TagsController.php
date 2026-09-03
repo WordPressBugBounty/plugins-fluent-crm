@@ -26,8 +26,8 @@ class TagsController extends Controller
     public function index(Request $request)
     {
         $order = [
-            'by'    => $request->getSafe('sort_by', 'sanitize_sql_orderby', 'id'),
-            'order' => $request->getSafe('sort_order', 'sanitize_sql_orderby', 'DESC')
+            'by'    => Helper::sanitizeOrderBy($request->get('sort_by'), 'id'),
+            'order' => Helper::sanitizeOrderBy($request->get('sort_order'), 'DESC')
         ];
 
         $tags = Tag::orderBy($order['by'], $order['order'])
@@ -98,7 +98,7 @@ class TagsController extends Controller
     }
 
     /**
-     * Store a tag.
+     * Store a tag after validating its database-bound title and slug.
      * @param \FluentCrm\Framework\Http\Request\Request $request
      * @return \WP_REST_Response
      */
@@ -113,8 +113,8 @@ class TagsController extends Controller
         }
 
         $allData = $this->validate($allData, [
-            'title' => 'required',
-            'slug'  => "required|unique:fc_tags,slug"
+            'title' => 'required|string|max:192',
+            'slug'  => "required|string|max:192|unique:fc_tags,slug"
         ]);
 
         $tag = Tag::create([
@@ -135,20 +135,25 @@ class TagsController extends Controller
     }
 
     /**
-     * Store a tag.
+     * Update a tag after validating its database-bound title and slug.
      * @param \FluentCrm\Framework\Http\Request\Request $request
      * @param $id int Tag ID
      * @return \WP_REST_Response
      */
     public function store(Request $request, $id)
     {
-        $allData = $this->validate($request->all(), [
-            'title' => 'required'
-        ]);
+        $allData = $request->all();
 
         if (empty($allData['slug'])) {
             $allData['slug'] = Helper::slugify($allData['title']);
+        } else {
+            $allData['slug'] = sanitize_text_field($allData['slug']);
         }
+
+        $allData = $this->validate($allData, [
+            'title' => 'required|string|max:192',
+            'slug'  => 'required|string|max:192'
+        ]);
 
         if ($id == 0 && $request->get('update_by') == 'slug' && !empty($allData['slug'])) {
 

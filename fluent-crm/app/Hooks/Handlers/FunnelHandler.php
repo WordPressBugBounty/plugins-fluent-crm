@@ -391,44 +391,6 @@ class FunnelHandler
         ]);
     }
 
-    public function exportFunnel()
-    {
-        check_ajax_referer('fluentcrm_ajax_nonce', '_nonce');
-
-        $permission = 'manage_options';
-        if (!current_user_can($permission)) {
-            die('You do not have permission');
-        }
-
-        $funnelId = intval($_REQUEST['funnel_id']);
-        $funnel = Funnel::findOrFail($funnelId);
-        /**
-         * Determine the funnel editor details based on the funnel's trigger name.
-         *
-         * The dynamic portion of the hook name, `$funnel->trigger_name`, refers to the trigger name of the funnel.
-         *
-         * @param object $funnel The funnel object containing the editor details.
-         * @since 2.0.0
-         *
-         */
-        $funnel = apply_filters('fluentcrm_funnel_editor_details_' . $funnel->trigger_name, $funnel);
-
-        $funnel->labels = $funnel->getFormattedLabels();
-
-        // Ship the sticky note with the export so the note survives a hand-off.
-        $funnel->sticky_note = FunnelHelper::getStickyNote($funnel);
-
-        $funnel->sequences = FunnelHelper::getFunnelSequences($funnel, true);
-
-        $funnel->site_hash = md5(site_url());
-        $funnel->export_date = gmdate('Y-m-d H:i:s');
-
-        header('Content-disposition: attachment; filename=' . sanitize_title($funnel->title, 'funnel', 'display') . '-' . $funnelId . '.json');
-        header('Content-type: application/json');
-        echo json_encode($funnel); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
-        exit();
-    }
-
     public function saveEmailAction()
     {
         check_ajax_referer('fluentcrm_ajax_nonce', '_nonce');

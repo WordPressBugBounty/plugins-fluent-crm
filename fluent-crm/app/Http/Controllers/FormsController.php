@@ -39,11 +39,24 @@ class FormsController extends Controller
             ];
         }
 
-        // Now let's find the forms which are connected with Fluent Forms
+        /*
+         * A form can hold more than one FluentCRM feed, and this listing shows at
+         * most one entry per form. That collapsing used to be done with
+         * GROUP BY form_id while selecting the non-aggregated id and value, which
+         * MySQL rejects under ONLY_FULL_GROUP_BY — on by default in MySQL 8, so
+         * this endpoint returned a 500 on most managed hosting.
+         *
+         * The de-duplication is done in PHP instead of in SQL, because both
+         * structures built below already collapse by form_id anyway ($formIds via
+         * the array_unique() further down, $connectedFormIds via its keys). An
+         * aggregate would have been the other option, but MIN(id)/ANY_VALUE(value)
+         * are evaluated independently and could pair an id with a value from a
+         * different feed row.
+         */
         $connectFeedForms = fluentCrmDb()->table('fluentform_form_meta')
             ->where('meta_key', 'fluentcrm_feeds')
             ->select(['form_id', 'id', 'value'])
-            ->groupBy('form_id')
+            ->orderBy('id', 'ASC')
             ->get();
 
 
@@ -51,6 +64,13 @@ class FormsController extends Controller
         $connectedFormIds = [];
         foreach ($connectFeedForms as $form) {
             $formIds[] = $form->form_id;
+
+            // Lowest feed id wins, matching what the grouped query returned in
+            // practice, and it is deterministic rather than left to the planner.
+            if (isset($connectedFormIds[$form->form_id])) {
+                continue;
+            }
+
             $settings = json_decode($form->value, true);
             $connectedFormIds[$form->form_id] = [
                 'feed_id'  => $form->id,

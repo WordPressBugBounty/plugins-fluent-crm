@@ -248,23 +248,6 @@ class OptionsController extends Controller
     }
 
     /**
-     * Include subscribers' sms statuses.
-     *
-     * @return array
-     */
-    public function sms_statuses()
-    {
-        /**
-         * sms statuses are static data and no db call is happening here
-         * also available in fcAdmin data in frontend
-         *
-         */
-        return [
-            'sms_statuses' => fluentcrm_subscriber_sms_statuses(true)
-        ];
-    }
-
-    /**
      * Include subscriber editable statuses.
      *
      * @return array

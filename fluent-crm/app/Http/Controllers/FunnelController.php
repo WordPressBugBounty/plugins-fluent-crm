@@ -34,10 +34,44 @@ use FluentCrm\Framework\Validator\ValidationException;
  */
 class FunnelController extends Controller
 {
+    /**
+     * Stream one automation export after the REST nonce and route policy have
+     * authenticated the POST request. The attachment structure intentionally
+     * matches the retired AJAX exporter so imports remain compatible.
+     *
+     * @param Request $request
+     * @param int $id
+     * @return mixed
+     */
+    public function exportFunnel(Request $request, $id)
+    {
+        if (!wp_verify_nonce($request->get('_wpnonce'), 'wp_rest')) {
+            return $this->sendError([
+                'message' => __('Security verification failed. Please refresh the page and try again.', 'fluent-crm')
+            ], 403);
+        }
+
+        $funnelId = absint($id);
+        $funnel = Funnel::findOrFail($funnelId);
+        $funnel = apply_filters('fluentcrm_funnel_editor_details_' . $funnel->trigger_name, $funnel);
+
+        $funnel->labels = $funnel->getFormattedLabels();
+        $funnel->sticky_note = FunnelHelper::getStickyNote($funnel);
+        $funnel->sequences = FunnelHelper::getFunnelSequences($funnel, true);
+        $funnel->site_hash = md5(site_url());
+        $funnel->export_date = gmdate('Y-m-d H:i:s');
+
+        header('Content-disposition: attachment; filename=' . sanitize_title($funnel->title, 'funnel', 'display') . '-' . $funnelId . '.json');
+        header('Content-type: application/json');
+        // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- json_encode serializes the attachment payload.
+        echo json_encode($funnel);
+        exit();
+    }
+
     public function funnels(Request $request)
     {
-        $orderBy = $request->getSafe('sort_by', 'sanitize_sql_orderby', 'id');
-        $orderType = $request->getSafe('sort_type', 'sanitize_sql_orderby', 'DESC');
+        $orderBy = Helper::sanitizeOrderBy($request->get('sort_by'), 'id');
+        $orderType = Helper::sanitizeOrderBy($request->get('sort_type'), 'DESC');
 
         $labelIds = $this->sanitizeFilterIds($request->get('labels')); // labels are id
         $tagIds = $this->sanitizeFilterIds($request->get('tags')); // tags are id
@@ -1008,6 +1042,9 @@ class FunnelController extends Controller
                     if ($newParentId) {
                         $childBlock['parent_id'] = $newParentId;
                         $createdSequence = FunnelSequence::create($childBlock);
+                        // Fire the same hook as top-level sequences so action handlers (e.g. the
+                        // FluentCart coupon smartcode injector) run for nested/child sequences too.
+                        do_action('fluent_crm/sequence_created_' . $createdSequence->action_name, $createdSequence);
                         $sequenceIds[] = $createdSequence->id;
                     }
                 }
@@ -1640,6 +1677,9 @@ class FunnelController extends Controller
                     if ($newParentId) {
                         $childBlock['parent_id'] = $newParentId;
                         $createdSequence = FunnelSequence::create($childBlock);
+                        // Fire the same hook as top-level sequences so action handlers (e.g. the
+                        // FluentCart coupon smartcode injector) run for nested/child sequences too.
+                        do_action('fluent_crm/sequence_created_' . $createdSequence->action_name, $createdSequence);
                         $sequenceIds[] = $createdSequence->id;
                     }
                 }

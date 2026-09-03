@@ -180,6 +180,8 @@ if (fluentcrm_is_rtl()) {
     <?php endif; ?>
     }
 
+    .fc_email_body ul,
+    .fc_email_body ol,
     .fc_email_body p {
     <?php if ($mainColor): ?> color: <?php echo esc_attr($mainColor) ?>;
     <?php endif; ?><?php if ($pSize): ?> font-size: <?php echo esc_attr($pSize) ?>;
@@ -283,6 +285,7 @@ if (fluentcrm_is_rtl()) {
     }
 
     figure.wp-block-media-text__media {
+        margin: 0;
         background-size: cover;
         background-repeat: no-repeat;
     }
@@ -457,6 +460,48 @@ if (fluentcrm_is_rtl()) {
 
     #bodyCell {
         border-top: 0;
+    }
+
+    @media only screen and (max-width: 480px) {
+        .fcrm_hide_on_mobile,
+        table.fcrm_hide_on_mobile,
+        td.fcrm_hide_on_mobile {
+            display: none !important;
+            max-height: 0 !important;
+            overflow: hidden !important;
+            visibility: hidden !important;
+            line-height: 0 !important;
+            font-size: 0 !important;
+            mso-hide: all !important;
+        }
+    }
+
+    @media only screen and (min-width: 481px) and (max-width: 782px) {
+        .fcrm_hide_on_tablet,
+        table.fcrm_hide_on_tablet,
+        td.fcrm_hide_on_tablet {
+            display: none !important;
+            max-height: 0 !important;
+            overflow: hidden !important;
+            visibility: hidden !important;
+            line-height: 0 !important;
+            font-size: 0 !important;
+            mso-hide: all !important;
+        }
+    }
+
+    @media only screen and (min-width: 783px) {
+        .fcrm_hide_on_desktop,
+        table.fcrm_hide_on_desktop,
+        td.fcrm_hide_on_desktop {
+            display: none !important;
+            max-height: 0 !important;
+            overflow: hidden !important;
+            visibility: hidden !important;
+            line-height: 0 !important;
+            font-size: 0 !important;
+            mso-hide: all !important;
+        }
     }
 
     .templateContainer {
@@ -743,6 +788,14 @@ if (fluentcrm_is_rtl()) {
             width: 100% !important;
             padding-right: 0 !important;
             padding-left: 0 !important;
+        }
+
+        .fc_row_media_text.fce_stacked td.fc_media_table,
+        .fc_row_media_text.fce_stacked td.fc_media_text {
+            display: block !important;
+            width: 100% !important;
+            padding-left: 0 !important;
+            padding-right: 0 !important;
         }
     }
 

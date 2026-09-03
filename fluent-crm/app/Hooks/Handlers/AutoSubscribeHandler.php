@@ -82,7 +82,7 @@ class AutoSubscribeHandler
             return false;
         }
 
-        if ($contact->status == 'pending' && $subscriberData['status'] == 'pending') {
+        if ($subscriberData['status'] == 'pending' && $contact->status != 'subscribed') {
             $contact->sendDoubleOptinEmail();
         }
 
@@ -207,7 +207,7 @@ class AutoSubscribeHandler
         }
 
 
-        if ($contact->status == 'pending') {
+        if ($isDoubleOptin && $contact->status != 'subscribed') {
             $contact->sendDoubleOptinEmail();
         }
 

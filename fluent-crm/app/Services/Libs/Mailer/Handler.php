@@ -265,11 +265,8 @@ class Handler extends BaseHandler
 
     public function sendDoubleOptInEmail($subscriber)
     {
-        if ($subscriber->status != 'pending' || !$subscriber->email) {
-            // Strictly gated: the opt-in email goes only to contacts whose status IS
-            // 'pending' (awaiting confirmation). Moving a contact into 'pending' is the
-            // caller's explicit decision — this sender never mails around that state.
-            return false;
+        if ($subscriber->status == 'subscribed' || !$subscriber->email) {
+            return false; // already confirmed: nothing left to opt in to
         }
 
         $listIdOfSubscriber = Helper::latestListIdOfSubscriber($subscriber->id);
@@ -399,6 +396,11 @@ class Handler extends BaseHandler
      */
     public static function fireNonBlockingRequest($url, $body = [])
     {
+        // Test seam: allows suites to observe continuation intent without HTTP.
+        if (apply_filters('fluent_crm/intercept_loopback', false, $url, $body)) {
+            return;
+        }
+
         $timeout = max(1, (int)apply_filters('fluent_crm/non_blocking_request_timeout', 3, $url, $body));
         $connectTimeout = max(1, (int)apply_filters('fluent_crm/non_blocking_request_connect_timeout', 2, $url, $body));
 

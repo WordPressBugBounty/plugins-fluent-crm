@@ -22,6 +22,16 @@ use FluentCrm\Framework\Support\Str;
  */
 class Subscriber extends Model
 {
+    /**
+     * Mirrors the DEFAULT on the fc_subscribers.status column.
+     *
+     * A row inserted without an explicit status persists as 'subscribed' while the
+     * in-memory model created by self::create() has no status attribute at all. Any
+     * code that decides something from a freshly created contact's status must
+     * resolve through this constant rather than reading the model or defaulting to ''.
+     */
+    const DEFAULT_STATUS = 'subscribed';
+
     protected $table = 'fc_subscribers';
 
     protected $guarded = ['id'];
@@ -43,8 +53,6 @@ class Subscriber extends Model
         'email',
         'status', // pending / subscribed / bounced / unsubscribed; Default: subscriber
         'contact_type', // lead / customer
-        'sms_status', // sms_pending / sms_subscribed / sms_unsubscribed / sms_bounced; Default: sms_subscribed
-        // 'whatsapp_status', // whatsapp_subscribed / whatsapp_unsubscribed; Default: whatsapp_unsubscribed
         'address_line_1',
         'address_line_2',
         'postal_code',
@@ -631,10 +639,17 @@ class Subscriber extends Model
      * Update Custom Field Values
      * @param $values array of custom values
      * @param bool $deleteOtherValues
+     * @param array $customFields optional pre-loaded field definitions keyed by slug
      * @return array of updated values
      */
-    public function syncCustomFieldValues($values, $deleteOtherValues = true)
+    public function syncCustomFieldValues($values, $deleteOtherValues = true, $customFields = [])
     {
+        // Sanitize here rather than at the callers: this is the single point every
+        // custom-field write passes through (REST update, import, updateOrCreate,
+        // bulk import), and Sanitize::contact() cannot reach these values because
+        // they are runtime-defined meta keys rather than mapped columns.
+        $values = Sanitize::contactCustomValues($values, $customFields);
+
         $emptyValues = array_filter($values, function ($value) {
             return $value === '';
         });
@@ -659,8 +674,7 @@ class Subscriber extends Model
         foreach ($newValues as $key => $value) {
             // Scope to object_type = 'custom_field' (Behavioral Rule 11): the untyped
             // meta() lookup can collide with an internal meta key of the same name
-            // (e.g. a field slugged "unsubscribe_reason"), overwriting the internal
-            // row while the reads below — which ARE scoped — keep showing empty.
+            // and overwrite the internal row while scoped reads keep showing empty.
             $exist = $this->custom_field_meta()->where('key', $key)->first();
             if ($exist) {
                 if ($exist->value == $value) {
@@ -1000,7 +1014,17 @@ class Subscriber extends Model
                     $attachableTags && $insertedModel->attachTags($attachableTags);
                     $attachableLists && $insertedModel->attachLists($attachableLists);
 
-                    if ($doubleOptin && $insertedModel->status == 'pending') {
+                    // Resolve the status the row ACTUALLY persisted with. Two traps
+                    // meet here: self::create() is not re-find()ed, so
+                    // $insertedModel->status is unset in memory whenever the insertable
+                    // carried no status; and fc_subscribers.status is DEFAULT
+                    // 'subscribed' at the column level, so those rows land as subscribed.
+                    // Reading either the model or a bare Arr::get() would mail a
+                    // confirmation request to a contact the database records as already
+                    // subscribed (import() leaves status unset whenever $newStatus is '').
+                    $importedStatus = Arr::get($insertable, 'status') ?: self::DEFAULT_STATUS;
+
+                    if ($doubleOptin && $importedStatus != 'subscribed') {
                         $insertedModel->sendDoubleOptinEmail();
                     }
                 }
@@ -1227,12 +1251,18 @@ class Subscriber extends Model
 
     public function sendDoubleOptinEmail()
     {
-        if ($this->status != 'pending') {
-            // The double opt-in email goes ONLY to contacts awaiting confirmation.
-            // A caller that wants to (re-)start the opt-in flow for any other status
-            // (bounced, unsubscribed, …) must move the contact to 'pending' first —
-            // via updateStatus() or a forced updateOrCreate — because that status
-            // change is the caller's decision, not this sender's.
+        if ($this->status == 'subscribed') {
+            // Only an already-confirmed contact has nothing left to confirm. Every other
+            // status — pending, unsubscribed, bounced, complained — may be a contact the
+            // caller is legitimately re-inviting, and the caller is the only layer that
+            // knows whether a real consent event (form submit, checkout, resubscribe
+            // click) just happened. This sender does not second-guess that; the 150s
+            // throttle below is what bounds abuse.
+            //
+            // Sending never changes status: only the confirmation click does, in
+            // ExternalPages::confirmationPage(), which promotes ANY non-subscribed
+            // status and clears the soft-bounce counter. Gating this email on 'pending'
+            // made that recovery path unreachable for the very contacts it exists for.
             return false;
         }
 
@@ -1715,10 +1745,15 @@ class Subscriber extends Model
             $exist->save();
             return true;
         }
+        // created_by is NOT NULL with no default. Omitting it only survives where
+        // STRICT_TRANS_TABLES is off; on MySQL 8 defaults the insert is rejected,
+        // which broke the unauthenticated preference form. Mirrors the value
+        // syncCustomFieldValues() already writes — 0 for a public, signed-out write.
         $this->meta()->create([
             'key'         => $metaKey,
             'object_type' => $objectType,
-            'value'       => $metaValue
+            'value'       => $metaValue,
+            'created_by'  => get_current_user_id()
         ]);
 
         return true;
@@ -1832,6 +1867,31 @@ class Subscriber extends Model
         }
 
         return $query;
+    }
+
+    /**
+     * Build the inclusive end-of-day bound for "last activity" date filters.
+     *
+     * Activity filters first normalize before/date_equal/days_before into a date
+     * comparison, then add a second "no newer activity exists" condition. Always
+     * derive that second bound from the normalized date so relative-day values
+     * like "30" cannot leak into TIMESTAMP comparisons.
+     *
+     * @param array $filter
+     * @return string|false
+     */
+    protected static function getActivityLatestDateUpperBound($filter)
+    {
+        if (empty($filter['value']) || is_array($filter['value'])) {
+            return false;
+        }
+
+        $value = trim((string) $filter['value'], "% \t\n\r\0\x0B");
+        if (!preg_match('/^\d{4}-\d{2}-\d{2}/', $value, $match)) {
+            return false;
+        }
+
+        return $match[0] . ' 23:59:59';
     }
 
     /**
@@ -2284,6 +2344,24 @@ class Subscriber extends Model
                     $values = (array)$filter['value'];
                     $q->whereIn('type', $values);
                 });
+            } else if (!in_array($prop, $this->fillable, true)) {
+                /*
+                 * A segment row whose property is not a subscribers column was
+                 * put in this group by another plugin through
+                 * fluentcrm_advanced_filter_options, and only that plugin can
+                 * constrain the query — the data lives in its tables. Hand the
+                 * row to its owner, and fail closed when nobody claims it:
+                 * ContactsQuery already compiles an unregistered provider to
+                 * `1 = 0` for the same reason, and a row that cannot be applied
+                 * must never widen a campaign's audience to everyone. This also
+                 * keeps an arbitrary request-supplied property out of the column
+                 * comparison below.
+                 */
+                if (has_action('fluent_crm/contacts_filter_segment_' . $prop)) {
+                    do_action_ref_array('fluent_crm/contacts_filter_segment_' . $prop, [&$query, $filter]);
+                } else {
+                    $query = $query->whereRaw('1 = 0');
+                }
             } else {
                 $operator = $filter['operator'];
                 $method = ($operator == 'in' || $operator == 'contains') ? 'whereIn' : 'whereNotIn';
@@ -2302,6 +2380,26 @@ class Subscriber extends Model
      */
     public function buildCustomFieldsFilterQuery($query, $filters)
     {
+        $numericFieldKeys = [];
+        foreach ((array)fluentcrm_get_option('contact_custom_fields', []) as $field) {
+            if (Arr::get($field, 'type') === 'number' && Arr::get($field, 'slug')) {
+                $numericFieldKeys[] = $field['slug'];
+            }
+        }
+
+        $numericOperators = ['>', '<', '=', '!='];
+        foreach ($filters as $filter) {
+            $isNumericFilter = in_array(Arr::get($filter, 'property'), $numericFieldKeys, true)
+                && in_array(Arr::get($filter, 'operator'), $numericOperators, true);
+            $value = Arr::get($filter, 'value');
+
+            // Fail the whole AND group before the inverted != branch can turn an
+            // invalid threshold into a match for every contact.
+            if ($isNumericFilter && (!is_scalar($value) || !is_numeric(trim((string)$value)))) {
+                return $query->whereRaw('1 = 0');
+            }
+        }
+
         $filters = array_reduce($filters, function ($carry, $filter) {
             $operator = $filter['operator'];
 
@@ -2330,7 +2428,10 @@ class Subscriber extends Model
 
         if (array_key_exists('regular', $filters)) {
             foreach ($filters['regular'] as $filter) {
-                $query->whereHas('custom_field_meta', function ($customFieldQuery) use ($filter) {
+                $isNumericFilter = in_array($filter['property'], $numericFieldKeys, true)
+                    && in_array($filter['operator'], $numericOperators, true);
+
+                $query->whereHas('custom_field_meta', function ($customFieldQuery) use ($filter, $isNumericFilter) {
                     $customFieldQuery->where('key', $filter['property']);
                     $operator = self::parseCustomFieldsFilterOperator($filter);
                     if (is_array($filter['value'])) {
@@ -2351,6 +2452,12 @@ class Subscriber extends Model
                                 $first = false;
                             }
                         });
+                    } else if ($isNumericFilter) {
+                        $customFieldQuery = self::applyNumericCustomFieldFilterQuery(
+                            $customFieldQuery,
+                            $operator,
+                            $filter['value']
+                        );
                     } else {
                         $customFieldQuery = self::applyGeneralFilterQuery($customFieldQuery, $filter, 'value');
                     }
@@ -2382,6 +2489,14 @@ class Subscriber extends Model
                 $value = (string)trim($filter['value']);
                 $operator = $filter['operator'];
 
+                if ($operator == '!=' && in_array($filter['property'], $numericFieldKeys, true)) {
+                    $query->whereDoesntHave('custom_field_meta', function ($customFieldQuery) use ($value, $filter) {
+                        $customFieldQuery->where('key', $filter['property']);
+                        self::applyNumericCustomFieldFilterQuery($customFieldQuery, '=', $value);
+                    });
+                    continue;
+                }
+
                 if ($operator == 'not_contains') {
                     global $wpdb;
                     $operator = 'LIKE';
@@ -2407,6 +2522,30 @@ class Subscriber extends Model
         }
 
         return $query;
+    }
+
+    /**
+     * Apply a bound numeric comparison to a LONGTEXT custom-field value.
+     *
+     * @param \FluentCrm\Framework\Database\Orm\Builder|\FluentCrm\Framework\Database\Query\Builder $query
+     * @param string $operator
+     * @param mixed $value
+     * @return \FluentCrm\Framework\Database\Orm\Builder|\FluentCrm\Framework\Database\Query\Builder
+     */
+    protected static function applyNumericCustomFieldFilterQuery($query, $operator, $value)
+    {
+        if (!in_array($operator, ['>', '<', '=', '!='], true) || !is_scalar($value) || !is_numeric(trim((string)$value))) {
+            return $query->whereRaw('1 = 0');
+        }
+
+        $numericPattern = '^[+-]?([0-9]+([.][0-9]*)?|[.][0-9]+)$';
+
+        return $query
+            ->whereRaw('TRIM(`value`) REGEXP ?', [$numericPattern])
+            ->whereRaw(
+                'CAST(TRIM(`value`) AS DECIMAL(20,6)) ' . $operator . ' CAST(? AS DECIMAL(20,6))',
+                [trim((string)$value)]
+            );
     }
 
     public static function parseCustomFieldsFilterOperator($filter)
@@ -2444,8 +2583,6 @@ class Subscriber extends Model
                     continue;
                 }
             }
-
-            $originalValue = $filter['value'];
 
             $relation = 'campaignEmails';
 
@@ -2563,11 +2700,12 @@ class Subscriber extends Model
 
             $operator = $filter['operator'];
             if ($operator == '<' || $operator == 'LIKE') {
-                // Build the end-of-day bound from the ORIGINAL date in both branches —
-                // filterParser already appended ' 00:00:00' to the parsed value for
-                // 'before', so concatenating onto $filter['value'] would produce the
-                // malformed literal 'Y-m-d 00:00:00 23:59:59' (truncated by MySQL).
-                $compareValue = $originalValue . ' 23:59:59';
+                $compareValue = static::getActivityLatestDateUpperBound($filter);
+                if (!$compareValue) {
+                    // Invalid date bounds must not become broad activity matches.
+                    $query->whereRaw('1 = 0');
+                    continue;
+                }
 
                 $query->whereDoesntHave($relation, function ($campaignEmailQuery) use ($filter, $compareValue) {
                     $campaignEmailQuery->where($filter['where']['prop'], $filter['where']['value']);

@@ -387,7 +387,6 @@ class ContextTools
 
         if ($access['contacts']) {
             $enums['contact_statuses'] = array_values(fluentcrm_subscriber_statuses());
-            $enums['sms_statuses'] = array_values(fluentcrm_subscriber_sms_statuses());
             $enums['contact_types'] = array_keys(fluentcrm_contact_types());
             $enums['note_types'] = ['note', 'call', 'email', 'meeting', 'quote'];
         }

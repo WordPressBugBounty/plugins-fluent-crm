@@ -448,11 +448,8 @@ class ExternalPages
 
         $subscriber = Subscriber::where('email', $email)->first();
 
-        if (!$subscriber || $subscriber->status != 'subscribed') {
-            // Use the same success response to prevent email enumeration
-            wp_send_json_success([
-                'message' => __("If this email exists in our system, we've sent a confirmation link to your inbox.", 'fluent-crm')
-            ]);
+        if (!$subscriber || $subscriber->status != 'subscribed' || $this->isPublicSubscriptionRequestCoolingDown($subscriber)) {
+            $this->sendPublicSubscriptionRequestResponse();
         }
 
         // Let's send unsubscribe email with link
@@ -471,7 +468,7 @@ class ExternalPages
 
         do_action('fluent_crm/before_unsubscribe_request_email', $subscriber, $data);
 
-        Mailer::send([
+        $isSent = Mailer::send([
             'to'      => [
                 'email' => $subscriber->email,
                 'name'  => $subscriber->full_name
@@ -480,9 +477,11 @@ class ExternalPages
             'body'    => $emailBody
         ]);
 
-        wp_send_json_success([
-            'message' => __("We've sent an email to your inbox that contains a link to unsubscribe from our mailing list. Please check your email address and unsubscribe.", 'fluent-crm')
-        ]);
+        if ($isSent) {
+            $this->markPublicSubscriptionRequestSent($subscriber);
+        }
+
+        $this->sendPublicSubscriptionRequestResponse();
     }
 
     public function handleManageSubRequestAjax()
@@ -498,11 +497,8 @@ class ExternalPages
 
         $subscriber = Subscriber::where('email', $email)->first();
 
-        if (!$subscriber) {
-            // Use the same success response to prevent email enumeration
-            wp_send_json_success([
-                'message' => __("If this email exists in our system, we've sent a confirmation link to your inbox.", 'fluent-crm')
-            ]);
+        if (!$subscriber || $this->isPublicSubscriptionRequestCoolingDown($subscriber)) {
+            $this->sendPublicSubscriptionRequestResponse();
         }
 
         // Let's send manage subscription email with link
@@ -522,7 +518,7 @@ class ExternalPages
 
         do_action('fluent_crm/before_manage_sub_request_email', $subscriber, $data);
 
-        Mailer::send([
+        $isSent = Mailer::send([
             'to'      => [
                 'email' => $subscriber->email,
                 'name'  => $subscriber->full_name
@@ -531,8 +527,56 @@ class ExternalPages
             'body'    => $emailBody
         ]);
 
+        if ($isSent) {
+            $this->markPublicSubscriptionRequestSent($subscriber);
+        }
+
+        $this->sendPublicSubscriptionRequestResponse();
+    }
+
+    /**
+     * Keep public link-request responses indistinguishable and rate-limit mail
+     * per contact, so an attacker cannot enumerate contacts or flood an inbox.
+     *
+     * @param Subscriber $subscriber Contact whose request is being considered.
+     * @return bool
+     */
+    private function isPublicSubscriptionRequestCoolingDown($subscriber)
+    {
+        $lastRequestedAt = (int) fluentcrm_get_subscriber_meta(
+            $subscriber->id,
+            '_last_public_subscription_request_timestamp',
+            0
+        );
+
+        return $lastRequestedAt && (time() - $lastRequestedAt < 5 * MINUTE_IN_SECONDS);
+    }
+
+    /**
+     * Record only requests that produced mail, leaving a failed delivery free
+     * to retry after its underlying configuration is corrected.
+     *
+     * @param Subscriber $subscriber Contact that received a request email.
+     * @return void
+     */
+    private function markPublicSubscriptionRequestSent($subscriber)
+    {
+        fluentcrm_update_subscriber_meta(
+            $subscriber->id,
+            '_last_public_subscription_request_timestamp',
+            time()
+        );
+    }
+
+    /**
+     * Reply identically for every public email state to avoid an email oracle.
+     *
+     * @return void
+     */
+    private function sendPublicSubscriptionRequestResponse()
+    {
         wp_send_json_success([
-            'message' => __("We've sent an email to your inbox that contains a link to email management from. Please check your email address to get the link.", 'fluent-crm')
+            'message' => __("If this email exists in our system, we've sent a confirmation link to your inbox.", 'fluent-crm')
         ]);
     }
 
@@ -658,18 +702,34 @@ class ExternalPages
         if (!$reason) {
             $reason = 'n/a';
         }
-        SubscriberNote::create([
-            'subscriber_id' => $subscriber->id,
-            'type'          => 'system_log',
-            'title'         => __('Unsubscribed', 'fluent-crm'),
-            /* translators: 1: IP address of the subscriber (may be anonymized), 2: unsubscribe reason */
-            'description'   => wp_kses(sprintf(__('Subscriber unsubscribed from IP Address: %1$s <br />Reason: %2$s', 'fluent-crm'),
-                esc_html(FluentCrm()->request->getIp(fluentCrmWillAnonymizeIp())),
-                esc_html($reason)
-            ),
-                array('br' => array())
-            )
-        ]);
+
+        /*
+         * Log only when this request actually caused the transition. Mail clients
+         * and security scanners pre-fetch and re-submit unsubscribe links, so an
+         * unconditional write turned every repeat into another identical
+         * system-log row. The other side effects here are already safe under
+         * repetition — the status change is guarded, CampaignUrlMetric uses
+         * maybeInsert(), and the unsubscribe_reason meta is intentionally
+         * last-write-wins — leaving this the only one that accumulated. The guard
+         * matches the one the status change and the
+         * fluent_crm/subscriber_unsubscribed_from_web_ui action already use, so a
+         * repeat still records a changed reason in meta without re-logging an
+         * event that did not happen twice.
+         */
+        if ($oldStatus != 'unsubscribed') {
+            SubscriberNote::create([
+                'subscriber_id' => $subscriber->id,
+                'type'          => 'system_log',
+                'title'         => __('Unsubscribed', 'fluent-crm'),
+                /* translators: 1: IP address of the subscriber (may be anonymized), 2: unsubscribe reason */
+                'description'   => wp_kses(sprintf(__('Subscriber unsubscribed from IP Address: %1$s <br />Reason: %2$s', 'fluent-crm'),
+                    esc_html(FluentCrm()->request->getIp(fluentCrmWillAnonymizeIp())),
+                    esc_html($reason)
+                ),
+                    array('br' => array())
+                )
+            ]);
+        }
 
         $message = __("You've successfully unsubscribed from our email list.", 'fluent-crm');
         wp_send_json_success([
@@ -776,19 +836,12 @@ class ExternalPages
             $subscriber = fluentCrmApi('contacts')->getContactBySecureHash($secureHash);
         }
 
+        if ($subscriber && !hash_equals((string)$subscriber->hash, (string)$hash)) {
+            $subscriber = false;
+        }
+
         if (!$subscriber) {
             $body = __('Sorry! Your confirmation url is not valid', 'fluent-crm');
-        } else if (!in_array($subscriber->status, ['subscribed', 'pending'])) {
-            /*
-             * Stale link guard: the confirmation click is the sole path from `pending`
-             * back to `subscribed`. A contact who is neither pending nor subscribed
-             * (unsubscribed/bounced/complained since this email was sent) has no active
-             * opt-in flow — a years-old link, often prefetched by a mail scanner on a
-             * bare GET, must not resurrect them. Re-subscribing requires starting a new
-             * opt-in (which moves them to `pending` first).
-             */
-            $body = __('This confirmation link is no longer valid. Please subscribe again to receive a fresh confirmation email.', 'fluent-crm');
-            $subscriber = false;
         } else {
             if (!is_user_logged_in()) {
                 $secureHash = fluentCrmGetContactSecureHash($subscriber->id);
@@ -1095,7 +1148,9 @@ class ExternalPages
 
         $subscriber = FluentCrmApi('contacts')->createOrUpdate($data, $forceUpdate);
 
-        if ($subscriber->status == 'pending') {
+        // Only when the webhook itself asked for the opt-in flow — $data went through
+        // array_filter(), so an absent 'status' means the webhook did not request it.
+        if (Arr::get($data, 'status') === 'pending' && $subscriber->status != 'subscribed') {
             $subscriber->sendDoubleOptinEmail();
         }
 
@@ -1288,7 +1343,6 @@ class ExternalPages
 
             $oldEmail = $subscriber->email;
 
-            $subscriber->status = 'pending';
             $subscriber->email = $email;
             $subscriber->first_name = sanitize_text_field(Arr::get($_REQUEST, 'first_name', ''));
             $subscriber->last_name = sanitize_text_field(Arr::get($_REQUEST, 'last_name', ''));
@@ -1297,6 +1351,20 @@ class ExternalPages
             // Re-snapshot queued fc_campaign_emails rows (they store email_address
             // at schedule time) so scheduled sends go to the NEW address.
             do_action('fluent_crm/contact_email_changed', $subscriber, $oldEmail);
+
+            // Unlike every other opt-in send, this path DOES reset status — and for a
+            // different reason than consent. The ADDRESS just changed, so the new
+            // mailbox is unverified: anyone holding this hash link can point the contact
+            // at a third party's address, and leaving them 'subscribed' would start
+            // mailing someone who never opted in. Only a confirmed contact is downgraded;
+            // a suppressed one (unsubscribed/bounced/complained) keeps its marker, which
+            // is already non-mailable and is not ours to clear here.
+            // updateStatus() rather than a raw save() so the transition hooks fire —
+            // fluent_crm/subscriber_status_changed is a funnel trigger, and automations
+            // built on it were blind to this path.
+            if ($subscriber->status == 'subscribed') {
+                $subscriber->updateStatus('pending');
+            }
 
             $subscriber->sendDoubleOptinEmail();
 
@@ -1332,11 +1400,8 @@ class ExternalPages
 
         if ($subscriber->status != 'subscribed') {
             // The contact themselves clicked "resubscribe" on the hash-authenticated
-            // manage page — move them into the opt-in pipeline (the opt-in email is
-            // strictly gated on 'pending') and let the confirmation link finish it.
-            if ($subscriber->status != 'pending') {
-                $subscriber->updateStatus('pending');
-            }
+            // manage page. Send the confirmation email but do NOT touch their status:
+            // a bounced/complained marker stays until the confirmation click clears it.
             $subscriber->sendDoubleOptinEmail();
             wp_send_json_success([
                 'message' => sprintf(

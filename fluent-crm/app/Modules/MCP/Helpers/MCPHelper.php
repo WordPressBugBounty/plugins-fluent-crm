@@ -905,12 +905,6 @@ class MCPHelper
             ));
         }
 
-        if (!empty($filter['sms_statuses'])) {
-            $args['sms_statuses'] = array_values(array_filter(
-                array_map('sanitize_text_field', (array) $filter['sms_statuses'])
-            ));
-        }
-
         if (!empty($filter['contact_ids'])) {
             $args['contact_ids'] = array_values(array_filter(array_map('intval', (array) $filter['contact_ids'])));
         }
@@ -934,7 +928,7 @@ class MCPHelper
         // column, applied outside the simple/advanced branch). It must NOT be
         // routed through advanced_filters: that flips filter_type to
         // 'advanced', and ContactsQuery's advanced branch skips the simple
-        // tags/lists/statuses/sms_statuses args entirely — so a call like
+        // tags/lists/statuses args entirely — so a call like
         // {contact_type: 'lead', tags: [...]} silently dropped the tag filter
         // and returned every lead (list-contacts "tags ignored" bug). It also
         // OR'ed with caller-supplied advanced groups, widening instead of
@@ -1163,7 +1157,6 @@ class MCPHelper
      * Checks enforced (all fail-closed — a bad value never silently widens
      * the result set):
      *   1. `statuses[]` — must be in fluentcrm_subscriber_statuses().
-     *   2. `sms_statuses[]` — must be in fluentcrm_subscriber_sms_statuses().
      *   3. `contact_type` — must be a key in fluentcrm_contact_types().
      *   4. `tags[]` / `lists[]` — every ref must resolve to an existing
      *      tag/list; an unmatched ref would collapse to "no filter" and
@@ -1171,7 +1164,7 @@ class MCPHelper
      *   5. `advanced_filters` — fully validated per condition (property,
      *      operator, value shape) by AdvancedFilters::normalize() against
      *      the live filter catalog; see get-contact-filter-schema. Also
-     *      mutually exclusive with tags/lists/statuses/sms_statuses —
+     *      mutually exclusive with tags/lists/statuses —
      *      ContactsQuery applies one branch or the other, never both.
      *
      * Operator-test report 2026-05-07 #1 — invalid statuses were being
@@ -1203,24 +1196,7 @@ class MCPHelper
             }
         }
 
-        // 2. sms_statuses[]
-        if (!empty($filter['sms_statuses']) && is_array($filter['sms_statuses'])) {
-            $allowed = fluentcrm_subscriber_sms_statuses();
-            $bad = array_values(array_filter(
-                array_map('sanitize_text_field', $filter['sms_statuses']),
-                function ($s) use ($allowed) {
-                    return $s !== '' && !in_array($s, $allowed, true);
-                }
-            ));
-            if (!empty($bad)) {
-                return self::error('invalid_param', __('sms_statuses contains values not in the SMS-status enum.', 'fluent-crm'), [
-                    'unknown_sms_statuses' => $bad,
-                    'allowed_sms_statuses' => array_values($allowed),
-                ]);
-            }
-        }
-
-        // 3. contact_type
+        // 2. contact_type
         if (!empty($filter['contact_type'])) {
             $allowed = array_keys(fluentcrm_contact_types());
             $value = sanitize_text_field((string) $filter['contact_type']);
@@ -1232,7 +1208,7 @@ class MCPHelper
             }
         }
 
-        // 4. tags[] / lists[] — every reference must resolve to an existing
+        // 3. tags[] / lists[] — every reference must resolve to an existing
         // tag/list (by id, title, or slug). resolveTagIds() drops unmatched
         // refs, and to ContactsQuery an empty tags arg means "no tag filter
         // at all" — so a typo'd slug silently returned the ENTIRE contact
@@ -1293,7 +1269,7 @@ class MCPHelper
             }
         }
 
-        // 6. created_after / created_before — an unparseable value would reach
+        // 5. created_after / created_before — an unparseable value would reach
         // MySQL verbatim and fail the call with an opaque database error rather
         // than a correctable invalid_param. See normalizeDateBoundary().
         foreach (['created_after', 'created_before'] as $dateKey) {
@@ -1308,18 +1284,18 @@ class MCPHelper
 
         $original = $filter['advanced_filters'] ?? null;
         if (!empty($original) && is_array($original)) {
-            // 5. advanced_filters is mutually exclusive with the simple
+            // 4. advanced_filters is mutually exclusive with the simple
             // segment filters: ContactsQuery applies EITHER the advanced
-            // groups OR tags/lists/statuses/sms_statuses, never both, so the
+            // groups OR tags/lists/statuses, never both, so the
             // simple ones would be silently ignored and widen the result.
             $conflicting = array_values(array_filter(
-                ['tags', 'lists', 'statuses', 'sms_statuses'],
+                ['tags', 'lists', 'statuses'],
                 function ($key) use ($filter) {
                     return !empty($filter[$key]);
                 }
             ));
             if ($conflicting) {
-                return self::error('invalid_param', __('advanced_filters cannot be combined with tags/lists/statuses/sms_statuses — the query engine applies one or the other, so the simple filters would be silently ignored. Express the constraint inside advanced_filters instead (e.g. {property: "segment.tags", operator: "in", value: [tag ids or slugs]}) or drop advanced_filters. search, contact_type, and created_after/before DO combine with advanced_filters.', 'fluent-crm'), [
+                return self::error('invalid_param', __('advanced_filters cannot be combined with tags/lists/statuses — the query engine applies one or the other, so the simple filters would be silently ignored. Express the constraint inside advanced_filters instead (e.g. {property: "segment.tags", operator: "in", value: [tag ids or slugs]}) or drop advanced_filters. search, contact_type, and created_after/before DO combine with advanced_filters.', 'fluent-crm'), [
                     'conflicting_fields' => $conflicting,
                     'tip'                => 'Call get-contact-filter-schema for the full advanced_filters reference.',
                 ]);

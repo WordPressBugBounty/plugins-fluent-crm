@@ -71,7 +71,8 @@ class SubscriberPolicy extends BasePolicy
 
     public function handleBulkActions(Request $request)
     {
-        $actionName = $request->get('action_name');
+        // Match the controller's normalization before selecting a capability.
+        $actionName = sanitize_text_field($request->get('action_name', ''));
 
         if (!$actionName) {
             return $this->currentUserCan('fcrm_manage_contacts');

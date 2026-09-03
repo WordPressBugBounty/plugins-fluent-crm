@@ -56,117 +56,142 @@ abstract class BaseHandler
         $sendableStatuses = ['subscribed', 'transactional'];
         $table = $wpdb->prefix . 'fc_campaign_emails';
 
+        // Announce the batch's contacts so their managed hashes resolve in one
+        // round trip. Nearly every email in a bulk run needs one — Mailer builds
+        // a List-Unsubscribe header for non-transactional campaigns, and most
+        // bodies also carry a manage-subscription smartcode — and each lookup
+        // was its own SELECT (plus an INSERT the first time a contact is
+        // emailed). Priming issues no query itself, so a batch that never asks
+        // for a hash still costs nothing and creates no rows.
+        $batchContactIds = [];
+        foreach ($campaignEmails as $email) {
+            if ($email->subscriber_id) {
+                $batchContactIds[] = $email->subscriber_id;
+            }
+        }
+        Helper::primeManagedHashes($batchContactIds);
+
         $reachedCount = 0;
 
-        foreach ($campaignEmails as $email) {
-            // Stop starting new emails once the runtime budget is spent. The
-            // rate-limit wait below counts against wall-clock, so check every
-            // iteration. Rows this batch claimed but never reached are handed
-            // straight back to 'pending' (claim-token guarded) — during a
-            // healthy chained send the stale-row reset defers to the fresh
-            // sender lock, so without this they would strand in 'processing'
-            // until the whole queue drained.
-            if ($this->isTimeUp()) {
-                $this->releaseUnreachedClaims($campaignEmails, $reachedCount);
-                break;
+        try {
+            foreach ($campaignEmails as $email) {
+                // Stop starting new emails once the runtime budget is spent. The
+                // rate-limit wait below counts against wall-clock, so check every
+                // iteration. Rows this batch claimed but never reached are handed
+                // straight back to 'pending' (claim-token guarded) — during a
+                // healthy chained send the stale-row reset defers to the fresh
+                // sender lock, so without this they would strand in 'processing'
+                // until the whole queue drained.
+                if ($this->isTimeUp()) {
+                    $this->releaseUnreachedClaims($campaignEmails, $reachedCount);
+                    break;
+                }
+
+                $reachedCount++;
+
+                // Check again if the contact is in subscribed status or not
+                // If not then we will cancel the email
+                if ($email->subscriber && !in_array($email->subscriber->status, $sendableStatuses, true)) {
+                    $email->status = 'cancelled';
+                    // Campaign rows carry no body since the bulk-insert change, but
+                    // funnel/sequence rows store per-row parsed bodies — clear on
+                    // cancel so they don't hold LONGTEXT forever.
+                    $email->email_body = '';
+                    $email->save();
+                    continue;
+                }
+
+                // Duplicate guard BEFORE the body render — data() is the expensive
+                // step (block parse, smartcodes, click-tracking rewrite); a skipped
+                // email must not pay for it. Pure in-memory key check, no data deps.
+                if (Helper::wasProcessedByKeyId('mail_' . $email->id . '_' . $email->email_address)) {
+                    continue;
+                }
+
+                $emailData = $email->data();
+
+                // Wait for this email's global rate-limit slot BEFORE marking it
+                // sent, so a crash/timeout during the wait leaves the row in
+                // 'processing' (recoverable by the stale-row reset) instead of
+                // 'sent'-but-never-delivered. Heartbeat the processing lock first
+                // (time-gated, so it costs an in-memory check not a write per email)
+                // so a long backpressure sleep can't let the lock expire mid-batch
+                // and admit a second concurrent sender.
+                $this->maybeRefreshLock();
+                GlobalRateLimiter::throttle($emailData);
+
+                // Mark as 'sent' and clear email_body BEFORE sending.
+                // This prevents duplicates on crash — if the process dies after this
+                // point, the email won't be re-queued. Missing one email is acceptable,
+                // sending duplicates is not.
+                //
+                // The WHERE pins both status='processing' AND the original claim's
+                // updated_at. If the rate-limit wait above ran long enough that the
+                // stale-row reset reclaimed this row and another sender re-claimed it
+                // (even one that is mid-send right now, with status back at
+                // 'processing'), that re-claim rewrote updated_at — so our UPDATE
+                // matches 0 rows and we skip. This closes the duplicate-send window
+                // independently of the lock TTL, so it holds even for slow SMTP
+                // transports where a single wp_mail() can hang past the lock. (Same
+                // UPDATE, one extra WHERE column — no added query.)
+                //
+                // Use the RAW updated_at string, not $email->updated_at: the model
+                // casts that column to a DateTime, and $wpdb binds a DateTime object
+                // as an empty string (it does not call __toString), which would make
+                // the WHERE `updated_at = ''`, match 0 rows, and strand EVERY email in
+                // 'processing' forever. The raw attribute is the exact stored string.
+                $claimToken = Arr::get($email->getAttributes(), 'updated_at');
+                $claimed = $wpdb->update($table, [
+                    'status'       => 'sent',
+                    'scheduled_at' => current_time('mysql'),
+                    'email_body'   => '',
+                    'is_parsed'    => 1,
+                ], ['id' => $email->id, 'status' => 'processing', 'updated_at' => $claimToken]);
+
+                if ($claimed === false) {
+                    Helper::debugLog('DB Error at ' . $this->runnerTitle, $wpdb->last_error, 'error');
+                    return new \WP_Error('db_error', $wpdb->last_error ?: 'mark-sent update failed');
+                }
+
+                if ($claimed === 0) {
+                    // Row was reclaimed (and likely already sent) by another process
+                    // during our wait. Do not send it again.
+                    continue;
+                }
+
+                $this->sentCount++;
+
+                // Already throttled above (before mark-sent); skip the in-Mailer
+                // reservation so this email isn't rate-limited twice. The id is
+                // pinned around the call (and cleared in finally, so a Throwable
+                // from a mail-layer filter can't leave a stale id that would let a
+                // later unrelated failure in this process mark this row failed).
+                $this->currentSendingEmailId = $email->id;
+                $this->currentSendingEmailAddress = $email->email_address;
+                try {
+                    $response = Mailer::send($emailData, $email->subscriber, $email, true);
+                } finally {
+                    $this->currentSendingEmailId = null;
+                    $this->currentSendingEmailAddress = null;
+                }
+
+                // wp_mail() returns false on failure (not WP_Error) in most cases.
+                // We must catch both to avoid marking undelivered emails as 'sent'.
+                // Note: emails are marked 'sent' BEFORE wp_mail() by design to prevent
+                // duplicate sends on crash. This is intentional — losing one email is
+                // acceptable, sending duplicates is not.
+                if (is_wp_error($response) || $response === false) {
+                    $failedIds[] = $email->id;
+                }
             }
-
-            $reachedCount++;
-
-            // Check again if the contact is in subscribed status or not
-            // If not then we will cancel the email
-            if ($email->subscriber && !in_array($email->subscriber->status, $sendableStatuses, true)) {
-                $email->status = 'cancelled';
-                // Campaign rows carry no body since the bulk-insert change, but
-                // funnel/sequence rows store per-row parsed bodies — clear on
-                // cancel so they don't hold LONGTEXT forever.
-                $email->email_body = '';
-                $email->save();
-                continue;
-            }
-
-            // Duplicate guard BEFORE the body render — data() is the expensive
-            // step (block parse, smartcodes, click-tracking rewrite); a skipped
-            // email must not pay for it. Pure in-memory key check, no data deps.
-            if (Helper::wasProcessedByKeyId('mail_' . $email->id . '_' . $email->email_address)) {
-                continue;
-            }
-
-            $emailData = $email->data();
-
-            // Wait for this email's global rate-limit slot BEFORE marking it
-            // sent, so a crash/timeout during the wait leaves the row in
-            // 'processing' (recoverable by the stale-row reset) instead of
-            // 'sent'-but-never-delivered. Heartbeat the processing lock first
-            // (time-gated, so it costs an in-memory check not a write per email)
-            // so a long backpressure sleep can't let the lock expire mid-batch
-            // and admit a second concurrent sender.
-            $this->maybeRefreshLock();
-            GlobalRateLimiter::throttle($emailData);
-
-            // Mark as 'sent' and clear email_body BEFORE sending.
-            // This prevents duplicates on crash — if the process dies after this
-            // point, the email won't be re-queued. Missing one email is acceptable,
-            // sending duplicates is not.
-            //
-            // The WHERE pins both status='processing' AND the original claim's
-            // updated_at. If the rate-limit wait above ran long enough that the
-            // stale-row reset reclaimed this row and another sender re-claimed it
-            // (even one that is mid-send right now, with status back at
-            // 'processing'), that re-claim rewrote updated_at — so our UPDATE
-            // matches 0 rows and we skip. This closes the duplicate-send window
-            // independently of the lock TTL, so it holds even for slow SMTP
-            // transports where a single wp_mail() can hang past the lock. (Same
-            // UPDATE, one extra WHERE column — no added query.)
-            //
-            // Use the RAW updated_at string, not $email->updated_at: the model
-            // casts that column to a DateTime, and $wpdb binds a DateTime object
-            // as an empty string (it does not call __toString), which would make
-            // the WHERE `updated_at = ''`, match 0 rows, and strand EVERY email in
-            // 'processing' forever. The raw attribute is the exact stored string.
-            $claimToken = Arr::get($email->getAttributes(), 'updated_at');
-            $claimed = $wpdb->update($table, [
-                'status'       => 'sent',
-                'scheduled_at' => current_time('mysql'),
-                'email_body'   => '',
-                'is_parsed'    => 1,
-            ], ['id' => $email->id, 'status' => 'processing', 'updated_at' => $claimToken]);
-
-            if ($claimed === false) {
-                Helper::debugLog('DB Error at ' . $this->runnerTitle, $wpdb->last_error, 'error');
-                return new \WP_Error('db_error', $wpdb->last_error ?: 'mark-sent update failed');
-            }
-
-            if ($claimed === 0) {
-                // Row was reclaimed (and likely already sent) by another process
-                // during our wait. Do not send it again.
-                continue;
-            }
-
-            $this->sentCount++;
-
-            // Already throttled above (before mark-sent); skip the in-Mailer
-            // reservation so this email isn't rate-limited twice. The id is
-            // pinned around the call (and cleared in finally, so a Throwable
-            // from a mail-layer filter can't leave a stale id that would let a
-            // later unrelated failure in this process mark this row failed).
-            $this->currentSendingEmailId = $email->id;
-            $this->currentSendingEmailAddress = $email->email_address;
-            try {
-                $response = Mailer::send($emailData, $email->subscriber, $email, true);
-            } finally {
-                $this->currentSendingEmailId = null;
-                $this->currentSendingEmailAddress = null;
-            }
-
-            // wp_mail() returns false on failure (not WP_Error) in most cases.
-            // We must catch both to avoid marking undelivered emails as 'sent'.
-            // Note: emails are marked 'sent' BEFORE wp_mail() by design to prevent
-            // duplicate sends on crash. This is intentional — losing one email is
-            // acceptable, sending duplicates is not.
-            if (is_wp_error($response) || $response === false) {
-                $failedIds[] = $email->id;
-            }
+        } finally {
+            // The announced batch must not outlive this call. A batch that
+            // never asked for a hash — a transactional campaign, or a site
+            // filtering the List-Unsubscribe header off — would otherwise
+            // leave its contact ids queued, and the next unrelated lookup
+            // anywhere in this process would resolve them and create rows
+            // for contacts this batch deliberately skipped.
+            Helper::clearPendingManagedHashes();
         }
 
         $this->updateEmailsStatus($failedIds, 'failed');

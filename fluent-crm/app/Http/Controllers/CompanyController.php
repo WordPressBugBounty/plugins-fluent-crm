@@ -21,8 +21,8 @@ class CompanyController extends Controller
     public function index(Request $request)
     {
         $order = [
-            'by'    => $request->getSafe('sort_by', 'sanitize_sql_orderby', 'id'),
-            'order' => $request->getSafe('sort_order', 'sanitize_sql_orderby', 'DESC')
+            'by'    => Helper::sanitizeOrderBy($request->get('sort_by'), 'id'),
+            'order' => Helper::sanitizeOrderBy($request->get('sort_order'), 'DESC')
         ];
 
         $companies = Company::orderBy($order['by'], $order['order'])

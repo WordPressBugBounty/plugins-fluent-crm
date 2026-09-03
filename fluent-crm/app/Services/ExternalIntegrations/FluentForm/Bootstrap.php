@@ -447,7 +447,7 @@ class Bootstrap extends IntegrationManagerController
                 $subscriber = $subscriber->updateStatus('subscribed');
             }
 
-            if ($subscriber->status == 'pending') {
+            if (Arr::isTrue($data, 'double_opt_in') && $subscriber->status != 'subscribed') {
                 $subscriber->sendDoubleOptinEmail();
             }
 
@@ -495,15 +495,10 @@ class Bootstrap extends IntegrationManagerController
                 $subscriber = $subscriber->updateStatus('subscribed');
             }
 
-            // The opt-in email is strictly gated on status == 'pending', so a double
-            // opt-in feed first moves a non-subscribed contact (unsubscribed, bounced, …)
-            // into 'pending' — the contact just submitted this form, which is the
-            // re-consent trigger — and only the confirmation link makes them 'subscribed'.
-            if ($hasDouBleOptIn && !in_array($subscriber->status, ['subscribed', 'pending'])) {
-                $subscriber = $subscriber->updateStatus('pending');
-            }
-
-            if ($hasDouBleOptIn && $subscriber->status == 'pending') {
+            // The submission itself is the re-consent trigger, so a double opt-in feed
+            // re-invites any non-subscribed contact (unsubscribed, bounced, …) without
+            // writing status — only the confirmation link makes them 'subscribed'.
+            if ($hasDouBleOptIn && $subscriber->status != 'subscribed') {
                 $subscriber->sendDoubleOptinEmail();
             }
 

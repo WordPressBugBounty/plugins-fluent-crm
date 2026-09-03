@@ -39,7 +39,7 @@ class CampaignController extends Controller
         $order = strtoupper($request->get('sort_type', ''));
         $order = in_array($order, ['ASC', 'DESC'], true) ? $order : 'DESC';
 
-        $orderBy = sanitize_key($request->get('sort_by', ''));
+        $orderBy = Helper::sanitizeOrderBy($request->get('sort_by'), 'created_at');
         // Re-key `with` to a flat, integer-indexed list and sanitize each value.
         // Legitimate callers always send a plain list of names (e.g. with[]=stats);
         // discarding any caller-supplied string keys closes the relation-name
@@ -395,7 +395,9 @@ class CampaignController extends Controller
         if (!empty($data['settings'])) {
             $updateData['settings'] = $data['settings'];
 
-            if (!empty($data['settings']['template_config']['design_template'])) {
+            if (!empty($updateData['design_template']) && is_array($updateData['settings'])) {
+                $updateData['settings']['template_config']['design_template'] = $updateData['design_template'];
+            } else if (is_array($data['settings']) && !empty($data['settings']['template_config']['design_template'])) {
                 $updateData['design_template'] = $data['settings']['template_config']['design_template'];
             }
         }

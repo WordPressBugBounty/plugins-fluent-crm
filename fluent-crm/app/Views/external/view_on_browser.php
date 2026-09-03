@@ -48,8 +48,8 @@ $fcEmailData = wp_json_encode(
 );
 wp_add_inline_script('fluentcrm_dompurify', 'window.fluentCrmEmail = ' . $fcEmailData . ';', 'before');
 
-// Renderer: sanitize the email body and mount it inside a closed shadow root so
-// its styles stay isolated from (and can't leak into) the surrounding page.
+// Renderer: sanitize the email document and mount it inside a closed shadow root
+// so its styles stay isolated from (and can't leak into) the surrounding page.
 // Runs after DOMPurify loads (default 'after' position).
 $fcViewOnBrowserScript = <<<'JS'
 (function () {

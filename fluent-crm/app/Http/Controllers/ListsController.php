@@ -30,8 +30,8 @@ class ListsController extends Controller
         $with = $request->get('with', []);
 
         $order = [
-            'by'    => $request->getSafe('sort_by', 'sanitize_sql_orderby', 'id'),
-            'order' => $request->getSafe('sort_order', 'sanitize_sql_orderby', 'DESC')
+            'by'    => Helper::sanitizeOrderBy($request->get('sort_by'), 'id'),
+            'order' => Helper::sanitizeOrderBy($request->get('sort_order'), 'DESC')
         ];
         $paginatedLists = Lists::orderBy($order['by'], $order['order'])
             ->searchBy($request->getSafe('search'))
@@ -115,7 +115,7 @@ class ListsController extends Controller
 
 
     /**
-     * Store a list.
+     * Store a list after validating its database-bound title and slug.
      *
      * @param \FluentCrm\Framework\Http\Request\Request $request
      * @return \WP_REST_Response
@@ -130,14 +130,22 @@ class ListsController extends Controller
             }
         }
 
+        $rawSlug = $allData['slug'];
+        $allData['slug'] = sanitize_title($rawSlug, 'display');
+
+        // Fall back only when encoding pushes an otherwise valid raw slug beyond the column limit.
+        if (is_string($rawSlug) && mb_strlen($rawSlug) <= 192 && strlen($allData['slug']) > 192) {
+            $allData['slug'] = Helper::slugify($rawSlug);
+        }
+
         $data = $this->validate($allData, [
-            'title' => 'required',
-            'slug'  => "required|unique:fc_lists,slug"
+            'title' => 'required|string|max:192',
+            'slug'  => "required|string|max:192|unique:fc_lists,slug"
         ]);
 
         $list = Lists::create([
             'title'       => sanitize_text_field($allData['title']),
-            'slug'        => sanitize_title($data['slug'], 'display'),
+            'slug'        => $data['slug'],
             'description' => sanitize_textarea_field(Arr::get($allData, 'description'))
         ]);
 
@@ -154,7 +162,7 @@ class ListsController extends Controller
 
 
     /**
-     * Store a list.
+     * Update a list after validating its database-bound title and slug.
      *
      * @param \FluentCrm\Framework\Http\Request\Request $request
      * @param $id int
@@ -163,7 +171,7 @@ class ListsController extends Controller
     public function update(Request $request, $id)
     {
         $allData = $this->validate($request->all(), [
-            'title' => 'required'
+            'title' => 'required|string|max:192'
         ]);
 
         if(!empty($allData['slug'])) {
@@ -186,6 +194,11 @@ class ListsController extends Controller
                 $allData['slug'] = $list->slug;
             }
         }
+
+        $allData = $this->validate($allData, [
+            'title' => 'required|string|max:192',
+            'slug'  => 'required|string|max:192'
+        ]);
 
         if (Lists::where('slug', $allData['slug'])->where('id', '!=', $id)->first()) {
             return $this->sendError([

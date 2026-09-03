@@ -181,7 +181,7 @@ class AdvancedFilters
                 'parameter' => 'advanced_filters',
                 'tools'     => ['list-contacts', 'apply-segments-to-contacts (inside filter)'],
                 'format'    => 'Array of OR groups; each group is an array of AND conditions {property, operator, value}. [[A,B],[C]] means (A AND B) OR C. A flat array of conditions is one group (all AND-ed). A single condition object is also accepted.',
-                'combining' => 'advanced_filters composes with search, contact_type, created_after/before, sorting and paging — but NOT with the simple tags/lists/statuses/sms_statuses parameters (the engine applies one branch or the other). Express those as segment.* conditions instead.',
+                'combining' => 'advanced_filters composes with search, contact_type, created_after/before, sorting and paging — but NOT with the simple tags/lists/statuses parameters (the engine applies one branch or the other). Express those as segment.* conditions instead.',
                 'limits'    => sprintf('Up to %1$d OR groups, %2$d conditions per group, %3$d values per condition.', self::MAX_GROUPS, self::MAX_CONDITIONS_PER_GROUP, self::MAX_VALUES_PER_CONDITION),
                 'example'   => [
                     'meaning' => 'subscribed leads carrying tag 12 or 15 created in the last 90 days, PLUS anyone who opened campaign 123',

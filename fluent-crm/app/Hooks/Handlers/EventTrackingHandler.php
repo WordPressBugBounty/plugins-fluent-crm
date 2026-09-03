@@ -217,7 +217,7 @@ class EventTrackingHandler
             }
             $html .= '<div class="fcrm_event_tracking_footer">';
             $html .= '<div class="fcrm_event_tracking_badge">' . esc_attr($event->event_key) . '<span class="fcrm_event_tracking_count">(' . esc_html($event->counter) . ')</span></div>';
-            $html .= '<span class="fcrm_event_tracking_date">' . $event->updated_at . '</span>';
+            $html .= '<span class="fcrm_event_tracking_date">' . esc_html(Helper::formatDateTime($event->updated_at)) . '</span>';
             $html .= '</div>';
             $html .= '</li>';
         }

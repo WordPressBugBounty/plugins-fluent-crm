@@ -266,6 +266,19 @@ class PrefFormHandler
             $errors[] = 'date_of_birth';
         }
 
+        /*
+         * The loop above normalizes every enabled-but-unsubmitted field to '',
+         * which is right for the varchar columns but not for date_of_birth: that
+         * maps to a DATE column, where '' is rejected outright wherever
+         * STRICT_TRANS_TABLES is on (the MySQL 8 default) and silently stored as
+         * the sentinel '0000-00-00' everywhere else. Clearing an omitted optional
+         * date is the existing intent; NULL is how this column already expresses
+         * "unset", so clear to that instead.
+         */
+        if (array_key_exists('date_of_birth', $validData) && $validData['date_of_birth'] === '') {
+            $validData['date_of_birth'] = null;
+        }
+
         if ($errors) {
             wp_send_json_error([
                 'message' => __('Please fill up all required fields', 'fluent-crm'),

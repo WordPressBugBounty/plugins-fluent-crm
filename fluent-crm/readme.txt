@@ -4,7 +4,7 @@ Tags: email marketing, newsletter, crm, email newsletter, subscribers
 Requires at least: 5.0
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 3.1.13
+Stable tag: 3.2.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -261,7 +261,54 @@ You can report any security bugs found in the source code of FluentCRM plugins t
 
 == Changelog ==
 
-= 3.1.13 (Date: August 24, 2026) =
+= 3.2.0 (Date: September 03, 2026) =
+- New: Unified Messaging for SMS and WhatsApp, with one Inbox for contacts and new people.
+- New: Start a one-to-one SMS or WhatsApp conversation with any phone number, even before the person becomes a CRM contact.
+- New: Send Messaging campaigns to one-time recipients from a CSV file or pasted phone numbers.
+- New: Always-on receiving — any message sent to your business number lands in the CRM Inbox, whether or not the sender is a contact.
+- New: WhatsApp templates without leaving FluentCRM — create, manage and sync them in one place.
+- New: Reusable SMS message templates for faster, consistent replies and campaigns.
+- New: Receive WhatsApp images and documents in Inbox.
+- New: FluentCart Create Coupon automation action with coupon smartcode support.
+- New: Theme colors are now available in the email editor.
+- New: Media & Text block support in emails.
+- Improvement: Messaging rebuilt on a conversation-thread architecture — a solid foundation for upcoming channels and features.
+- Improvement: Messaging settings are now organized in one simpler tabbed screen.
+- Improvement: Ability to Select all contacts in a dynamic segment.
+- Improvement: Added replace/add/subtract modes to bulk custom field update
+- Improvement: Redesigned license screen with grace period and clearer status.
+- Improvement: Event tracking dates now follow the site date format.
+- Improvement: Tag and list names are length-checked before saving.
+- Improvement: Faster sending on large campaigns.
+- Improvement: Dark mode polish across inputs, buttons and admin screens.
+- Improvement: Non-subscribed contacts can be re-invited through opt-in forms and LMS integrations.
+- Improvement: Active WooCommerce subscriptions are now included on re-sync.
+- Improvement: WordPress version 7.1 compatible
+- Fixed: The fluent_crm/default_email_design_template filter not being applied to templates created from scratch.
+- Fixed: activity days-before contact filter
+- Fixed: The configured Default Contact Status is now honored for WooCommerce and EDD
+- Fixed: Heading font weight in email preview
+- Fixed: Raw HTML campaign content not saving in the editor.
+- Fixed: Campaign Archive shortcode parameters being ignored without ids
+- Fixed: Single Campaign archive rendering issue.
+- Fixed: Woo review smartcode responsive layout
+- Fixed: https:// being added to smartcode button links.
+- Fixed: Image links lost when replacing an image from the media library.
+- Fixed: Styling issues on the View in Browser email page.
+- Fixed: Outdated revenue showing after re-syncing a campaign report.
+- Fixed: Bounces from ToSend not being recorded.
+- Fixed: Incorrect advanced filter results for numeric contact custom fields.
+- Fixed: Phone numbers in local format being rejected.
+- Fixed: Tag search returning empty results when searching from page 2.
+- Fixed: Incorrect counts in automation step reports.
+- Fixed: Fatal error and incorrect campaign revenue totals on refunded WooCommerce orders.
+- Security Improvement: Strengthened permissions and safer handling for imports, exports, settings and external connections.
+- Security Improvement: Added safeguards against repeated subscription-link email requests.
+- Security Improvement: The "Change User Role" automation action now validates the target role's capabilities before applying it.
+- Security Improvement: SSL and safe Remote call enforced in some places.
+- Other Improvement & Bug Fixes
+
+= 3.1.13 (Date: August 24, 2026)
 - Internal Changes for Messaging Platforms Features
 - Route Policies Improvements for Roles and Permissions
 

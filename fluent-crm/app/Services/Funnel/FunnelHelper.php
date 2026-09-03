@@ -353,10 +353,24 @@ class FunnelHelper
         $funnel->updated_at = current_time('mysql');
         $funnel->save();
 
-        if ($funnelDescription = Arr::get($data, 'funnel_description')) {
-            $funnel->updateMeta('description', $funnelDescription);
-        } else {
-            $funnel->deleteMeta('description');
+        /*
+         * Only touch the description when the payload actually carries the field.
+         * Not every caller sends it — the editor's jQuery AJAX fallback save omits
+         * it entirely — and an omitted field must not delete a description the user
+         * never edited. An empty value that IS sent still clears it, so the editor
+         * can deliberately remove a description.
+         */
+        if (array_key_exists('funnel_description', $data)) {
+            $rawDescription = Arr::get($data, 'funnel_description');
+            // The note is plain text by design, so a non-scalar payload clears it.
+            $funnelDescription = is_scalar($rawDescription)
+                ? sanitize_textarea_field((string)$rawDescription)
+                : '';
+            if ($funnelDescription) {
+                $funnel->updateMeta('description', $funnelDescription);
+            } else {
+                $funnel->deleteMeta('description');
+            }
         }
 
         $sequenceIds = [];

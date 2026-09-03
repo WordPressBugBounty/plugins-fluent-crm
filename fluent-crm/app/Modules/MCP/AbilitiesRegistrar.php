@@ -83,7 +83,6 @@ class AbilitiesRegistrar
                         'tags'                  => ['type' => 'array', 'items' => ['type' => ['string', 'integer']], 'description' => 'Tag ids or slugs/titles. Mixed allowed.'],
                         'lists'                 => ['type' => 'array', 'items' => ['type' => ['string', 'integer']], 'description' => 'List ids or slugs/titles. Mixed allowed.'],
                         'statuses'              => ['type' => 'array', 'items' => ['type' => 'string'], 'description' => 'See get-crm-context.enums.contact_statuses.'],
-                        'sms_statuses'          => ['type' => 'array', 'items' => ['type' => 'string'], 'description' => 'See get-crm-context.enums.sms_statuses.'],
                         'contact_type'          => ['type' => 'string', 'enum' => ['lead', 'customer']],
                         'created_after'         => ['type' => 'string', 'description' => 'Inclusive lower bound. YYYY-MM-DD, "YYYY-MM-DD HH:MM:SS" (site timezone), or full ISO 8601 with offset. Unparseable values are rejected, not ignored.'],
                         'created_before'        => ['type' => 'string', 'description' => 'Inclusive upper bound, same formats. A date-only value means midnight at the START of that day.'],

@@ -246,6 +246,7 @@ function fluentcrm_delete_meta($objectId, $objectType, $key = '')
         ->delete();
 }
 
+
 /**
  * Get FluentCRM Option
  * @param $optionName string
@@ -373,6 +374,33 @@ function fluentcrm_update_sms_campaign_meta($campaignId, $key, $value)
 function fluentcrm_delete_sms_campaign_meta($campaignId, $key = '')
 {
     return fluentcrm_delete_meta($campaignId, 'FluentCampaign\App\Modules\SMS\Models\SMSCampaign', $key);
+}
+
+/*
+ * WhatsApp Campaign Meta Functions
+ */
+
+function fluentcrm_get_wa_campaign_meta($campaignId, $key, $returnValue = false)
+{
+    $item = fluentcrm_get_meta($campaignId, 'FluentCrm\App\Models\WhatsAppCampaign', $key);
+    if ($returnValue) {
+        if ($item) {
+            return $item->value;
+        }
+        return false;
+    }
+
+    return $item;
+}
+
+function fluentcrm_update_wa_campaign_meta($campaignId, $key, $value)
+{
+    return fluentcrm_update_meta($campaignId, 'FluentCrm\App\Models\WhatsAppCampaign', $key, $value);
+}
+
+function fluentcrm_delete_wa_campaign_meta($campaignId, $key = '')
+{
+    return fluentcrm_delete_meta($campaignId, 'FluentCrm\App\Models\WhatsAppCampaign', $key);
 }
 
 /**
@@ -577,41 +605,6 @@ function fluentcrm_subscriber_statuses($isOptions = false)
 
     return $formattedStatues;
 
-}
-
-function fluentcrm_subscriber_sms_statuses($isOptions = false)
-{
-    $core_statuses = [
-        'sms_subscribed',
-        'sms_pending',
-        'sms_unsubscribed',
-        'sms_bounced'
-    ];
-
-    $statuses = apply_filters('fluent_crm/contact_sms_statuses', $core_statuses);
-
-    if (!$isOptions) {
-        return $statuses;
-    }
-
-    $formattedStatues = [];
-    $transMaps = [
-        'sms_subscribed'   => __('SMS Subscribed', 'fluent-crm'),
-        'sms_pending'      => __('SMS Pending', 'fluent-crm'),
-        'sms_unsubscribed' => __('SMS Unsubscribed', 'fluent-crm'),
-        'sms_bounced'      => __('SMS Bounced', 'fluent-crm')
-    ];
-
-    foreach ($statuses as $status) {
-        $title = isset($transMaps[$status]) ? $transMaps[$status] : ucwords(str_replace('_', ' ', $status));
-        $formattedStatues[] = [
-            'id'    => $status,
-            'slug'  => $status,
-            'title' => $title
-        ];
-    }
-
-    return $formattedStatues;
 }
 
 /**
@@ -1685,39 +1678,24 @@ function fluentCrmGetContactSecureHash($contactId)
     return $hash;
 }
 
+/**
+ * The contact's managed hash, creating one if it does not exist yet.
+ *
+ * The hash is stable for the life of the contact so that List-Unsubscribe and
+ * manage-subscription links keep resolving however long an email lingers in an
+ * inbox. It is rotated only on an explicit security event — a WordPress
+ * password change (see Cleanup::handleUserPasswordChanged()).
+ *
+ * The lookup, per-process cache and batch priming live on Helper so the bulk
+ * send loop can resolve a whole claimed batch in one round trip
+ * (Helper::primeManagedHashes). Behaviour here is unchanged.
+ *
+ * @param int $contactId
+ * @return string
+ */
 function fluentCrmGetContactManagedHash($contactId)
 {
-    static $cache = [];
-
-    if (isset($cache[$contactId])) {
-        return $cache[$contactId];
-    }
-
-    $exist = SubscriberMeta::where('subscriber_id', $contactId)
-        ->where('key', '_secure_managed_hash')
-        ->first();
-
-    if ($exist) {
-        // The managed hash is stable for the life of the contact so that List-Unsubscribe
-        // and manage-subscription links keep resolving however long an email lingers in an
-        // inbox. It is rotated only on an explicit security event — a WordPress password
-        // change (see Cleanup::handleUserPasswordChanged()).
-        $cache[$contactId] = $exist->value;
-        return $exist->value;
-    }
-
-    $hash = md5(wp_generate_uuid4() . '_' . $contactId . '_' . '_' . time()) . '__' . $contactId;
-
-    SubscriberMeta::create([
-        'subscriber_id' => $contactId,
-        'created_by'    => 0,
-        'key'           => '_secure_managed_hash',
-        'object_type'   => 'option',
-        'value'         => $hash
-    ]);
-
-    $cache[$contactId] = $hash;
-    return $hash;
+    return \FluentCrm\App\Services\Helper::getManagedHash($contactId);
 }
 
 function fluentCrmGetFromCache($key, $callback = false, $expire = 600)

@@ -16,7 +16,11 @@
 (new \FluentCrm\App\Hooks\Handlers\FluentConditionalContentBlockHandler())->register();
 (new \FluentCrm\App\Modules\AbandonCart\AbandonCart())->register();
 
+
 (new \FluentCrm\App\Hooks\Handlers\AutoSubscribeHandler())->register();
+
+// WhatsApp Module is a Pro feature — initialized by fluentcampaign-pro plugin
+// The free plugin only provides: Vue frontend, database migrations, and helper functions
 
 add_action('fluentcrm_contacts_filter_subscriber', function ($query, $filters) {
     return (new \FluentCrm\App\Models\Subscriber)->buildGeneralPropertiesFilterQuery($query, $filters);
@@ -64,7 +68,6 @@ $app->addAction('wp_ajax_nopriv_fluent_crm_account_form', 'PrefFormHandler@handl
 
 // Fallback for funnel sequence save ajax
 $app->addAction('wp_ajax_fluentcrm_save_funnel_sequence_ajax', 'FunnelHandler@saveSequences');
-$app->addAction('wp_ajax_fluentcrm_export_funnel', 'FunnelHandler@exportFunnel');
 $app->addAction('wp_ajax_fluentcrm_save_funnel_email_action', 'FunnelHandler@saveEmailAction');
 $app->addAction('wp_ajax_fluentcrm_save_campaign_email_body', 'FunnelHandler@saveCampaignEmail');
 

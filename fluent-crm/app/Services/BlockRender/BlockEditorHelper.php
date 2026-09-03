@@ -312,6 +312,17 @@ class BlockEditorHelper
             $replaces['var(--wp--preset--font-size--' . $themeFontSize['slug'] . ')'] = $size;
         }
 
+        // Include active theme palette colors (classic or block theme) so theme-color
+        // slugs resolve to concrete values in the final email instead of leaking var() tokens.
+        $themeColors = \FluentCrm\App\Services\Helper::getThemeColorPalette();
+        foreach ((array)$themeColors as $themeColor) {
+            if (!is_array($themeColor) || empty($themeColor['slug']) || empty($themeColor['color'])) {
+                continue;
+            }
+            $replaces['var(--wp--preset--color--' . $themeColor['slug'] . ')'] = $themeColor['color'];
+            $replaces['var(--fcom--color--' . $themeColor['slug'] . ')'] = $themeColor['color'];
+        }
+
         return str_replace(array_keys($replaces), array_values($replaces), $css);
     }
 

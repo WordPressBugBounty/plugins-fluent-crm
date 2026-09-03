@@ -462,7 +462,7 @@ class ContactTools
     /**
      * The explicit top-level contact columns the MCP write contract accepts.
      * Everything else in the Subscriber model's fillable list — user_id,
-     * company_id, ip, latitude/longitude, sms_status, whatsapp_status,
+     * company_id, ip, latitude/longitude,
      * life_time_value, total_points, created_at/updated_at — is NOT an MCP
      * input and must be dropped, never overposted (SEC-001). Single and bulk
      * upsert share this list so their write contract can never diverge.
@@ -730,7 +730,7 @@ class ContactTools
             // Deferred: this delivers a real email, and an email promising a
             // confirmation link for a contact the rollback removed is not
             // something we can take back.
-            if ($contact->status === 'pending' && !empty($params['double_optin'])) {
+            if (!empty($params['double_optin']) && $contact->status !== 'subscribed') {
                 $optinContact = $contact;
                 $deferredEffects[] = function () use ($optinContact) {
                     $optinContact->sendDoubleOptinEmail();
@@ -1055,7 +1055,7 @@ class ContactTools
 
             // Build from the shared allowlist, never the raw row — otherwise
             // model-fillable-but-not-MCP fields (user_id, company_id, ip,
-            // sms_status, life_time_value, timestamps, …) would be overposted
+            // life_time_value, timestamps, …) would be overposted
             // through the untyped bulk object (SEC-001). Mirrors single upsert.
             $payload = [
                 'email' => sanitize_email($row['email']),
@@ -1141,7 +1141,7 @@ class ContactTools
             // replaced re-read the table every iteration and behaved that way.
             $existingByEmail[strtolower($contact->email)] = $contact;
 
-            if ($doubleOptin && $contact->status === 'pending') {
+            if ($doubleOptin && $contact->status !== 'subscribed') {
                 $contact->sendDoubleOptinEmail();
             }
 

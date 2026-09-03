@@ -10,7 +10,6 @@ use FluentCrm\App\Models\CustomEmailCampaign;
 use FluentCrm\App\Models\EventTracker;
 use FluentCrm\App\Models\Funnel;
 use FluentCrm\App\Models\Subscriber;
-use FluentCrm\App\Models\SubscriberMeta;
 use FluentCrm\App\Models\SubscriberNote;
 use FluentCrm\App\Models\SubscriberPivot;
 use FluentCrm\App\Services\AutoSubscribe;
@@ -67,7 +66,6 @@ class SubscriberController extends Controller
                 'custom_fields' => $this->request->get('custom_fields') == 'true',
                 'tags'          => $this->request->get('tags', []),
                 'statuses'      => $this->request->get('statuses', []),
-                'sms_statuses'  => $this->request->get('sms_statuses', []),
                 'lists'         => $this->request->get('lists', []),
                 'company_ids'   => $this->request->get('company_ids', []),
             ];
@@ -192,23 +190,9 @@ class SubscriberController extends Controller
         $subscriberIds = array_map('intval', $subscriberIds);
         $subscriberIds = array_unique(array_filter($subscriberIds));
 
-        // $validColumns = ['status', 'contact_type', 'avatar', 'company_id', 'sms_status', 'whatsapp_status'];
-        $validColumns = ['status', 'contact_type', 'avatar', 'company_id', 'sms_status'];
+        $validColumns = ['status', 'contact_type', 'avatar', 'company_id'];
         $subscriberStatuses = fluentcrm_subscriber_statuses();
         $leadStatuses = fluentcrm_contact_types();
-        $smsStatuses = apply_filters('fluentcrm_sms_statuses', [
-            'sms_subscribed',
-            'sms_unsubscribed',
-            'sms_pending',
-            'sms_bounced'
-        ]);
-        // Resolve WhatsApp statuses through a filter so Pro/third-party
-        // extensions can extend the vocabulary, mirroring how SMS statuses work.
-        // $whatsappStatuses = apply_filters('fluent_crm/whatsapp_statuses', [
-        //     'whatsapp_subscribed',
-        //     'whatsapp_unsubscribed'
-        // ]);
-
         $this->validate([
             'column'         => $column,
             'subscriber_ids' => $subscriberIds
@@ -233,16 +217,7 @@ class SubscriberController extends Controller
             ]);
         } else if ($column == 'company_id') {
             Company::findOrFail($value); // just a check
-        } else if ($column == 'sms_status' && !in_array($value, $smsStatuses)) {
-            return $this->sendError([
-                'message' => __('Value is not valid', 'fluent-crm')
-            ]);
         }
-        // } else if ($column == 'whatsapp_status' && !in_array($value, $whatsappStatuses)) {
-        //     return $this->sendError([
-        //         'message' => __('Value is not valid', 'fluent-crm')
-        //     ]);
-        // }
 
         $subscribers = Subscriber::whereIn('id', $subscriberIds)->get();
 
@@ -251,8 +226,7 @@ class SubscriberController extends Controller
             if ($oldValue != $value) {
                 $subscriber->{$column} = $value;
                 $subscriber->save();
-                // if (in_array($column, ['status', 'contact_type', 'sms_status', 'whatsapp_status'])) {
-                if (in_array($column, ['status', 'contact_type', 'sms_status'])) {
+                if (in_array($column, ['status', 'contact_type'])) {
                     do_action('fluentcrm_subscriber_' . $column . '_to_' . $value, $subscriber, $oldValue);
 
                     if ($column == 'status') {
@@ -265,31 +239,7 @@ class SubscriberController extends Controller
                          *
                          */
                         do_action('fluent_crm/subscriber_status_changed', $subscriber, $oldValue, $value);
-                    } else if ($column == 'sms_status') {
-                        /**
-                         * Contact's SMS Status has been changed
-                         *
-                         * @param Subscriber $subscriber Subscriber Model.
-                         * @param string $oldStatus Old SMS Status.
-                         * @since 3.0.0
-                         *
-                         */
-                        do_action('fluent_crm/subscriber_sms_status_changed', $subscriber, $oldValue, $value);
                     }
-                    // } else if ($column == 'whatsapp_status') {
-                    //     /**
-                    //      * Contact's WhatsApp Status has been changed
-                    //      *
-                    //      * @param Subscriber $subscriber Subscriber Model.
-                    //      * @param string $oldValue Old WhatsApp Status.
-                    //      * @param string $value New WhatsApp Status.
-                    //      */
-                    //     if ($value === 'whatsapp_subscribed') {
-                    //         do_action('fluent_crm/contact_whatsapp_subscribed', $subscriber, $oldValue, $value);
-                    //     } else {
-                    //         do_action('fluent_crm/contact_whatsapp_unsubscribed', $subscriber, $oldValue, $value);
-                    //     }
-                    // }
 
                 }
                 if ($column == 'avatar') {
@@ -427,7 +377,7 @@ class SubscriberController extends Controller
 
             $double_optin = filter_var($request->get('double_optin'), FILTER_VALIDATE_BOOLEAN);
 
-            if ($double_optin && $contact->status == 'pending') {
+            if ($double_optin && $contact->status != 'subscribed') {
                 $contact->sendDoubleOptinEmail();
             }
 
@@ -448,7 +398,7 @@ class SubscriberController extends Controller
 
             $contact = FluentCrmApi('contacts')->createOrUpdate($data, $shouldForce, false);
 
-            if ($contact && $contact->status == 'pending') {
+            if ($contact && $contact->status != 'subscribed') {
                 $contact->sendDoubleOptinEmail();
             }
 
@@ -495,7 +445,7 @@ class SubscriberController extends Controller
                 continue;
             }
 
-            if ($createdContact->status == 'pending' && $double_optin) {
+            if ($double_optin && $createdContact->status != 'subscribed') {
                 $createdContact->sendDoubleOptinEmail();
             }
 
@@ -1209,13 +1159,9 @@ class SubscriberController extends Controller
             ]);
         }
 
-        // The admin explicitly asked for an opt-in send, and the opt-in email is
-        // strictly gated on status == 'pending' — so this caller moves the contact
-        // into the opt-in pipeline first (that status decision is the caller's).
-        if ($subscriber->status != 'pending') {
-            $subscriber->updateStatus('pending');
-        }
-
+        // No status write here: an unsubscribed/bounced contact keeps that status
+        // (and its suppression) until they actually click the confirmation link,
+        // which is the only real proof of re-consent.
         if (!$subscriber->sendDoubleOptinEmail()) {
             return $this->sendError([
                 'message' => __('Double opt-in email could not be sent. Please check the double opt-in settings; resends are also throttled for a couple of minutes.', 'fluent-crm')
@@ -1682,8 +1628,9 @@ class SubscriberController extends Controller
             ];
         } else if ($actionName == 'update_custom_fields') {
             $customField = $request->get('custom_field');
-            $customFieldKey = Arr::get($customField, 'key');
+            $customFieldKey = sanitize_text_field(Arr::get($customField, 'key', ''));
             $customFieldValue = Arr::get($customField, 'value');
+            $operation = sanitize_text_field(Arr::get($customField, 'operation', ''));
             $subscribers = Subscriber::whereIn('id', $subscriberIds)->get();
 
             if (empty($customFieldKey)) {
@@ -1692,31 +1639,42 @@ class SubscriberController extends Controller
                 ]);
             }
 
-            foreach ($subscribers as $subscriber) {
-                // Scope to object_type = 'custom_field' (Behavioral Rule 11) so a field
-                // slugged like an internal meta key can't overwrite the internal row.
-                $existField = SubscriberMeta::where('key', $customFieldKey)
-                    ->where('subscriber_id', $subscriber->id)
-                    ->where('object_type', 'custom_field')
-                    ->first();
-
-                // check if exists
-                if ($existField) {
-                    if ($existField->value == $customFieldValue) {
-                        continue;
-                    }
-                    $existField->fill(['value' => $customFieldValue])->save();
-                } else {
-                    $customFieldMeta = new SubscriberMeta();
-                    $customFieldMeta->fill([
-                        'subscriber_id' => $subscriber->id,
-                        'object_type'   => 'custom_field',
-                        'key'           => $customFieldKey,
-                        'value'         => $customFieldValue,
-                        'created_by'    => get_current_user_id()
-                    ]);
-                    $customFieldMeta->save();
+            // Resolve and reuse custom-field definitions once for the whole chunk.
+            $customFieldDefinitions = [];
+            foreach ((array) fluentcrm_get_option('contact_custom_fields', []) as $storedField) {
+                $storedFieldSlug = sanitize_text_field(Arr::get($storedField, 'slug', ''));
+                if ($storedFieldSlug) {
+                    $customFieldDefinitions[$storedFieldSlug] = $storedField;
                 }
+            }
+
+            $fieldType = Arr::get($customFieldDefinitions, $customFieldKey . '.type', '');
+            $isMultiType = in_array($fieldType, ['select-multi', 'checkbox'], true);
+            $isNumberType = $fieldType === 'number';
+            $useOperation = in_array($operation, ['add', 'subtract'], true) && ($isMultiType || $isNumberType);
+
+            foreach ($subscribers as $subscriber) {
+                $newValue = $customFieldValue;
+
+                if ($useOperation) {
+                    $existingValue = $subscriber->getMeta($customFieldKey, 'custom_field');
+
+                    if ($isNumberType) {
+                        $existingNum = (float) $existingValue;
+                        $incomingNum = (float) $customFieldValue;
+                        $newValue = $operation === 'subtract'
+                            ? $existingNum - $incomingNum
+                            : $existingNum + $incomingNum;
+                    } else {
+                        $existingOptions = $existingValue ? (array) $existingValue : [];
+                        $incomingOptions = (array) $customFieldValue;
+                        $newValue = $operation === 'subtract'
+                            ? array_values(array_diff($existingOptions, $incomingOptions))
+                            : array_values(array_unique(array_merge($existingOptions, $incomingOptions)));
+                    }
+                }
+
+                $subscriber->syncCustomFieldValues([$customFieldKey => $newValue], true, $customFieldDefinitions);
             }
 
             return [
@@ -1802,7 +1760,7 @@ class SubscriberController extends Controller
             ]);
         }
 
-        $sortType = sanitize_sql_orderby($this->request->get('sort_type', 'DESC'));
+        $sortType = Helper::sanitizeOrderBy($this->request->get('sort_type'), 'DESC');
         $prevSortType = ($sortType == 'DESC') ? 'ASC' : 'DESC';
 
         if ($filterType == 'advanced') {
@@ -2056,8 +2014,8 @@ class SubscriberController extends Controller
 
     public function getUrlMetrics(Request $request, $id)
     {
-        $sort_by = sanitize_sql_orderby($this->request->get('sort_by', 'id'));
-        $sort_type = sanitize_sql_orderby($this->request->get('sort_type', 'DESC'));
+        $sort_by = Helper::sanitizeOrderBy($this->request->get('sort_by'), 'id');
+        $sort_type = Helper::sanitizeOrderBy($this->request->get('sort_type'), 'DESC');
         $subscriber = Subscriber::findOrFail($id);
 
         $urlActivityQuery = CampaignUrlMetric::with('url_stores')

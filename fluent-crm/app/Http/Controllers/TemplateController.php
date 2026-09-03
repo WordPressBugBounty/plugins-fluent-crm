@@ -29,8 +29,8 @@ class TemplateController extends Controller
      */
     public function templates(Request $request)
     {
-        $order = $request->getSafe('order', 'sanitize_sql_orderby', 'desc');
-        $orderBy = $request->getSafe('orderBy', 'sanitize_sql_orderby', 'ID');
+        $order = Helper::sanitizeOrderBy($request->get('order'), 'desc');
+        $orderBy = Helper::sanitizeOrderBy($request->get('orderBy'), 'ID');
 
         $templatesQuery = Template::emailTemplates(
             $request->get('types', ['publish', 'draft'])
