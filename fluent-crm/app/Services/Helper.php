@@ -20,6 +20,27 @@ use FluentCrm\Framework\Support\Str;
 class Helper
 {
     const DEFAULT_CAMPAIGN_TEMPLATE_OPTION = 'default_campaign_template_id';
+    const MIGRATION_FLAGS_OPTION = '_fc_migration_flags';
+
+    public static function getMigrationFlag($flag, $default = '')
+    {
+        $flags = fluentcrm_get_option(self::MIGRATION_FLAGS_OPTION, []);
+
+        return is_array($flags) ? ($flags[$flag] ?? $default) : $default;
+    }
+
+    public static function setMigrationFlag($flag, $value)
+    {
+        if (!$flag) {
+            return;
+        }
+
+        $flags = fluentcrm_get_option(self::MIGRATION_FLAGS_OPTION, []);
+        $flags = is_array($flags) ? $flags : [];
+        $flags[$flag] = $value;
+
+        fluentcrm_update_option(self::MIGRATION_FLAGS_OPTION, $flags);
+    }
 
     /**
      * Determine if the active Easy Digital Downloads version is supported.
@@ -1531,13 +1552,13 @@ class Helper
 
         $headers = [];
         if (Arr::get($emailSettings, 'from_name') && Arr::get($emailSettings, 'from_email')) {
-            $headers['From'] = $emailSettings['from_name'] . ' <' . $emailSettings['from_email'] . '>';
+            $headers['From'] = static::formatMailbox($emailSettings['from_name'], $emailSettings['from_email']);
         } else if ($fromEmail = Arr::get($emailSettings, 'from_email')) {
             $headers['From'] = $fromEmail;
         }
 
         if (Arr::get($emailSettings, 'reply_to_name') && Arr::get($emailSettings, 'reply_to_email')) {
-            $headers['Reply-To'] = $emailSettings['reply_to_name'] . ' <' . $emailSettings['reply_to_email'] . '>';
+            $headers['Reply-To'] = static::formatMailbox($emailSettings['reply_to_name'], $emailSettings['reply_to_email']);
         } else if ($replyTo = Arr::get($emailSettings, 'reply_to_email')) {
             $headers['Reply-To'] = $replyTo;
         }
@@ -1567,7 +1588,7 @@ class Helper
         $fromEmail = Arr::get($globalEmailSettings, 'from_email');
 
         if ($fromName && $fromEmail) {
-            $headers['From'] = $fromName . ' <' . $fromEmail . '>';
+            $headers['From'] = static::formatMailbox($fromName, $fromEmail);
         } else if ($fromEmail) {
             $headers['From'] = $fromEmail;
         }
@@ -1576,7 +1597,7 @@ class Helper
         $replyEmail = Arr::get($globalEmailSettings, 'reply_to_email');
 
         if ($replyName && $replyEmail) {
-            $headers['Reply-To'] = $replyName . ' <' . $replyEmail . '>';
+            $headers['Reply-To'] = static::formatMailbox($replyName, $replyEmail);
         } else if ($replyEmail) {
             $headers['Reply-To'] = $replyEmail;
         }
@@ -1584,6 +1605,27 @@ class Helper
         $globalHeaders = $headers;
 
         return $globalHeaders;
+    }
+
+    /**
+     * Build an RFC 5322 mailbox header from a display name and email address.
+     *
+     * Display names with RFC specials, such as commas, must be quoted so
+     * providers do not interpret them as a list of mailboxes.
+     */
+    public static function formatMailbox($name, $email)
+    {
+        $name = trim(preg_replace('/[\r\n]+/', ' ', (string) $name));
+
+        if ($name === '') {
+            return $email;
+        }
+
+        if (preg_match('/[()<>\[\]:;@\\\\,."\x00-\x1F\x7F]/u', $name)) {
+            $name = '"' . str_replace(['\\', '"'], ['\\\\', '\\"'], $name) . '"';
+        }
+
+        return $name . ' <' . $email . '>';
     }
 
     public static function recordCampaignRevenue($campaignId, $amount, $orderId, $currency = 'USD', $isRefunded = false)

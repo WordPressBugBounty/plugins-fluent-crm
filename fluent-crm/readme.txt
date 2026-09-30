@@ -1,10 +1,10 @@
 === FluentCRM - Email Newsletter, Automation, Email Marketing, Email Campaigns, Optins, Leads, and CRM Solution ===
 Contributors: techjewel,adreastrian,heera,wpmanageninja
 Tags: email marketing, newsletter, crm, email newsletter, subscribers
-Requires at least: 5.0
+Requires at least: 6.0
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 3.2.0
+Stable tag: 3.2.5
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -260,6 +260,22 @@ You can report any security bugs found in the source code of FluentCRM plugins t
 10. Pro Integrations
 
 == Changelog ==
+
+= 3.2.5 (Date: September 30, 2026) =
+- New: Company sync for new Fluent Forms contacts.
+- New: Completed lesson filters for LearnDash, LifterLMS, LearnPress, and TutorLMS.
+- New: Campaign Archives Gutenberg block with card layouts.
+- New: CSV import options to update existing contacts only and preserve existing data.
+- Improvement: Faster reports, company contact counts, block editor startup, and template loading.
+- Improvement: Easier campaign, automation, and sequence renaming; campaign revenue badges and automatic report refresh.
+- Improvement: URL-encoded smartcodes, safer Fluent Forms smartcode handling, and WooCommerce product selectors.
+- Important: Legacy Twilio webhook URLs are retired. Update older configurations to the URL shown in FluentCRM settings.
+- Fixed: Automation trigger updates, REST publishing, nested sequence goals, and continuation after re-applied conditional branches.
+- Fixed: Messaging dynamic-segment recipients, Inbox scrolling, SMS capitalization, and WhatsApp template variables and approvals.
+- Fixed: WooCommerce HPOS purchase tags, subscription reports, revenue updates, and subscription variation filters; coupon expiry now starts at generation.
+- Fixed: MySQL 5.6 installation, MyISAM indexes, database repair, Messaging migrations, and cron scheduling.
+- Fixed: Visual Builder campaigns, email sender names with commas, logged-in preference forms, and Elementor custom fields.
+- Other: Additional integration, contact management, editor, and compatibility fixes.
 
 = 3.2.0 (Date: September 03, 2026) =
 - New: Unified Messaging for SMS and WhatsApp, with one Inbox for contacts and new people.

@@ -33,7 +33,7 @@ final class Extender
             return $sections;
         });
 
-        add_filter('fluencrm_profile_section_' . $key, function ($content, $subscriber) use ($callback) {
+        add_filter('fluent_crm/profile_section_' . $key, function ($content, $subscriber) use ($callback) {
             if (is_callable($callback)) {
                 return $callback($content, $subscriber);
             }
@@ -41,7 +41,7 @@ final class Extender
         }, 10, 2);
 
         if ($saveCallback) {
-            add_filter('fluencrm_profile_section_save_' . $key, function ($response, $data, $subscriber) use ($saveCallback) {
+            add_filter('fluent_crm/profile_section_save_' . $key, function ($response, $data, $subscriber) use ($saveCallback) {
                 if (is_callable($saveCallback)) {
                     return $saveCallback($response, $data, $subscriber);
                 }

@@ -681,47 +681,18 @@ class TemplateController extends Controller
                 // Skip if no template json
                 continue;
             }
-            $mediaURL = '';
-            if ($template['featured_media'] != 0) {
-                $mediaURL = $this->getMediaURL($template['featured_media'], $restApi);
-            }
             $formattedTemplates[] = [
                 'id'                => $template['id'],
                 'title'             => $template['title']['rendered'],
                 'content'           => $template['template_json'],
                 'short_description' => $template['short_description'],
                 'link'              => $template['link'],
-                'media_url'         => $mediaURL,
+                'media_url'         => Arr::get($template, 'cover_image', ''),
                 'status'            => $template['status'],
-                'cover_image'       => $template['cover_image'],
+                'cover_image'       => Arr::get($template, 'cover_image', ''),
             ];
         }
 
         return $formattedTemplates;
-    }
-
-
-    /**
-     * Retrieves the full source URL of a media item.
-     *
-     * @param int    $mediaID Media item ID.
-     * @param string $restAPI The base URL of the REST API.
-     *
-     * @return string Full source URL of the media item.
-     */
-    public function getMediaURL($mediaID, $restAPI) {
-        $request = wp_remote_get($restAPI.'media/'.$mediaID, [
-            'sslverify' => false,
-        ]);
-
-        // Check for request errors
-        if (is_wp_error($request)) {
-            return '';
-        }
-
-        $image = json_decode($request['body'], true);
-        $img   = Arr::get($image, 'source_url');
-
-        return $img;
     }
 }

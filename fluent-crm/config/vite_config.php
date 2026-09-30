@@ -95,6 +95,15 @@
             '_fc-bits-ui.js'
         ]
     ],
+    '_ChartBuilder.js' => [
+        'file' => 'ChartBuilder.js',
+        'name' => 'ChartBuilder',
+        'imports' => [
+            '_fc-bits-ui.js',
+            '_vendor.js',
+            '_fc-bits.js'
+        ]
+    ],
     '_CompanyEditForm.js' => [
         'file' => 'CompanyEditForm.js',
         'name' => 'CompanyEditForm',
@@ -419,6 +428,15 @@
         ],
         'dynamicImports' => [
             'resources/v3app/src/Modules/Contacts/RichFilters/Filters.vue'
+        ]
+    ],
+    '_RenameTitle.js' => [
+        'file' => 'RenameTitle.js',
+        'name' => 'RenameTitle',
+        'imports' => [
+            '_vendor-element-plus.js',
+            '_fc-bits-ui.js',
+            '_vendor.js'
         ]
     ],
     '_SaveButton.js' => [
@@ -790,13 +808,13 @@
             'flags@2x.webp'
         ]
     ],
-    'node_modules/.pnpm/intl-tel-input@26.9.1/node_modules/intl-tel-input/build/img/flags.webp' => [
+    'node_modules/.pnpm/intl-tel-input@26.9.2/node_modules/intl-tel-input/build/img/flags.webp' => [
         'file' => 'flags.webp',
-        'src' => 'node_modules/.pnpm/intl-tel-input@26.9.1/node_modules/intl-tel-input/build/img/flags.webp'
+        'src' => 'node_modules/.pnpm/intl-tel-input@26.9.2/node_modules/intl-tel-input/build/img/flags.webp'
     ],
-    'node_modules/.pnpm/intl-tel-input@26.9.1/node_modules/intl-tel-input/build/img/flags@2x.webp' => [
+    'node_modules/.pnpm/intl-tel-input@26.9.2/node_modules/intl-tel-input/build/img/flags@2x.webp' => [
         'file' => 'flags@2x.webp',
-        'src' => 'node_modules/.pnpm/intl-tel-input@26.9.1/node_modules/intl-tel-input/build/img/flags@2x.webp'
+        'src' => 'node_modules/.pnpm/intl-tel-input@26.9.2/node_modules/intl-tel-input/build/img/flags@2x.webp'
     ],
     'resources/admin/Modules/Dashboard/Dashboard.vue' => [
         'file' => 'admin/Modules/Dashboard/Dashboard.js',
@@ -882,6 +900,7 @@
             '_PreviewIframeBuilder.js',
             '_data_config.js',
             '_CampaignSubjectLines.js',
+            '_RenameTitle.js',
             '_Confirm.js',
             '__FormBuilder.js',
             '_PhotoWidget.js',
@@ -946,6 +965,7 @@
             '__CampaignDetails.js',
             '_ReadableRecipientTagger.js',
             '_ItemCopier.js',
+            '_RenameTitle.js',
             '_TestEmail.js',
             '_BaseCard.js',
             '_Confirm.js',
@@ -1047,6 +1067,7 @@
             '_EmailPreview.js',
             '_PageHeader.js',
             '_fc-bits-ui.js',
+            '_RenameTitle.js',
             '_BaseCard.js',
             '_emailPermissions.js',
             '_vendor.js',
@@ -1417,6 +1438,7 @@
             '_vendor.js',
             '__report_widget.js',
             '_InlineDoc.js',
+            '_RenameTitle.js',
             '_PromoCard.js',
             '_fc-bits.js',
             '__FormBuilder.js',
@@ -1746,9 +1768,10 @@
         'isDynamicEntry' => true,
         'imports' => [
             '_vendor-element-plus.js',
+            '_ChartBuilder.js',
+            '_fc-bits.js',
             '_vendor.js',
             '_fc-bits-ui.js',
-            '_fc-bits.js',
             '_data_config.js',
             '_CalendarIcon.js',
             '_PageHeader.js',
@@ -1952,6 +1975,7 @@
             '_Badge.js',
             '_input-popover-dropdown.js',
             '_FloatingBulkActionShell.js',
+            '_ChartBuilder.js',
             '_Confirm.js',
             '_TestEmail.js',
             '_ReadableRecipientTagger.js',
@@ -1977,8 +2001,7 @@
         'src' => 'resources/admin/shared/vue.js',
         'isEntry' => true,
         'imports' => [
-            '_vendor.js',
-            '_vendor-element-plus.js'
+            '_vendor.js'
         ]
     ],
     'resources/admin/visual-editor/visual-editor.js' => [
@@ -2375,6 +2398,7 @@
         'isDynamicEntry' => true,
         'imports' => [
             '_vendor-element-plus.js',
+            '_contacts.js',
             '_Confirm2.js',
             '_ActionMenu.js',
             '__FormBuilder2.js',
@@ -2384,8 +2408,8 @@
             '_DataTable.js',
             '_FloatingBulkActionShell.js',
             '_PageHeader.js',
-            '_Error.js',
             '_fc-bits.js',
+            '_Error.js',
             '__OptionSelector.js',
             '_input-popover-dropdown.js',
             '_CustomIcon.js',
@@ -2805,6 +2829,7 @@
         'isDynamicEntry' => true,
         'imports' => [
             '_vendor-element-plus.js',
+            '_contacts.js',
             '_Confirm2.js',
             '_ActionMenu.js',
             '_PaginationBar.js',
@@ -2813,8 +2838,8 @@
             '_vendor.js',
             '_fc-bits-ui.js',
             '_PageHeader.js',
-            '_Error.js',
-            '_fc-bits.js'
+            '_fc-bits.js',
+            '_Error.js'
         ]
     ],
     'resources/v3app/src/images/crm_managers.png' => [

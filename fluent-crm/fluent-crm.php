@@ -4,7 +4,9 @@
  * Plugin Name:  FluentCRM - Marketing Automation For WordPress
  * Plugin URI:   https://fluentcrm.com
  * Description:  CRM and Email Newsletter Plugin for WordPress
- * Version:      3.2.0
+ * Version:      3.2.5
+ * Requires at least: 6.0
+ * Requires PHP: 7.4
  * Author:       WP Email Newsletter Team - FluentCRM
  * Author URI:   https://fluentcrm.com
  * License:      GPLv2 or later
@@ -20,8 +22,8 @@ if (defined('FLUENTCRM')) {
 define('FLUENTCRM', 'fluentcrm');
 define('FLUENTCRM_PLUGIN_URL', plugin_dir_url(__FILE__));
 define('FLUENTCRM_PLUGIN_PATH', plugin_dir_path(__FILE__));
-define('FLUENTCRM_PLUGIN_VERSION', '3.2.0');
-define('FLUENTCRM_MIN_PRO_VERSION', '3.2.0');;
+define('FLUENTCRM_PLUGIN_VERSION', '3.2.5');
+define('FLUENTCRM_MIN_PRO_VERSION', '3.2.5');;
 define('FLUENTCRM_FRAMEWORK_VERSION', 4);
 
 /**
@@ -35,7 +37,7 @@ define('FLUENTCRM_FRAMEWORK_VERSION', 4);
  */
 define('FLUENTCRM_MODULE_API', 2);
 
-define('FLUENTCRM_DB_VERSION', '2.10.30');
+define('FLUENTCRM_DB_VERSION', '2.10.40');
 
 define('FLUENTCRM_CORE_FRAMEWORK_VERSION', 3);
  
@@ -49,6 +51,17 @@ if (!defined('FLUENTCRM_UPLOAD_DIR')) {
 if (!defined('FLUENTCRM_EXTERNAL_URL_PARAM')) {
     define('FLUENTCRM_EXTERNAL_URL_PARAM', 'fluentcrm');
 }
+
+/*
+ * WooCommerce High-Performance Order Storage: FluentCRM reads orders only through
+ * the order CRUD API or storage-aware queries. WooCommerce needs __FILE__ to be
+ * this main plugin file.
+ */
+add_action('before_woocommerce_init', function () {
+    if (class_exists('\Automattic\WooCommerce\Utilities\FeaturesUtil')) {
+        \Automattic\WooCommerce\Utilities\FeaturesUtil::declare_compatibility('custom_order_tables', __FILE__, true);
+    }
+});
 
 require __DIR__ . '/vendor/autoload.php';
 

@@ -191,9 +191,32 @@ class FormSubmissions
 
     public function parseEditorCodes($code, $form, $keys)
     {
-        $contact = FluentCrmApi('contacts')->getCurrentContact(true, true);
+        return $this->escapeForFormHtml($this->resolveContactValue($keys[0]));
+    }
 
-        $providedKey = $keys[0];
+    /**
+     * Make a contact value safe to insert into finished Fluent Forms HTML.
+     *
+     * Fluent Forms pastes this value into the rendered form with a plain str_replace, so it may land
+     * in a double-quoted attribute, a text node or a Custom HTML link. Contact data is attacker
+     * controlled (any public form can set it), so escape what can break out of those contexts.
+     * ' and & are deliberately left alone: Fluent Forms always double-quotes attributes (and kses
+     * normalises Custom HTML to double quotes), and escaping them would stop select/checkbox
+     * defaults such as O'Connor or R&D from matching their options.
+     */
+    private function escapeForFormHtml($value)
+    {
+        if (!is_scalar($value) || preg_match('/^\s*(javascript|vbscript|data)\s*:/i', (string)$value)) {
+            return '';
+        }
+
+        // Braces are encoded so Fluent Forms does not parse a contact value as another smartcode.
+        return str_replace(['"', '<', '>', '{', '}'], ['&quot;', '&lt;', '&gt;', '&#123;', '&#125;'], (string)$value);
+    }
+
+    private function resolveContactValue($providedKey)
+    {
+        $contact = FluentCrmApi('contacts')->getCurrentContact(true, true);
 
         // maybe has fallback value
         $dynamicKey = explode('|', $providedKey);

@@ -162,6 +162,9 @@ class ShortcodeParser
 
         if ($transformer && is_string($transformer) && $value) {
             switch ($transformer) {
+                case 'urlencode':
+                    // Encode one URL parameter value: {{contact.email||urlencode}}.
+                    return rawurlencode((string) $value);
                 case 'trim':
                     return trim($value);
                 case 'ucfirst':

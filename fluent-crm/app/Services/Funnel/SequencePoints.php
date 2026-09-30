@@ -114,12 +114,30 @@ class SequencePoints
         return $sequences;
     }
 
+    /**
+     * Resolve top-level sequences after an exhausted conditional child branch.
+     *
+     * Re-Apply clears the next-sequence ID but may retain a stale numeric cursor.
+     * Resume after the completed child for missing or stale cursors; preserve forward cursors.
+     */
     private function queryParentEscapeSequences()
     {
         $nextSequenceNumber = $this->funnelSubscriber->next_sequence;
 
         if ($this->funnelSubscriber->next_sequence_item) {
             $nextSequenceNumber = $this->funnelSubscriber->next_sequence_item->sequence;
+        }
+
+        if ($this->lastSequence->parent_id
+            && (!$nextSequenceNumber || $nextSequenceNumber <= $this->lastSequence->sequence)) {
+            return FunnelSequence::orderBy('sequence', 'ASC')
+                ->where('funnel_id', $this->funnel->id)
+                ->where('sequence', '>', $this->lastSequence->sequence)
+                ->where(function ($q) {
+                    $q->whereNull('parent_id')
+                        ->orWhere('parent_id', '0');
+                })
+                ->get();
         }
 
         if (!$nextSequenceNumber) {

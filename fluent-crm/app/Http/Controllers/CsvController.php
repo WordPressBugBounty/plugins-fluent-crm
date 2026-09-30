@@ -9,6 +9,7 @@ use FluentCrm\App\Services\Sanitize;
 use FluentCrm\Framework\Support\Arr;
 use FluentCrm\Framework\Http\Request\Request;
 use FluentCrm\App\Models\Subscriber;
+use FluentCrm\App\Models\SubscriberMeta;
 
 /**
  *  CsvController - REST API Handler Class
@@ -151,8 +152,17 @@ class CsvController extends Controller
     public function import()
     {
         $inputs = $this->request->only([
-            'map', 'tags', 'lists', 'file', 'update', 'new_status', 'double_optin_email', 'import_silently', 'force_update_status'
+            'map', 'tags', 'lists', 'file', 'update', 'new_status', 'double_optin_email', 'import_silently', 'force_update_status',
+            'existing_only', 'keep_existing_data'
         ]);
+
+        $existingOnly = Arr::get($inputs, 'existing_only') == 'yes';
+        $keepExistingData = Arr::get($inputs, 'keep_existing_data') == 'yes';
+
+        // "Update existing only" has nothing to do unless existing rows are updated.
+        if ($existingOnly) {
+            $inputs['update'] = 'true';
+        }
 
         if (Arr::get($inputs, 'import_silently') == 'yes') {
             if (!defined('FLUENTCRM_DISABLE_TAG_LIST_EVENTS')) {
@@ -276,6 +286,11 @@ class CsvController extends Controller
             $inputs['lists'] = [];
         }
 
+        $notInCrm = [];
+        if ($subscribers && ($existingOnly || $keepExistingData)) {
+            list($subscribers, $notInCrm) = $this->applyExistingContactRules($subscribers, $existingOnly, $keepExistingData, $customFieldKeys);
+        }
+
         $sendDoubleOptin = Arr::get($inputs, 'double_optin_email') == 'yes';
 
         $result = Subscriber::import(
@@ -306,8 +321,111 @@ class CsvController extends Controller
             'tags'                 => $inputs['tags'],
             'lists'                => $inputs['lists'],
             'offset'               => $offset,
+            'not_in_crm'           => count($notInCrm),
+            'not_in_crm_contacts'  => $notInCrm,
             'result'               => $result
         ]);
+    }
+
+    /**
+     * Apply the CSV importer's per-contact rules for rows whose email is already in the CRM.
+     *
+     * - $existingOnly: rows for emails not in the CRM are dropped (and returned so the
+     *   UI can list them), so the import can tag/update known contacts without adding
+     *   anyone new — e.g. marking another product's customers to exclude from a campaign.
+     * - $keepExistingData: for known contacts, a mapped field is only written when the
+     *   contact's current value is empty, so an untrusted file cannot overwrite better
+     *   data already in the CRM. Covers contact columns, a mapped full_name (which
+     *   Subscriber::import() would split into first/last name) and custom fields.
+     *   Status is deliberately left to the new_status / force_update_status rules.
+     *
+     * One query loads the chunk's existing contacts and one loads their custom values.
+     *
+     * @param array $subscribers sanitized rows, each with an 'email'
+     * @param bool $existingOnly
+     * @param bool $keepExistingData
+     * @param array $customFieldKeys custom field slugs
+     * @return array [rows to import, emails skipped because they are not in the CRM]
+     */
+    private function applyExistingContactRules($subscribers, $existingOnly, $keepExistingData, $customFieldKeys)
+    {
+        $emails = array_values(array_unique(array_map(function ($row) {
+            return $row['email'];
+        }, $subscribers)));
+
+        $existing = [];
+        foreach (Subscriber::whereIn('email', $emails)->get() as $contact) {
+            $existing[strtolower($contact->email)] = $contact;
+        }
+
+        $existingCustomValues = [];
+        if ($keepExistingData && $existing && $customFieldKeys) {
+            $metaRows = SubscriberMeta::whereIn('subscriber_id', array_map(function ($contact) {
+                return $contact->id;
+            }, array_values($existing)))
+                ->where('object_type', 'custom_field')
+                ->whereIn('key', $customFieldKeys)
+                ->get();
+
+            foreach ($metaRows as $metaRow) {
+                $existingCustomValues[$metaRow->subscriber_id][$metaRow->key] = $metaRow->value;
+            }
+        }
+
+        // A zero date is how an unset date_of_birth is stored, so it counts as empty.
+        $isFilled = function ($value) {
+            return $value !== '' && $value !== null && $value !== [] && $value !== '0000-00-00';
+        };
+
+        // Keys that are not contact data, or that follow their own rules in Subscriber::import().
+        $protectedKeys = ['email', 'tags', 'lists', 'custom_values', 'status'];
+
+        $rows = [];
+        $notInCrm = [];
+        foreach ($subscribers as $row) {
+            $contact = Arr::get($existing, strtolower($row['email']));
+
+            if (!$contact) {
+                if ($existingOnly) {
+                    $notInCrm[] = $row['email'];
+                    continue;
+                }
+                $rows[] = $row;
+                continue;
+            }
+
+            if ($keepExistingData) {
+                foreach (array_keys($row) as $key) {
+                    if (in_array($key, $protectedKeys, true)) {
+                        continue;
+                    }
+
+                    if ($key == 'full_name') {
+                        if ($isFilled($contact->first_name) || $isFilled($contact->last_name)) {
+                            unset($row['full_name']);
+                        }
+                        continue;
+                    }
+
+                    if ($isFilled($contact->{$key})) {
+                        unset($row[$key]);
+                    }
+                }
+
+                if (!empty($row['custom_values'])) {
+                    $currentValues = Arr::get($existingCustomValues, $contact->id, []);
+                    foreach (array_keys($row['custom_values']) as $key) {
+                        if ($isFilled(Arr::get($currentValues, $key))) {
+                            unset($row['custom_values'][$key]);
+                        }
+                    }
+                }
+            }
+
+            $rows[] = $row;
+        }
+
+        return [$rows, $notInCrm];
     }
 
     public function importCompanies()

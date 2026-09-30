@@ -309,6 +309,7 @@ class Handler extends BaseHandler
         $emailBody = str_replace('#activate_link#', $url, $emailBody);
 
         $templateData = [
+            'is_double_optin' => true,
             'preHeader'   => $emailPreHeader,
             'email_body'  => $emailBody,
             'footer_text' => '',

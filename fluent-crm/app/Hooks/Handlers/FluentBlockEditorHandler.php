@@ -1171,6 +1171,8 @@ class FluentBlockEditorHandler
             wp_enqueue_style('admin-bar');
             wp_enqueue_style('l10n');
 
+            $this->preloadEditorRestData($post);
+
             wp_add_inline_script(
                 'wp-api-fetch',
                 \sprintf(
@@ -1239,6 +1241,85 @@ class FluentBlockEditorHandler
 
         // Disable Jetpack Blocks for now.
         add_filter('jetpack_gutenberg', '__return_false');
+    }
+
+    /**
+     * Preload the standard REST data fetched during block-editor startup.
+     *
+     * The dummy post itself is preloaded separately because its response shape
+     * is tailored for the email editor.
+     *
+     * @param \WP_Post $post
+     */
+    private function preloadEditorRestData($post)
+    {
+        if (!function_exists('block_editor_rest_api_preload') || !class_exists('WP_Block_Editor_Context')) {
+            return;
+        }
+
+        block_editor_rest_api_preload(
+            $this->getEditorRestPreloadPaths(),
+            new \WP_Block_Editor_Context(['post' => $post])
+        );
+    }
+
+    /**
+     * Return REST paths used by WordPress core to bootstrap the block editor.
+     *
+     * @return array
+     */
+    private function getEditorRestPreloadPaths()
+    {
+        $paths = [
+            '/wp/v2/types?context=view',
+            '/wp/v2/taxonomies?context=view',
+            '/wp/v2/types/fcrm-dummy?context=edit',
+            '/wp/v2/users/me',
+            ['/wp/v2/media', 'OPTIONS'],
+            ['/wp/v2/pages', 'OPTIONS'],
+            ['/wp/v2/blocks', 'OPTIONS'],
+            ['/wp/v2/templates', 'OPTIONS'],
+            '/wp/v2/settings',
+            ['/wp/v2/settings', 'OPTIONS'],
+            '/wp/v2/themes?context=edit&status=active',
+            '/wp/v2/block-patterns/categories',
+            '/?_fields=' . implode(',', [
+                'description',
+                'gmt_offset',
+                'home',
+                'image_max_bit_depth',
+                'image_sizes',
+                'image_size_threshold',
+                'image_strip_meta',
+                'name',
+                'site_icon',
+                'site_icon_url',
+                'site_logo',
+                'timezone_string',
+                'url',
+                'page_for_posts',
+                'page_on_front',
+                'show_on_front',
+            ]),
+            '/wp/v2/templates/lookup?slug=single-fcrm-dummy',
+            '/wp/v2/templates/lookup?slug=front-page',
+            '/wp/v2/taxonomies?context=edit',
+            ['/wp/v2/fcrm-dummy', 'OPTIONS'],
+        ];
+
+        $activeTheme = get_stylesheet();
+        $paths[] = '/wp/v2/global-styles/themes/' . $activeTheme . '?context=view';
+        $paths[] = '/wp/v2/global-styles/themes/' . $activeTheme . '/variations?context=view';
+
+        if (class_exists('WP_Theme_JSON_Resolver')) {
+            $globalStylesId = \WP_Theme_JSON_Resolver::get_user_global_styles_post_id();
+            $globalStylesContext = current_user_can('edit_theme_options') ? 'edit' : 'view';
+            $globalStylesPath = '/wp/v2/global-styles/' . $globalStylesId;
+            $paths[] = [$globalStylesPath, 'OPTIONS'];
+            $paths[] = $globalStylesPath . '?context=' . $globalStylesContext;
+        }
+
+        return $paths;
     }
 
     /*

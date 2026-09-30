@@ -36,11 +36,11 @@
             <input type="hidden" name="action" value="fluentcrm_request_manage_subscription_ajax"/>
             <div class="fc_field">
                 <label for="fc_email"><?php esc_html_e('Your Email Address', 'fluent-crm'); ?></label>
-                <input id="fc_email" required placeholder="Your Email Address"
+                <input id="fc_email" required placeholder="<?php esc_attr_e('Your Email Address', 'fluent-crm'); ?>"
                        class="fc_input_control" type="text" name="email"/>
             </div>
             <div class="fc_field">
-                <input id="fluentcrm_preferences_submit" type="submit" value="<?php esc_html_e('Email me the link', 'fluent-crm'); ?>"></input>
+                <input id="fluentcrm_preferences_submit" type="submit" value="<?php esc_attr_e('Email me the link', 'fluent-crm'); ?>"></input>
             </div>
         </form>
 

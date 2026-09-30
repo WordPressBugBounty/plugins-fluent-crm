@@ -115,6 +115,10 @@ if (fluentcrm_is_rtl()) {
         padding-top: <?php echo esc_attr($paddingTop); ?>;
         padding-bottom: <?php echo esc_attr($paddingBottom); ?>;
         margin-bottom: <?php echo esc_attr($marginBottom); ?>;
+        <?php if (!empty($is_double_optin)): ?>
+        padding-left: 20px !important;
+        padding-right: 20px !important;
+        <?php endif; ?>
     }
 
     .la-default td.la-root-column {

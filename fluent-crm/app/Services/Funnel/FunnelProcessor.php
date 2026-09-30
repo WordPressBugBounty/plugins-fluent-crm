@@ -554,6 +554,48 @@ class FunnelProcessor
             }
 
             foreach ($immediateSequences as $immediateSequence) {
+                // Benchmarks are traversal points, not executable actions. A required
+                // child benchmark must park the contact before later branch actions run.
+                if ($immediateSequence->type == 'benchmark') {
+                    if (Arr::get($immediateSequence->settings, 'type') == 'required') {
+                        $funnelSubscriber = FunnelSubscriber::where('id', $funnelSubscriberId)->first();
+                        if (!$funnelSubscriber) {
+                            return false;
+                        }
+
+                        $isAlreadyAsserted = apply_filters(
+                            'fluent_crm/benchmark_already_asserted_' . $immediateSequence->action_name,
+                            false,
+                            $immediateSequence,
+                            $funnelSubscriber
+                        );
+
+                        // A benchmark metric already recorded means the goal event fired
+                        // synchronously before this conditional was evaluated (e.g. a
+                        // single-email sequence completed inside the Set Sequence Emails
+                        // action). Parking now would rewind the enrollment to waiting with
+                        // no future event left to resume it.
+                        if (!$isAlreadyAsserted) {
+                            $isAlreadyAsserted = FunnelMetric::where('funnel_id', $immediateSequence->funnel_id)
+                                ->where('sequence_id', $immediateSequence->id)
+                                ->where('subscriber_id', $funnelSubscriber->subscriber_id)
+                                ->exists();
+                        }
+
+                        if (!$isAlreadyAsserted) {
+                            return FunnelSubscriber::where('id', $funnelSubscriberId)
+                                ->update([
+                                    'next_sequence'       => $immediateSequence->sequence,
+                                    'next_sequence_id'    => $immediateSequence->id,
+                                    'next_execution_time' => NULL,
+                                    'status'              => 'waiting'
+                                ]);
+                        }
+                    }
+
+                    continue;
+                }
+
                 $this->processSequence($subscriber, $immediateSequence, $funnelSubscriberId);
                 if ($immediateSequence->action_name == 'end_this_funnel') {
                     $funnelSub = FunnelSubscriber::where('id', $funnelSubscriberId)->first();

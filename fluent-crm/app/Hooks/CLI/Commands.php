@@ -382,9 +382,19 @@ class Commands
         $statuses = wc_get_is_paid_statuses();
 
         foreach ($statuses as $status) {
+            // wc_get_orders() reads whichever order storage is authoritative (HPOS or
+            // wp_posts); paginate + limit 1 returns the total without loading orders.
+            $result = wc_get_orders([
+                'type'     => 'shop_order',
+                'status'   => 'wc-' . $status,
+                'limit'    => 1,
+                'paginate' => true,
+                'return'   => 'ids',
+            ]);
+
             $orderStats[] = [
                 'status' => ucfirst($status),
-                'count'  => fluentCrmDb()->table('posts')->where('post_type', 'shop_order	')->where('post_status', 'wc-' . $status)->count()
+                'count'  => (int) $result->total
             ];
         }
 

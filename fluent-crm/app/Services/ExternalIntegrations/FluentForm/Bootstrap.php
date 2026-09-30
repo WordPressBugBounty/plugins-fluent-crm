@@ -2,11 +2,15 @@
 
 namespace FluentCrm\App\Services\ExternalIntegrations\FluentForm;
 
+use FluentCrm\App\Models\Company;
+use FluentCrm\App\Models\CustomCompanyField;
 use FluentCrm\App\Models\CustomContactField;
 use FluentCrm\App\Models\Lists;
 use FluentCrm\App\Models\Subscriber;
 use FluentCrm\App\Models\Tag;
 use FluentCrm\App\Services\Funnel\FunnelHelper;
+use FluentCrm\App\Services\Helper as CrmHelper;
+use FluentCrm\App\Services\Sanitize;
 use FluentCrm\Framework\Support\Arr;
 use FluentForm\App\Http\Controllers\IntegrationManagerController;
 use FluentForm\App\Modules\Form\FormFieldsParser;
@@ -66,6 +70,12 @@ class Bootstrap extends IntegrationManagerController
             'full_name'              => '',
             'email'                  => '',
             'other_fields'           => [
+                [
+                    'item_value' => '',
+                    'label'      => ''
+                ]
+            ],
+            'company_fields'         => [
                 [
                     'item_value' => '',
                     'label'      => ''
@@ -220,6 +230,22 @@ class Bootstrap extends IntegrationManagerController
             ]
         ];
 
+        if (CrmHelper::isCompanyEnabled()) {
+            $companyField = [
+                'key'                => 'company_fields',
+                'require_list'       => false,
+                'label'              => __('Company Fields (Optional)', 'fluent-crm'),
+                'tips'               => __('Map Company Name to synchronize a company only when creating a new contact. If an exact-name company already exists, it will be attached without updating its data. Otherwise, a new company will be created from the mapped fields and attached. Existing contacts and their company relationships will remain unchanged. This mapping takes precedence over Primary Company in Other Fields. Leave Company Name unmapped for contact-only feeds.', 'fluent-crm'),
+                'component'          => 'dropdown_many_fields',
+                'field_label_remote' => __('FluentCRM Company Field', 'fluent-crm'),
+                'field_label_local'  => __('Form Field', 'fluent-crm'),
+                'options'            => $this->getCompanyFieldOptions()
+            ];
+
+            // Keep company mapping beside contact Other Fields in the feed UI.
+            array_splice($fields, 4, 0, [$companyField]);
+        }
+
         if ($paymentFields) {
             $hasSubscriptionFields = !!FormFieldsParser::getInputsByElementTypes($form, ['subscription_payment_component']);
 
@@ -297,6 +323,25 @@ class Bootstrap extends IntegrationManagerController
         return $formattedTags;
     }
 
+    /**
+     * Get standard and custom company fields available to the feed mapper.
+     *
+     * @return array
+     */
+    private function getCompanyFieldOptions()
+    {
+        $fields = Company::mappables();
+        unset($fields['owner_email'], $fields['owner_name']);
+
+        foreach ((new CustomCompanyField())->getGlobalFields()['fields'] as $field) {
+            if (!empty($field['slug'])) {
+                $fields[$field['slug']] = $field['label'];
+            }
+        }
+
+        return $fields;
+    }
+
     /*
      * Form Submission Hooks Here
      */
@@ -315,9 +360,19 @@ class Bootstrap extends IntegrationManagerController
     }
 
 
+    /**
+     * Process a contact feed and report configured company sync failures to direct callers.
+     *
+     * @param array  $feed
+     * @param array  $formData
+     * @param object $entry
+     * @param object $form
+     * @return false|null
+     */
     private function runFeed($feed, $formData, $entry, $form)
     {
         $data = $feed['processedValues'];
+        $companyData = $this->prepareCompanyData($data);
         $contact = Arr::only($data, ['first_name', 'last_name', 'email']);
 
         if (!is_email($contact['email'])) {
@@ -341,6 +396,12 @@ class Bootstrap extends IntegrationManagerController
             if ($field['item_value']) {
                 $contact[$field['label']] = str_replace('<br />', ' ', $field['item_value']);
             }
+        }
+
+        // A dynamically resolved company owns the primary-company decision; a
+        // mapped contact company_id is only meaningful for the legacy ID flow.
+        if (!empty($companyData['name'])) {
+            unset($contact['company_id']);
         }
 
         if ($entry->ip) {
@@ -451,15 +512,23 @@ class Bootstrap extends IntegrationManagerController
                 $subscriber->sendDoubleOptinEmail();
             }
 
-            $this->addLog(
-                $feed['settings']['name'],
-                'success',
-                __('Contact has been created in FluentCRM. Contact ID: ', 'fluent-crm') . $subscriber->id,
-                $form->id,
-                $entry->id
-            );
+            $companySyncResult = $this->syncCompany($subscriber, $companyData, $feed, $entry, $form);
+
+            if ($companySyncResult !== false) {
+                $this->addLog(
+                    $feed['settings']['name'],
+                    'success',
+                    __('Contact has been created in FluentCRM. Contact ID: ', 'fluent-crm') . $subscriber->id,
+                    $form->id,
+                    $entry->id
+                );
+            }
 
             do_action('fluent_crm/contact_added_by_fluentform', $subscriber, $entry, $form, $feed);
+
+            if ($companySyncResult === false) {
+                return false;
+            }
 
         } else {
 
@@ -502,6 +571,16 @@ class Bootstrap extends IntegrationManagerController
                 $subscriber->sendDoubleOptinEmail();
             }
 
+            if (!empty($companyData['name'])) {
+                $this->addLog(
+                    $feed['settings']['name'],
+                    'info',
+                    __('Company synchronization was skipped because the contact already exists in FluentCRM.', 'fluent-crm'),
+                    $form->id,
+                    $entry->id
+                );
+            }
+
             do_action('fluent_crm/contact_updated_by_fluentform', $subscriber, $entry, $form, $feed);
 
             if ($removeTags = Arr::get($feed, 'settings.remove_tags', [])) {
@@ -520,6 +599,158 @@ class Bootstrap extends IntegrationManagerController
             );
         }
 
+    }
+
+    /**
+     * Build a sanitized company payload from processed Fluent Forms mappings.
+     *
+     * @param array $data
+     * @return array
+     */
+    private function prepareCompanyData($data)
+    {
+        if (!CrmHelper::isCompanyEnabled()) {
+            return [];
+        }
+
+        $allowedFields = array_keys(Company::mappables());
+        $allowedFields = array_diff($allowedFields, ['owner_email', 'owner_name']);
+        $customFields = (new CustomCompanyField())->getGlobalFields()['fields'];
+        $customFieldSlugs = array_column($customFields, 'slug');
+        $companyData = [];
+        $customValues = [];
+
+        foreach ((array) Arr::get($data, 'company_fields', []) as $field) {
+            $key = Arr::get($field, 'label');
+            $value = Arr::get($field, 'item_value');
+
+            if ($value === '' || $value === null || $value === []) {
+                continue;
+            }
+
+            if (in_array($key, $allowedFields, true) && is_scalar($value)) {
+                $companyData[$key] = str_replace('<br />', ' ', (string) $value);
+                continue;
+            }
+
+            if (in_array($key, $customFieldSlugs, true)) {
+                $customValues[$key] = is_scalar($value)
+                    ? str_replace('<br />', ' ', (string) $value)
+                    : $value;
+            }
+        }
+
+        if ($customValues) {
+            $companyData['custom_values'] = $customValues;
+        }
+
+        $companyData = Sanitize::company($companyData);
+
+        if (!empty($companyData['name'])) {
+            // Keep exact-name lookup aligned with the fc_companies.name column.
+            $companyData['name'] = mb_substr($companyData['name'], 0, 192, 'UTF-8');
+        }
+
+        return $companyData;
+    }
+
+    /**
+     * Resolve an exact-name company without updating it, or create a new company.
+     *
+     * @param array $companyData
+     * @return Company
+     */
+    private function resolveOrCreateCompany($companyData)
+    {
+        $customValues = Arr::get($companyData, 'custom_values', []);
+        $companyData['meta'] = [
+            'custom_values' => Sanitize::companyCustomValues($customValues)
+        ];
+
+        // Existing companies are shared CRM records; public form values may only create new records.
+        $company = Company::query()->firstOrCreate(
+            ['name' => $companyData['name']],
+            $companyData
+        );
+
+        if ($company->wasRecentlyCreated) {
+            do_action('fluent_crm/company_created', $company, $companyData);
+        }
+
+        return $company;
+    }
+
+    /**
+     * Resolve or create a mapped company and associate it with the contact.
+     *
+     * @param Subscriber $subscriber
+     * @param array      $companyData
+     * @param array      $feed
+     * @param object     $entry
+     * @param object     $form
+     * @return Company|false|null
+     */
+    private function syncCompany($subscriber, $companyData, $feed, $entry, $form)
+    {
+        if (empty($companyData['name'])) {
+            return null;
+        }
+
+        try {
+            $company = $this->resolveOrCreateCompany($companyData);
+            if (!$company) {
+                $this->addLog(
+                    Arr::get($feed, 'settings.name', 'FluentCRM'),
+                    'failed',
+                    __('Company could not be resolved or created in FluentCRM.', 'fluent-crm'),
+                    $form->id,
+                    $entry->id
+                );
+                return false;
+            }
+
+            $attached = FluentCrmApi('companies')->attachContactsByIds(
+                [$subscriber->id],
+                [$company->id]
+            );
+
+            if (!$attached) {
+                $this->addLog(
+                    Arr::get($feed, 'settings.name', 'FluentCRM'),
+                    'failed',
+                    __('Company was synced but could not be attached to the contact.', 'fluent-crm'),
+                    $form->id,
+                    $entry->id
+                );
+                return false;
+            }
+
+            $this->addLog(
+                Arr::get($feed, 'settings.name', 'FluentCRM'),
+                'success',
+                __('Company has been synced and attached in FluentCRM. Company ID: ', 'fluent-crm') . $company->id,
+                $form->id,
+                $entry->id
+            );
+
+            return $company;
+        } catch (\Throwable $exception) {
+            CrmHelper::debugLog(
+                'Fluent Forms company sync failed',
+                $exception->getMessage(),
+                'error'
+            );
+
+            $this->addLog(
+                Arr::get($feed, 'settings.name', 'FluentCRM'),
+                'failed',
+                __('Company could not be synced with the FluentCRM contact.', 'fluent-crm'),
+                $form->id,
+                $entry->id
+            );
+
+            return false;
+        }
     }
 
     public function isConfigured()

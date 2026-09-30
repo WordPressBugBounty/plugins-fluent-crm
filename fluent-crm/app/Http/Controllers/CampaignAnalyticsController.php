@@ -93,6 +93,34 @@ class CampaignAnalyticsController extends Controller
             ];
         }
 
+        // `auto=yes` is the silent recount the campaign report fires on page load.
+        // It may correct the stored total but must never destroy revenue that a
+        // currently inactive commerce plugin recorded (e.g. after a store moved
+        // from WooCommerce to FluentCart), so it only runs when every stored
+        // order is still visible, and it never clears the record. The manual
+        // re-sync button keeps the destructive rebuild.
+        $isAuto = $request->get('auto') === 'yes';
+
+        // A WooCommerce/EDD rebuild loads every attributed order, so the automatic
+        // run happens at most once per 10 minutes per campaign, however many times
+        // or tabs the report is opened. The transient is set before the work so
+        // concurrent visits do not all rebuild. The manual button is not throttled.
+        if ($isAuto) {
+            $throttleKey = 'fcrm_revenue_auto_resync_' . (int) $campaignId;
+            if (get_transient($throttleKey)) {
+                return [
+                    'message' => __('Revenue was re-synced recently', 'fluent-crm')
+                ];
+            }
+            set_transient($throttleKey, 1, 10 * MINUTE_IN_SECONDS);
+        }
+
+        if ($isAuto && !$this->storedRevenueOrdersAreVisible($campaignId, $sources)) {
+            return [
+                'message' => __('Revenue re-sync skipped: some recorded orders are not available from the active store plugins.', 'fluent-crm')
+            ];
+        }
+
         $revenueData = ['orderIds' => []];
         $primaryCurrency = null;
 
@@ -115,6 +143,12 @@ class CampaignAnalyticsController extends Controller
         }
 
         if (empty($revenueData['orderIds'])) {
+            if ($isAuto) {
+                return [
+                    'message' => __('No order found to re-sync', 'fluent-crm')
+                ];
+            }
+
             // The currently-active sources hold no attributed orders, so the
             // cached total is stale — typically a pre-orderIds legacy record
             // whose orders were purged. The deletion-reversal path skips
@@ -153,6 +187,29 @@ class CampaignAnalyticsController extends Controller
      * Active commerce sources that participate in campaign revenue attribution.
      * Order matters: it determines display precedence within the merged report.
      */
+    /**
+     * Whether every order ID in the stored revenue record is still attributed to
+     * this campaign in one of the active sources. Fully refunded or cancelled
+     * orders keep their `_fc_cid` meta, so they count as visible and a rebuild
+     * still lowers the total for them; orders from a deactivated plugin (or
+     * permanently deleted ones) do not. A legacy record without order IDs has
+     * nothing to check.
+     */
+    protected function storedRevenueOrdersAreVisible($campaignId, $sources)
+    {
+        $stored = fluentcrm_get_campaign_meta($campaignId, '_campaign_revenue', true);
+        if (!is_array($stored) || empty($stored['orderIds']) || !is_array($stored['orderIds'])) {
+            return true;
+        }
+
+        $visible = [];
+        foreach ($sources as $source) {
+            $visible = array_merge($visible, $this->getAttributedOrderIds($source, $campaignId));
+        }
+
+        return !array_diff(array_map('intval', $stored['orderIds']), $visible);
+    }
+
     protected function getActiveRevenueSources()
     {
         $sources = [];

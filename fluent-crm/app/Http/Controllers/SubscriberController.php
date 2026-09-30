@@ -16,6 +16,7 @@ use FluentCrm\App\Services\AutoSubscribe;
 use FluentCrm\App\Services\ContactsQuery;
 use FluentCrm\App\Services\Funnel\FunnelProcessor;
 use FluentCrm\App\Services\Helper;
+use FluentCrm\App\Services\PermissionManager;
 use FluentCrm\App\Services\Sanitize;
 use FluentCrm\Framework\Support\Arr;
 use FluentCrm\Framework\Support\Collection;
@@ -700,6 +701,16 @@ class SubscriberController extends Controller
         $emailsQuery = CampaignEmail::where('subscriber_id', $subscriberId)
             ->orderBy('id', 'DESC');
 
+        // FCRM-SEC-12: contact readers need history metadata, not rendered bodies,
+        // List-Unsubscribe headers, or bearer hashes that unlock public email previews.
+        if (!PermissionManager::currentUserCan('fcrm_manage_contacts')) {
+            $emailsQuery->select([
+                'id', 'campaign_id', 'email_type', 'subscriber_id', 'email_subject_id',
+                'email_address', 'email_subject', 'is_open', 'is_parsed', 'click_counter',
+                'status', 'scheduled_at', 'created_at', 'updated_at',
+            ]);
+        }
+
         // Apply filter if present
         if ($filter == 'open') {
             $emailsQuery->where('is_open', '1');
@@ -1235,6 +1246,12 @@ class SubscriberController extends Controller
         $subscriber = Subscriber::findOrFail($subscriberId);
         $sectionId = $request->get('section_provider');
 
+        // Preserve existing integrations while directing new callbacks to the namespaced hook.
+        $content = apply_filters_deprecated('fluencrm_profile_section_' . $sectionId, [[
+            'heading'      => '',
+            'content_html' => ''
+        ], $subscriber], '3.2.1', 'fluent_crm/profile_section_' . $sectionId);
+
         /**
          * Filter the profile section content for a specific section ID.
          *
@@ -1247,7 +1264,7 @@ class SubscriberController extends Controller
          * @type string $content_html The HTML content of the profile section.
          * }
          * @param object $subscriber The subscriber object.
-         * @since 2.5.1
+         * @since 3.2.1 Replaces the deprecated fluencrm_profile_section_{$sectionId} hook.
          *
          * Security: `content_html` is rendered as raw HTML in the admin UI (Vue v-html)
          * without client-side sanitization. Producers hooking this filter MUST escape any
@@ -1255,16 +1272,19 @@ class SubscriberController extends Controller
          * to prevent stored XSS in the admin. Structural markup and intentional rich content
          * (styles, iframes, scripts) are allowed by design.
          */
-        return apply_filters('fluencrm_profile_section_' . $sectionId, [
-            'heading'      => '',
-            'content_html' => ''
-        ], $subscriber);
+        return apply_filters('fluent_crm/profile_section_' . $sectionId, $content, $subscriber);
     }
 
     public function saveExternalViewData(Request $request, $subscriberId)
     {
         $subscriber = Subscriber::findOrFail($subscriberId);
         $sectionId = $request->get('section_provider');
+
+        // Keep legacy save handlers and pass their response through the replacement filter.
+        $data = $request->get('data', []);
+        $response = apply_filters_deprecated('fluencrm_profile_section_save_' . $sectionId, [
+            '', $data, $subscriber
+        ], '3.2.1', 'fluent_crm/profile_section_save_' . $sectionId);
 
         /**
          * Filter the data being saved for a specific profile section.
@@ -1277,10 +1297,10 @@ class SubscriberController extends Controller
          * @param object $subscriber The subscriber object for which the profile section is being updated.
          *
          * @return mixed Filtered data to be saved for the profile section.
-         * @since 2.8.44
+         * @since 3.2.1 Replaces the deprecated fluencrm_profile_section_save_{$sectionId} hook.
          *
          */
-        $response = apply_filters('fluencrm_profile_section_save_' . $sectionId, '', $request->get('data', []), $subscriber);
+        $response = apply_filters('fluent_crm/profile_section_save_' . $sectionId, $response, $data, $subscriber);
 
         if (!$response) {
             return $this->sendError([

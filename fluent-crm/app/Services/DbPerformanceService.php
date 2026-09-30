@@ -193,13 +193,11 @@ class DbPerformanceService
         $health = self::getIndexHealth(true);
 
         if (!isset($health[$indexName]) || $health[$indexName]['status'] !== 'yes') {
+            $lists = self::getCriticalIndexLists();
+
             return new \WP_Error(
                 'repair_failed',
-                sprintf(
-                    /* translators: %s: index name */
-                    __('Could not create the "%s" index. Please check your database user privileges or repair it manually.', 'fluent-crm'),
-                    $indexName
-                ),
+                self::describeRepairFailure($wpdb->prefix . $lists[$indexName]['table'], $repairError),
                 ['db_error' => $repairError]
             );
         }
@@ -208,9 +206,76 @@ class DbPerformanceService
     }
 
     /**
+     * Turn a failed index ALTER into a message an admin can act on.
+     *
+     * The MySQL error tells us the real cause, and it is rarely privileges: the
+     * common case in the field is a MyISAM table, whose 1000-byte key limit a
+     * utf8mb4 index can exceed. Pointing those users at their privileges sent
+     * them the wrong way, so we name the cause whenever the error reveals it.
+     *
+     * @param string $table   Fully-prefixed table name.
+     * @param string $dbError The MySQL error captured from the ALTER, or ''.
+     * @return string Translated message.
+     */
+    private static function describeRepairFailure($table, $dbError)
+    {
+        global $wpdb;
+
+        if (stripos($dbError, 'key was too long') !== false) {
+            $engine = $wpdb->get_var($wpdb->prepare(
+                'SELECT ENGINE FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = %s',
+                $table
+            ));
+
+            if ($engine && strcasecmp($engine, 'MyISAM') === 0) {
+                return sprintf(
+                    /* translators: 1: table name, 2: SQL statement */
+                    __('The %1$s table uses the MyISAM storage engine, which cannot hold this index. After taking a database backup, convert the table to InnoDB (for example, run: %2$s) and click Repair Now again.', 'fluent-crm'),
+                    $table,
+                    "ALTER TABLE `{$table}` ENGINE=InnoDB;"
+                );
+            }
+
+            return sprintf(
+                /* translators: 1: table name, 2: database error */
+                __('Your database cannot create an index this long on the %1$s table. Database error: %2$s', 'fluent-crm'),
+                $table,
+                $dbError
+            );
+        }
+
+        if (stripos($dbError, 'denied') !== false) {
+            return sprintf(
+                /* translators: 1: table name, 2: database error */
+                __('Your database user is not allowed to change the %1$s table. Please ask your host to grant the ALTER and INDEX privileges. Database error: %2$s', 'fluent-crm'),
+                $table,
+                $dbError
+            );
+        }
+
+        if ($dbError) {
+            return sprintf(
+                /* translators: 1: table name, 2: database error */
+                __('Could not create the index on the %1$s table. Database error: %2$s', 'fluent-crm'),
+                $table,
+                $dbError
+            );
+        }
+
+        return sprintf(
+            /* translators: %s: table name */
+            __('Could not create the index on the %s table. Please try again, or contact your host if it keeps failing.', 'fluent-crm'),
+            $table
+        );
+    }
+
+    /**
      * Repair every missing critical index in one pass.
      *
-     * @return array{repaired: string[], failed: string[], health: array}
+     * 'errors' maps each failed index name to the actionable message from
+     * describeRepairFailure(), so the caller can say why rather than guess.
+     *
+     * @return array{repaired: string[], failed: string[], errors: array<string, string>, health: array}
      */
     public static function repairBrokenIndexes()
     {
@@ -218,6 +283,7 @@ class DbPerformanceService
 
         $repaired = [];
         $failed = [];
+        $errors = [];
         foreach ($health as $indexName => $indexData) {
             if ($indexData['status'] === 'yes') {
                 continue;
@@ -226,6 +292,7 @@ class DbPerformanceService
             $result = self::repairIndex($indexName);
             if (is_wp_error($result)) {
                 $failed[] = $indexName;
+                $errors[$indexName] = $result->get_error_message();
             } else {
                 $repaired[] = $indexName;
             }
@@ -234,6 +301,7 @@ class DbPerformanceService
         return [
             'repaired' => $repaired,
             'failed'   => $failed,
+            'errors'   => $errors,
             'health'   => self::getIndexHealth(false), // freshly cached by the calls above
         ];
     }
@@ -255,7 +323,7 @@ class DbPerformanceService
         $columnSql = self::buildColumnSql($columns);
 
         if (isset($info[$indexName])) {
-            if (self::indexColumnsMatch($info[$indexName]['columns'], $columns)) {
+            if (self::indexColumnsMatch($info[$indexName]['columns'], $columns, true)) {
                 return; // present with the right columns — nothing to do.
             }
             // Same name, wrong columns — replace it in one statement.
@@ -594,7 +662,7 @@ class DbPerformanceService
             return false;
         }
 
-        return self::indexColumnsMatch($actual['columns'], $index['columns']);
+        return self::indexColumnsMatch($actual['columns'], $index['columns'], $index['type'] !== 'unique');
     }
 
     /**
@@ -608,13 +676,21 @@ class DbPerformanceService
      * length — which is exactly what object_type(50) becomes on the current
      * VARCHAR(50) schema, and a full column is never weaker than the prefix.
      * A prefix where a full column is expected, or a different prefix length,
-     * is a mismatch.
+     * is a mismatch — unless $allowLongerPrefix is set.
      *
-     * @param array $actualColumns   Ordered [['name'=>, 'sub_part'=>], ...].
-     * @param array $expectedColumns Ordered [['name'=>, 'sub_part'=>?], ...].
+     * $allowLongerPrefix is for plain (non-unique) indexes only: there a longer
+     * prefix serves every lookup the expected one does, and it is what a site
+     * built under an older, wider spec holds (subscriber_meta_key_value_idx was
+     * key(191) before it was narrowed to fit MyISAM). It must stay off for
+     * UNIQUE keys, where a longer prefix is a weaker constraint: values sharing
+     * the expected prefix but differing after it would be allowed to coexist.
+     *
+     * @param array $actualColumns     Ordered [['name'=>, 'sub_part'=>], ...].
+     * @param array $expectedColumns   Ordered [['name'=>, 'sub_part'=>?], ...].
+     * @param bool  $allowLongerPrefix Accept a prefix longer than expected.
      * @return bool
      */
-    private static function indexColumnsMatch($actualColumns, array $expectedColumns)
+    private static function indexColumnsMatch($actualColumns, array $expectedColumns, $allowLongerPrefix = false)
     {
         if (count($actualColumns) !== count($expectedColumns)) {
             return false;
@@ -640,8 +716,10 @@ class DbPerformanceService
                 }
             } else {
                 // Prefix expected — accept the exact prefix, or a full-column
-                // index (NULL) which equals/exceeds the prefix.
-                if ($actualSub !== null && $actualSub !== $expectedSub) {
+                // index (NULL) which equals/exceeds the prefix. A longer prefix
+                // only when the caller allows it (plain indexes; see docblock).
+                if ($actualSub !== null && $actualSub !== $expectedSub
+                    && !($allowLongerPrefix && $actualSub > $expectedSub)) {
                     return false;
                 }
             }
@@ -765,12 +843,19 @@ class DbPerformanceService
             // click / manage-subscription view / conditional-content page render.
             // Without it those unauthenticated endpoints full-scan the meta table
             // with a LONGTEXT comparison.
+            //
+            // Prefix widths are sized to fit every storage engine: 100 + 64 utf8mb4
+            // chars = 656 bytes, under MyISAM's 1000-byte key limit and InnoDB's
+            // 767-byte per-column limit on old servers. The looked-up keys are short
+            // fixed names and the hashes are <= 64 chars, so lookups stay exact.
+            // Sites that already hold the older, wider key(191)/value(64) index keep
+            // it — indexColumnsMatch() accepts a longer prefix on a plain index.
             'subscriber_meta_key_value_idx'          => [
                 'type'    => 'index',
                 'table'   => 'fc_subscriber_meta',
                 'title'   => __('Subscriber Meta Key/Value Lookup Indexing', 'fluent-crm'),
                 'columns' => [
-                    ['name' => 'key', 'sub_part' => 191],
+                    ['name' => 'key', 'sub_part' => 100],
                     ['name' => 'value', 'sub_part' => 64],
                 ],
             ],

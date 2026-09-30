@@ -18,6 +18,12 @@ use FluentCrm\Framework\Support\Collection;
 
 class CompanyController extends Controller
 {
+    /**
+     * Return paginated companies with contact counts batched for the current page.
+     *
+     * @param Request $request
+     * @return array
+     */
     public function index(Request $request)
     {
         $order = [
@@ -49,9 +55,29 @@ class CompanyController extends Controller
         }
 
         $companies = $companies->paginate();
+        $companyIds = array_map('intval', $companies->pluck('id')->toArray());
+        $contactCounts = [];
+
+        if ($companyIds) {
+            // The pivot is shared, so Company type isolation must be explicit.
+            $countRows = fluentCrmDb()->table('fc_subscriber_pivot')
+                ->where('fc_subscriber_pivot.object_type', Company::class)
+                ->whereIn('fc_subscriber_pivot.object_id', $companyIds)
+                ->join('fc_subscribers', 'fc_subscribers.id', '=', 'fc_subscriber_pivot.subscriber_id')
+                ->groupBy('fc_subscriber_pivot.object_id')
+                ->select([
+                    'fc_subscriber_pivot.object_id',
+                    fluentCrmDb()->raw('COUNT(*) as contacts_count')
+                ])
+                ->get();
+
+            foreach ($countRows as $countRow) {
+                $contactCounts[(int) $countRow->object_id] = (int) $countRow->contacts_count;
+            }
+        }
 
         foreach ($companies as $company) {
-            $company->contacts_count = $company->getContactsCount();
+            $company->contacts_count = $contactCounts[(int) $company->id] ?? 0;
         }
 
         return [

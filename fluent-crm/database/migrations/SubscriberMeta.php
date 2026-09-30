@@ -39,9 +39,9 @@ class SubscriberMeta
             dbDelta($sql);
 
             // (key, value) lookup index — added post-create via the guarded service
-            // path (not inlined in CREATE TABLE): its 1020-byte utf8mb4 width exceeds
-            // the 767-byte InnoDB key limit on MySQL < 5.7.7 / MariaDB < 10.2, and an
-            // inline failure would take the whole CREATE TABLE down with it.
+            // path (not inlined in CREATE TABLE), which owns its definition and the
+            // engine-safe prefix widths; an inline failure would take the whole
+            // CREATE TABLE down with it.
             \FluentCrm\App\Services\DbPerformanceService::ensureCriticalIndex('subscriber_meta_key_value_idx');
         } else{
 

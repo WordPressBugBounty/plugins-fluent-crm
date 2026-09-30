@@ -416,19 +416,106 @@ class ReportingController extends Controller
 
     public function getCampaignsList(Request $request)
     {
-        $limit = intval($request->get('per_page', 15));
+        $limit = max(1, min(100, intval($request->get('per_page', 15))));
 
         $campaigns = Campaign::where('status', 'archived')
             ->orderBy('updated_at', 'DESC')
             ->paginate($limit);
 
-        foreach ($campaigns as $campaign) {
-            $campaign->stats = $campaign->stats();
-        }
+        $this->hydrateCampaignStats($campaigns);
 
         return $this->sendSuccess([
             'campaigns' => $campaigns,
         ]);
+    }
+
+    /**
+     * Attach report stats to one campaign page using fixed-count aggregate queries.
+     *
+     * @param \FluentCrm\Framework\Pagination\LengthAwarePaginator $campaigns
+     * @return void
+     */
+    private function hydrateCampaignStats($campaigns)
+    {
+        $campaignIds = $campaigns->pluck('id')->toArray();
+
+        if (!$campaignIds) {
+            return;
+        }
+
+        $emailStats = fluentCrmDb()->table('fc_campaign_emails')
+            ->select('campaign_id')
+            ->selectRaw('COUNT(*) as total')
+            ->selectRaw("SUM(CASE WHEN status = 'sent' THEN 1 ELSE 0 END) as sent")
+            ->selectRaw("SUM(CASE WHEN is_open = 1 THEN 1 ELSE 0 END) as views")
+            ->selectRaw("SUM(CASE WHEN click_counter IS NOT NULL THEN 1 ELSE 0 END) as clicks")
+            ->whereIn('campaign_id', $campaignIds)
+            ->groupBy('campaign_id')
+            ->get()
+            ->keyBy('campaign_id');
+
+        $unsubscribeCounts = fluentCrmDb()->table('fc_campaign_url_metrics')
+            ->select('campaign_id')
+            ->selectRaw('COUNT(DISTINCT subscriber_id) as total')
+            ->where('type', 'unsubscribe')
+            ->whereIn('campaign_id', $campaignIds)
+            ->groupBy('campaign_id')
+            ->get()
+            ->keyBy('campaign_id');
+
+        $metaItems = fluentCrmDb()->table('fc_meta')
+            ->whereIn('object_id', $campaignIds)
+            ->where('object_type', Campaign::class)
+            ->whereIn('key', ['_campaign_revenue', '_ano_open_count', '_ano_url_clicks'])
+            ->get();
+
+        $metaMap = [];
+        foreach ($metaItems as $meta) {
+            $metaMap[$meta->object_id][$meta->key] = $meta->value;
+        }
+
+        foreach ($campaigns as $campaign) {
+            $emailStat = $emailStats[$campaign->id] ?? null;
+            $unsubscribeCount = $unsubscribeCounts[$campaign->id] ?? null;
+            $campaignMeta = $metaMap[$campaign->id] ?? [];
+
+            $views = $emailStat ? (int) $emailStat->views : 0;
+            if ($campaign->getOpenTrackingStatus(false) === 'anonymous') {
+                $views = (int) ($campaignMeta['_ano_open_count'] ?? 0);
+            }
+
+            $clicks = $emailStat ? (int) $emailStat->clicks : 0;
+            if ($campaign->getClickTrackingStatus(false) === 'anonymous') {
+                $clicks = 0;
+                $clickItems = maybe_unserialize($campaignMeta['_ano_url_clicks'] ?? null);
+                if (is_array($clickItems)) {
+                    $clicks = array_sum($clickItems);
+                }
+            }
+
+            $stats = [
+                'total'         => $emailStat ? (int) $emailStat->total : 0,
+                'sent'          => $emailStat ? (int) $emailStat->sent : 0,
+                'clicks'        => $clicks,
+                'views'         => $views,
+                'unsubscribers' => $unsubscribeCount ? (int) $unsubscribeCount->total : 0,
+            ];
+
+            $revenue = maybe_unserialize($campaignMeta['_campaign_revenue'] ?? null);
+            if ($revenue) {
+                foreach ((array) $revenue as $currency => $cents) {
+                    if ($cents && $currency !== 'orderIds') {
+                        $stats['revenue'] = [
+                            'label'    => __('Revenue', 'fluent-crm') . ' (' . $currency . ')',
+                            'total'    => number_format($cents / 100, 2),
+                            'currency' => $currency,
+                        ];
+                    }
+                }
+            }
+
+            $campaign->stats = $stats;
+        }
     }
 
     public function getAutomationReports(Request $request)

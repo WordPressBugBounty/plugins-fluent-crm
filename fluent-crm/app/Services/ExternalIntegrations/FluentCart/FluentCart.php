@@ -7,6 +7,7 @@ use FluentCart\App\Helpers\Helper;
 use FluentCart\App\Models\Customer;
 use FluentCart\App\Models\Order;
 use FluentCrm\App\Models\Subscriber;
+use FluentCrm\App\Services\Helper as CrmHelper;
 
 use FluentCrm\App\Services\ExternalIntegrations\FluentCart\Actions\CreateCouponAction;
 use FluentCrm\App\Services\ExternalIntegrations\FluentCart\Benchmarks\OrderSuccessBenchmark;
@@ -200,7 +201,8 @@ class FluentCart
             </a>';
             $coupons = implode(', ', array_column($order['appliedCoupons']->toArray(), 'code'));
 
-            $date = '<span class="order_id">#' . $order->id .'</span><span class="order_date">'.date_i18n(get_option('date_format'), strtotime($order->created_at)).'</span>';
+            // Purchase dates follow FluentCRM's global date/time display preference.
+            $date = '<span class="order_id">#' . $order->id .'</span><span class="order_date">'.esc_html(CrmHelper::formatDateTime($order->created_at)).'</span>';
             $status = '<span class="fcrm_badge fcrm_badge_'.esc_attr($order->status).'">'. \FluentCrm\App\Services\Helper::getStatusText($order->status) .'</span>';
 
             $formattedOrders[] = [
@@ -286,10 +288,10 @@ class FluentCart
         $html .= '<li><span class="fc_list_sub">' . __('Total Orders', 'fluent-crm') . '</span><span class="fc_list_value">' . intval($orderCount) . '</span></li>';
         $html .= '<li><span class="fc_list_sub">' . __('Total Spent', 'fluent-crm') . '</span><span class="fc_list_value">' . esc_html(Helper::toDecimal($totalSpent)) . '</span></li>';
         if ($firstOrder) {
-            $html .= '<li><span class="fc_list_sub">' . __('First Order', 'fluent-crm') . '</span><span class="fc_list_value">' . date_i18n(get_option('date_format'), strtotime($firstOrder)) . '</span></li>';
+            $html .= '<li><span class="fc_list_sub">' . __('First Order', 'fluent-crm') . '</span><span class="fc_list_value">' . esc_html(CrmHelper::formatDateTime($firstOrder)) . '</span></li>';
         }
         if ($lastOrder) {
-            $html .= '<li><span class="fc_list_sub">' . __('Last Order', 'fluent-crm') . '</span><span class="fc_list_value">' . date_i18n(get_option('date_format'), strtotime($lastOrder)) . '</span></li>';
+            $html .= '<li><span class="fc_list_sub">' . __('Last Order', 'fluent-crm') . '</span><span class="fc_list_value">' . esc_html(CrmHelper::formatDateTime($lastOrder)) . '</span></li>';
         }
         $html .= '</ul></div>';
 
@@ -298,7 +300,7 @@ class FluentCart
         foreach ($items as $item) {
             $orderUrl = admin_url('admin.php?page=fluent-cart#/orders/' . $item['order_id'] . '/view');
             $badges = '<span class="el-tag el-tag--primary">' . esc_html(Helper::toDecimal($item['price'])) . '</span>';
-            $badges .= '<span class="el-tag el-tag--primary"><a target="_blank" rel="noopener" href="' . esc_url($orderUrl) . '">' . date_i18n(get_option('date_format'), strtotime($item['created_at'])) . '</a></span>';
+            $badges .= '<span class="el-tag el-tag--primary"><a target="_blank" rel="noopener" href="' . esc_url($orderUrl) . '">' . esc_html(CrmHelper::formatDateTime($item['created_at'])) . '</a></span>';
             $html .= '<li class="fc_product_name">' . esc_html($item['name']) . ' ' . $badges . '</li>';
         }
         if (!$items) {

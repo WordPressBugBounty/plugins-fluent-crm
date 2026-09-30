@@ -1158,7 +1158,8 @@ class ExternalPages
         wp_send_json_success([
             'message' => $message,
             'id'      => $subscriber->id,
-            'type'    => 'success'
+            'type'    => 'success',
+            'status' => $subscriber->status
         ], 200);
     }
 
@@ -1239,9 +1240,8 @@ class ExternalPages
             $pageId = Arr::get($emailSettings, 'pref_page_id');
             $pageUrl = get_permalink($pageId);
             if ($pageUrl) {
-                if(!is_user_logged_in()) {
-                    setcookie("fc_hash_secure", $subscriber->getSecureHash(), time() + 7776000, COOKIEPATH, COOKIE_DOMAIN, is_ssl(), true);  /* expire in 90 days */
-                }
+                // Logged-in WordPress users may have no CRM contact; preserve the verified recipient for the shortcode fallback.
+                setcookie("fc_hash_secure", $subscriber->getSecureHash(), time() + 7776000, COOKIEPATH, COOKIE_DOMAIN, is_ssl(), true);  /* expire in 90 days */
                 $pageUrl = add_query_arg('_signed_at', time(), $pageUrl);
                 wp_redirect($pageUrl);
                 exit();
@@ -1520,6 +1520,11 @@ class ExternalPages
 
     public function handlePreviewEmail()
     {
+        // wp_head() consumers need initialization, including WooCommerce's cart session.
+        if (!did_action('wp_loaded')) {
+            add_action('wp_loaded', [$this, 'handlePreviewEmail'], 20);
+            return;
+        }
 
         nocache_headers();
 

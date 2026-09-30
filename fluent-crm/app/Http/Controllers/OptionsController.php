@@ -409,6 +409,7 @@ class OptionsController extends Controller
 
                 $args = [
                     'limit'   => 50,
+                    'status'  => 'publish',
                     'orderby' => 'date',
                     'order'   => 'DESC',
                     's'       => $search

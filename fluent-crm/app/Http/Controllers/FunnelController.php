@@ -414,7 +414,10 @@ class FunnelController extends Controller
     public function create(Request $request)
     {
         try {
-            $funnel = $this->validate($request->get('funnel'), [
+            $funnel = $request->get('funnel');
+
+            // Missing or malformed funnel data must reach required-field validation.
+            $funnel = $this->validate(is_array($funnel) ? $funnel : [], [
                 'trigger_name' => 'required'
             ]);
 
@@ -514,7 +517,9 @@ class FunnelController extends Controller
 
         $funnel->settings = [];
         $funnel->conditions = [];
-        $funnel->save();
+
+        // A published funnel's trigger is a live listener; swap it in the registry.
+        (new FunnelHandler())->resetFunnelIndexes();
 
         /**
          * Determine the funnel editor details based on the funnel's trigger name in FluentCRM.
@@ -525,11 +530,17 @@ class FunnelController extends Controller
          * @since 2.3.1
          *
          */
-        $funnel = apply_filters('fluentcrm_funnel_editor_details_' . $funnel->trigger_name, $funnel);
+        $editorFunnel = apply_filters('fluentcrm_funnel_editor_details_' . $funnel->trigger_name, clone $funnel);
+
+        // Persist the new trigger's defaults without saving editor-only field definitions.
+        $funnel->settings = $editorFunnel->settings;
+        $funnel->conditions = $editorFunnel->conditions;
+        $funnel->save();
+        $editorFunnel->updated_at = $funnel->updated_at;
 
         return [
             'message' => __('Automation trigger has been successfully updated', 'fluent-crm'),
-            'funnel'  => $funnel
+            'funnel'  => $editorFunnel
         ];
 
     }
@@ -839,6 +850,9 @@ class FunnelController extends Controller
 
         $funnel->status = $newStatus;
         $funnel->save();
+
+        // Refresh active triggers and benchmarks after publishing or unpublishing.
+        (new FunnelHandler())->resetFunnelIndexes();
 
         return [
             /* translators: %s: subscription status */

@@ -3,7 +3,7 @@ msgstr ""
 "Project-Id-Version: FluentCRM - Marketing Automation For WordPress\n"
 "Report-Msgid-Bugs-To: \n"
 "POT-Creation-Date: 2020-11-14 13:14+0000\n"
-"PO-Revision-Date: 2026-09-03 12:06+0000\n"
+"PO-Revision-Date: 2026-09-29 04:53+0000\n"
 "Last-Translator: admin\n"
 "Language-Team: Hebrew\n"
 "Language: he_IL\n"
@@ -200,7 +200,7 @@ msgid "%1$s must be one of: %2$s."
 msgstr ""
 
 #. 1: caller tag such as "MCP", 2: recipient email address
-#: app/Services/Helper.php:2714
+#: app/Services/Helper.php:2756
 #, php-format
 msgid "%1$s one-off email to %2$s"
 msgstr ""
@@ -216,7 +216,7 @@ msgid ""
 msgstr ""
 
 #. %d: number of deleted notes
-#: app/Http/Controllers/CompanyController.php:833
+#: app/Http/Controllers/CompanyController.php:859
 #: app/Http/Controllers/SubscriberController.php:1055
 msgid "%d note deleted"
 msgid_plural "%d notes deleted"
@@ -228,28 +228,28 @@ msgid "%d pattern(s) deleted successfully"
 msgstr ""
 
 #. %d is the number of subscribers
-#: app/Http/Controllers/SubscriberController.php:1604
+#: app/Http/Controllers/SubscriberController.php:1613
 msgid "%d subscribers have been attached to the selected automation funnel"
 msgstr ""
 
 #. %d is the number of subscribers
-#: app/Http/Controllers/SubscriberController.php:1483
+#: app/Http/Controllers/SubscriberController.php:1492
 msgid "%d subscribers have been attached to the selected company"
 msgstr ""
 
 #. 1. Number of subscribers
-#: app/Http/Controllers/SubscriberController.php:1435
+#: app/Http/Controllers/SubscriberController.php:1444
 msgid "%d subscribers have been attached to the selected email sequence"
 msgstr ""
 
 #. %d is the number of subscribers
-#: app/Http/Controllers/SubscriberController.php:1531
+#: app/Http/Controllers/SubscriberController.php:1540
 msgid "%d subscribers have been detached from the selected company"
 msgstr ""
 
 #. %s: Human-readable time difference.
 #. %s: human-readable time difference
-#: app/Services/Helper.php:2498
+#: app/Services/Helper.php:2540
 #: app/Http/Controllers/CampaignAnalyticsController.php:388
 #, php-format
 msgctxt "%s = human-readable time difference"
@@ -326,11 +326,11 @@ msgstr ""
 msgid "(customer missing)"
 msgstr ""
 
-#: app/Services/GutenbergEmailParser.php:1043
+#: app/Services/GutenbergEmailParser.php:1073
 msgid "(no title)"
 msgstr ""
 
-#: app/Services/ExternalIntegrations/FluentForm/Bootstrap.php:253
+#: app/Services/ExternalIntegrations/FluentForm/Bootstrap.php:279
 msgid ""
 "(Optional) The selected tags will be removed from the contact (if it exists)"
 msgstr ""
@@ -389,7 +389,7 @@ msgstr ""
 msgid "+155555555"
 msgstr ""
 
-#: app/Http/Controllers/FunnelController.php:956
+#: app/Http/Controllers/FunnelController.php:970
 msgid "[Copy] "
 msgstr ""
 
@@ -466,7 +466,7 @@ msgstr ""
 msgid "A contact with this email already exists"
 msgstr ""
 
-#: app/Http/Controllers/SettingsController.php:675
+#: app/Http/Controllers/SettingsController.php:679
 msgid "A database index repair is already running."
 msgstr ""
 
@@ -627,7 +627,6 @@ msgstr ""
 
 #: app/Services/TransStrings.php:72 app/Hooks/Handlers/PurchaseHistory.php:425
 #: app/Hooks/Handlers/PurchaseHistory.php:787
-#: ../fluentcampaign-pro/app/Services/Integrations/Voxel/VoxelInit.php:120
 msgid "Actions"
 msgstr ""
 
@@ -685,7 +684,7 @@ msgstr ""
 msgid "Activate FluentHub"
 msgstr ""
 
-#: app/Services/TransStrings.php:78 app/Services/Helper.php:2278
+#: app/Services/TransStrings.php:78 app/Services/Helper.php:2320
 #, fuzzy
 #| msgid "Action"
 msgid "Active"
@@ -699,11 +698,11 @@ msgstr ""
 msgid "Active Contacts"
 msgstr ""
 
-#: app/Services/ExternalIntegrations/FluentCart/FluentCart.php:407
+#: app/Services/ExternalIntegrations/FluentCart/FluentCart.php:409
 msgid "Active Licenses"
 msgstr ""
 
-#: app/Services/ExternalIntegrations/FluentCart/FluentCart.php:419
+#: app/Services/ExternalIntegrations/FluentCart/FluentCart.php:421
 msgid "Active Variation Licenses"
 msgstr ""
 
@@ -724,7 +723,7 @@ msgid "Activity Log"
 msgstr ""
 
 #: app/Services/TransStrings.php:82
-#: app/Http/Controllers/SettingsController.php:756
+#: app/Http/Controllers/SettingsController.php:760
 msgid "Activity Logs"
 msgstr ""
 
@@ -1173,8 +1172,8 @@ msgid "Address Information"
 msgstr ""
 
 #: app/Models/Company.php:60 app/Models/Subscriber.php:770
-#: app/Services/TransStrings.php:182 app/Services/Helper.php:754
-#: app/Services/Helper.php:1863 app/Hooks/Handlers/PrefFormHandler.php:77
+#: app/Services/TransStrings.php:182 app/Services/Helper.php:775
+#: app/Services/Helper.php:1905 app/Hooks/Handlers/PrefFormHandler.php:77
 #: app/Hooks/Handlers/PrefFormHandler.php:568
 #: app/Services/CrmMigrator/BaseMigrator.php:36
 #: app/Services/Funnel/FunnelHelper.php:233
@@ -1182,8 +1181,8 @@ msgid "Address Line 1"
 msgstr "שורת כתובת 1"
 
 #: app/Models/Company.php:61 app/Models/Subscriber.php:771
-#: app/Services/TransStrings.php:183 app/Services/Helper.php:755
-#: app/Services/Helper.php:1868 app/Hooks/Handlers/PrefFormHandler.php:78
+#: app/Services/TransStrings.php:183 app/Services/Helper.php:776
+#: app/Services/Helper.php:1910 app/Hooks/Handlers/PrefFormHandler.php:78
 #: app/Hooks/Handlers/PrefFormHandler.php:579
 #: app/Services/CrmMigrator/BaseMigrator.php:37
 #: app/Services/Funnel/FunnelHelper.php:237
@@ -1200,7 +1199,7 @@ msgid ""
 "cert."
 msgstr ""
 
-#: app/Services/Helper.php:815
+#: app/Services/Helper.php:836
 msgid "Admin Email"
 msgstr "דוא\"ל מנהל"
 
@@ -1310,7 +1309,7 @@ msgid ""
 "accepted and treated as one group."
 msgstr ""
 
-#: app/Services/Helper.php:2263
+#: app/Services/Helper.php:2305
 msgid "Affiliate ID (Pro Required)"
 msgstr ""
 
@@ -1493,7 +1492,7 @@ msgstr "כל הקמפיינים"
 msgid "All carts"
 msgstr ""
 
-#: app/Http/Controllers/CompanyController.php:398
+#: app/Http/Controllers/CompanyController.php:424
 msgid "All companies have been processed"
 msgstr ""
 
@@ -1514,7 +1513,7 @@ msgstr ""
 msgid "All contacts from"
 msgstr ""
 
-#: app/Http/Controllers/SubscriberController.php:1360
+#: app/Http/Controllers/SubscriberController.php:1369
 msgid "All contacts have been processed"
 msgstr ""
 
@@ -1526,7 +1525,7 @@ msgstr ""
 msgid "All critical indexes are present and healthy."
 msgstr ""
 
-#: app/Http/Controllers/SettingsController.php:663
+#: app/Http/Controllers/SettingsController.php:667
 msgid "All database indexes are healthy."
 msgstr ""
 
@@ -1649,7 +1648,7 @@ msgid ""
 "steps or feedback forms."
 msgstr ""
 
-#: app/Services/ExternalIntegrations/FluentForm/Bootstrap.php:218
+#: app/Services/ExternalIntegrations/FluentForm/Bootstrap.php:228
 msgid ""
 "Allow FluentCRM integration conditionally based on your submission values"
 msgstr "אפשר שילוב FluentCRM מותנה בהתבסס על ערכי ההגשה שלך"
@@ -1815,11 +1814,11 @@ msgstr ""
 msgid "API Key"
 msgstr ""
 
-#: app/Http/Controllers/SettingsController.php:1042
+#: app/Http/Controllers/SettingsController.php:1046
 msgid "API Key has been successfully created"
 msgstr ""
 
-#: app/Http/Controllers/SettingsController.php:901
+#: app/Http/Controllers/SettingsController.php:905
 msgid "API Key has been successfully deleted"
 msgstr ""
 
@@ -2171,7 +2170,7 @@ msgstr ""
 msgid "Associate FluentCRM Manager (Non-Admin Only)"
 msgstr ""
 
-#: app/Services/ExternalIntegrations/FluentForm/Bootstrap.php:135
+#: app/Services/ExternalIntegrations/FluentForm/Bootstrap.php:145
 msgid ""
 "Associate your FluentCRM merge tags to the appropriate Fluent Form fields by "
 "selecting the appropriate form field from the list."
@@ -2299,15 +2298,15 @@ msgstr ""
 msgid "Automation"
 msgstr ""
 
-#: app/Services/Helper.php:2027
+#: app/Services/Helper.php:2069
 msgid "Automation Activity -"
 msgstr ""
 
-#: app/Http/Controllers/FunnelController.php:836
+#: app/Http/Controllers/FunnelController.php:847
 msgid "Automation already has the same status"
 msgstr ""
 
-#: app/Http/Controllers/FunnelController.php:1934
+#: app/Http/Controllers/FunnelController.php:1948
 msgid "Automation already has the same title"
 msgstr ""
 
@@ -2327,25 +2326,25 @@ msgstr ""
 msgid "Automation Goal Quick Lookup Indexing"
 msgstr ""
 
-#: app/Http/Controllers/FunnelController.php:1540
+#: app/Http/Controllers/FunnelController.php:1554
 msgid "Automation has been created from template"
 msgstr ""
 
-#: app/Http/Controllers/FunnelController.php:448
+#: app/Http/Controllers/FunnelController.php:451
 #, fuzzy
 #| msgid "Funnel has been created. Please configure now"
 msgid "Automation has been created. Please configure now"
 msgstr "משפך נוצר. אנא הגדר כעת"
 
-#: app/Http/Controllers/FunnelController.php:484
+#: app/Http/Controllers/FunnelController.php:487
 msgid "Automation has been deleted"
 msgstr ""
 
-#: app/Http/Controllers/FunnelController.php:1058
+#: app/Http/Controllers/FunnelController.php:1072
 msgid "Automation has been successfully cloned"
 msgstr ""
 
-#: app/Http/Controllers/FunnelController.php:1081
+#: app/Http/Controllers/FunnelController.php:1095
 #, fuzzy
 #| msgid "Funnel has been successfully imported"
 msgid "Automation has been successfully imported"
@@ -2385,7 +2384,7 @@ msgstr ""
 msgid "Automation Settings"
 msgstr ""
 
-#: app/Http/Controllers/FunnelController.php:1394
+#: app/Http/Controllers/FunnelController.php:1408
 msgid "Automation status needs to be published"
 msgstr ""
 
@@ -2393,7 +2392,7 @@ msgstr ""
 msgid "Automation Subscriber Metrics Uniqueness"
 msgstr ""
 
-#: app/Http/Controllers/FunnelController.php:531
+#: app/Http/Controllers/FunnelController.php:542
 msgid "Automation trigger has been successfully updated"
 msgstr ""
 
@@ -2415,7 +2414,7 @@ msgstr "אוטומציה כתיבה / עריכה / מחיקה"
 msgid "Automations"
 msgstr "אוטומציות"
 
-#: app/Services/ExternalIntegrations/FluentCart/FluentCart.php:337
+#: app/Services/ExternalIntegrations/FluentCart/FluentCart.php:339
 msgid "Average Order Value"
 msgstr ""
 
@@ -2641,7 +2640,7 @@ msgstr ""
 msgid "Billing State"
 msgstr ""
 
-#: app/Services/Helper.php:1215
+#: app/Services/Helper.php:1236
 #, fuzzy
 #| msgid "Back"
 msgid "Black"
@@ -2709,7 +2708,7 @@ msgstr ""
 
 #: app/Functions/helpers.php:593 app/Functions/helpers.php:644
 #: app/Services/TransStrings.php:375 app/Services/TransStrings.php:2983
-#: app/Services/Helper.php:3370
+#: app/Services/Helper.php:3412
 msgid "Bounced"
 msgstr "הקפיץ"
 
@@ -2813,7 +2812,7 @@ msgstr "בורקינה פאסו"
 msgid "Burundi"
 msgstr "בורונדי"
 
-#: app/Services/Helper.php:814
+#: app/Services/Helper.php:835
 msgid "Business Address"
 msgstr "כתובת עסקית"
 
@@ -2825,7 +2824,7 @@ msgstr ""
 msgid "Business Full Address"
 msgstr ""
 
-#: app/Services/TransStrings.php:384 app/Services/Helper.php:813
+#: app/Services/TransStrings.php:384 app/Services/Helper.php:834
 msgid "Business Name"
 msgstr "שם עסק"
 
@@ -2865,8 +2864,8 @@ msgstr ""
 msgid "Button URL"
 msgstr ""
 
-#: app/Services/GutenbergEmailParser.php:1356
-#: app/Services/GutenbergEmailParser.php:1460
+#: app/Services/GutenbergEmailParser.php:1397
+#: app/Services/GutenbergEmailParser.php:1501
 #: app/Services/BlockRender/CartProduct.php:23
 #: app/Services/BlockRender/CartProduct.php:100
 #: app/Services/BlockRender/ProductListRenderer.php:105
@@ -2878,7 +2877,7 @@ msgid "By"
 msgstr ""
 
 #. %s: author name.
-#: app/Services/GutenbergEmailParser.php:1072
+#: app/Services/GutenbergEmailParser.php:1102
 #, php-format
 msgid "by %s"
 msgstr ""
@@ -2961,7 +2960,7 @@ msgid ""
 "link_report, recipients_estimate."
 msgstr ""
 
-#: app/Services/Helper.php:2009
+#: app/Services/Helper.php:2051
 msgid "Campaign Email -"
 msgstr ""
 
@@ -3117,7 +3116,7 @@ msgstr ""
 msgid "Canceled"
 msgstr ""
 
-#: app/Services/TransStrings.php:478 app/Services/Helper.php:3377
+#: app/Services/TransStrings.php:478 app/Services/Helper.php:3419
 msgid "Cancelled"
 msgstr ""
 
@@ -3130,7 +3129,7 @@ msgid "Cancelled Date: "
 msgstr ""
 
 #. %s: subscriber status
-#: app/Http/Controllers/FunnelController.php:1180
+#: app/Http/Controllers/FunnelController.php:1194
 #, php-format
 msgid "Cannot advance a subscriber with status: %s"
 msgstr ""
@@ -3340,7 +3339,7 @@ msgstr ""
 msgid "Check All"
 msgstr ""
 
-#: app/Services/ExternalIntegrations/FluentCart/FluentCart.php:459
+#: app/Services/ExternalIntegrations/FluentCart/FluentCart.php:461
 msgid "Check if contacts has any active license from any products"
 msgstr ""
 
@@ -3365,7 +3364,7 @@ msgstr ""
 msgid "Checking..."
 msgstr ""
 
-#: app/Services/Helper.php:3373
+#: app/Services/Helper.php:3415
 msgid "Checkout Draft"
 msgstr ""
 
@@ -3439,8 +3438,8 @@ msgid "Christmas Island"
 msgstr "אי חג המולד"
 
 #: app/Models/Company.php:63 app/Models/Subscriber.php:772
-#: app/Services/TransStrings.php:521 app/Services/Helper.php:756
-#: app/Services/Helper.php:1873 app/Hooks/Handlers/PrefFormHandler.php:79
+#: app/Services/TransStrings.php:521 app/Services/Helper.php:777
+#: app/Services/Helper.php:1915 app/Hooks/Handlers/PrefFormHandler.php:79
 #: app/Hooks/Handlers/PrefFormHandler.php:590
 #: app/Services/CrmMigrator/BaseMigrator.php:39
 #: app/Services/Funnel/FunnelHelper.php:245
@@ -3451,7 +3450,7 @@ msgstr "עִיר"
 msgid "Classic"
 msgstr ""
 
-#: app/Services/TransStrings.php:522 app/Services/Helper.php:986
+#: app/Services/TransStrings.php:522 app/Services/Helper.php:1007
 msgid "Classic Editor"
 msgstr ""
 
@@ -3573,7 +3572,7 @@ msgstr "קולומביה"
 msgid "Color"
 msgstr ""
 
-#: app/Http/Controllers/CompanyController.php:294
+#: app/Http/Controllers/CompanyController.php:320
 #: app/Http/Controllers/SubscriberController.php:206
 msgid "Column is not valid"
 msgstr ""
@@ -3643,15 +3642,15 @@ msgstr ""
 msgid "companies selected"
 msgstr ""
 
-#: app/Services/TransStrings.php:549 app/Services/Helper.php:2067
+#: app/Services/TransStrings.php:549 app/Services/Helper.php:2109
 msgid "Company"
 msgstr ""
 
-#: app/Services/Helper.php:2078
+#: app/Services/Helper.php:2120
 msgid "Company - Industry"
 msgstr ""
 
-#: app/Services/Helper.php:2088
+#: app/Services/Helper.php:2130
 msgid "Company - Type"
 msgstr ""
 
@@ -3659,7 +3658,7 @@ msgstr ""
 msgid "Company / Business"
 msgstr ""
 
-#: app/Services/Helper.php:769
+#: app/Services/Helper.php:790
 msgid "Company Address"
 msgstr ""
 
@@ -3667,8 +3666,16 @@ msgstr ""
 msgid "Company association removed"
 msgstr ""
 
-#: app/Http/Controllers/CompanyController.php:479
+#: app/Http/Controllers/CompanyController.php:505
 msgid "Company Category has been updated for the selected companies"
+msgstr ""
+
+#: app/Services/ExternalIntegrations/FluentForm/Bootstrap.php:705
+msgid "Company could not be resolved or created in FluentCRM."
+msgstr ""
+
+#: app/Services/ExternalIntegrations/FluentForm/Bootstrap.php:747
+msgid "Company could not be synced with the FluentCRM contact."
 msgstr ""
 
 #: app/Models/Company.php:55
@@ -3683,19 +3690,27 @@ msgstr ""
 msgid "Company Fields"
 msgstr ""
 
-#: app/Http/Controllers/CompanyController.php:232
+#: app/Services/ExternalIntegrations/FluentForm/Bootstrap.php:237
+msgid "Company Fields (Optional)"
+msgstr ""
+
+#: app/Http/Controllers/CompanyController.php:258
 msgid "Company has been created successfully"
 msgstr ""
 
-#: app/Http/Controllers/CompanyController.php:351
+#: app/Http/Controllers/CompanyController.php:377
 msgid "Company has been deleted successfully"
 msgstr ""
 
-#: app/Http/Controllers/CompanyController.php:162
+#: app/Http/Controllers/CompanyController.php:188
 msgid "Company has been successfully detached"
 msgstr ""
 
-#: app/Http/Controllers/CompanyController.php:260
+#: app/Services/ExternalIntegrations/FluentForm/Bootstrap.php:731
+msgid "Company has been synced and attached in FluentCRM. Company ID: "
+msgstr ""
+
+#: app/Http/Controllers/CompanyController.php:286
 msgid "Company has been updated"
 msgstr ""
 
@@ -3703,7 +3718,7 @@ msgstr ""
 msgid "Company ID:"
 msgstr ""
 
-#: app/Services/TransStrings.php:554 app/Services/Helper.php:768
+#: app/Services/TransStrings.php:554 app/Services/Helper.php:789
 msgid "Company Industry"
 msgstr ""
 
@@ -3731,7 +3746,7 @@ msgstr ""
 msgid "Company Module Settings"
 msgstr ""
 
-#: app/Services/TransStrings.php:558 app/Services/Helper.php:767
+#: app/Services/TransStrings.php:558 app/Services/Helper.php:788
 msgid "Company Name"
 msgstr ""
 
@@ -3743,7 +3758,7 @@ msgstr ""
 msgid "Company Name *"
 msgstr ""
 
-#: app/Http/Controllers/CompanyController.php:251
+#: app/Http/Controllers/CompanyController.php:277
 msgid "Company name already exists. Please use a different company name"
 msgstr ""
 
@@ -3759,7 +3774,7 @@ msgstr ""
 msgid "Company Phone Number"
 msgstr ""
 
-#: app/Http/Controllers/CompanyController.php:339
+#: app/Http/Controllers/CompanyController.php:365
 msgid "Company successfully updated"
 msgstr ""
 
@@ -3767,12 +3782,22 @@ msgstr ""
 msgid "Company Summary"
 msgstr ""
 
+#: app/Services/ExternalIntegrations/FluentForm/Bootstrap.php:578
+msgid ""
+"Company synchronization was skipped because the contact already exists in "
+"FluentCRM."
+msgstr ""
+
 #: app/Services/TransStrings.php:563
 msgid "Company Type"
 msgstr ""
 
-#: app/Http/Controllers/CompanyController.php:458
+#: app/Http/Controllers/CompanyController.php:484
 msgid "Company Type has been updated for the selected companies"
+msgstr ""
+
+#: app/Services/ExternalIntegrations/FluentForm/Bootstrap.php:721
+msgid "Company was synced but could not be attached to the contact."
 msgstr ""
 
 #: app/Services/TransStrings.php:571
@@ -3801,7 +3826,7 @@ msgstr ""
 
 #: app/Functions/helpers.php:594 app/Functions/helpers.php:645
 #: app/Services/TransStrings.php:574 app/Services/TransStrings.php:2997
-#: app/Services/Helper.php:3371
+#: app/Services/Helper.php:3413
 msgid "Complained"
 msgstr "התלונן"
 
@@ -3817,7 +3842,7 @@ msgstr ""
 msgid "Complaint received from ToSend Webhook API."
 msgstr ""
 
-#: app/Services/TransStrings.php:575 app/Services/Helper.php:3375
+#: app/Services/TransStrings.php:575 app/Services/Helper.php:3417
 msgid "Complete"
 msgstr ""
 
@@ -3837,7 +3862,7 @@ msgstr ""
 msgid "Complete Installation"
 msgstr ""
 
-#: app/Services/TransStrings.php:579 app/Services/Helper.php:3374
+#: app/Services/TransStrings.php:579 app/Services/Helper.php:3416
 #: app/Hooks/CLI/Commands.php:138
 #: app/Modules/AbandonCart/Drivers/FluentCart/FluentCartDriver.php:243
 msgid "Completed"
@@ -3915,7 +3940,7 @@ msgstr ""
 msgid "Conditional blocks are not allowed inside conditional child branches"
 msgstr ""
 
-#: app/Services/ExternalIntegrations/FluentForm/Bootstrap.php:217
+#: app/Services/ExternalIntegrations/FluentForm/Bootstrap.php:227
 msgid "Conditional Logics"
 msgstr "לוגיקה מותנית"
 
@@ -3936,7 +3961,7 @@ msgstr ""
 msgid "Configuration"
 msgstr ""
 
-#: app/Services/ExternalIntegrations/FluentForm/Bootstrap.php:52
+#: app/Services/ExternalIntegrations/FluentForm/Bootstrap.php:56
 msgid "Configuration required!"
 msgstr "תצורה נדרשת!"
 
@@ -4008,7 +4033,7 @@ msgstr ""
 msgid "Confirm Send"
 msgstr ""
 
-#: app/Services/Libs/Parser/ShortcodeParser.php:253
+#: app/Services/Libs/Parser/ShortcodeParser.php:256
 msgid "Confirm Subscription"
 msgstr ""
 
@@ -4040,7 +4065,7 @@ msgstr ""
 msgid "Connect a client"
 msgstr ""
 
-#: app/Services/ExternalIntegrations/FluentForm/Bootstrap.php:36
+#: app/Services/ExternalIntegrations/FluentForm/Bootstrap.php:40
 msgid ""
 "Connect FluentCRM with WP Fluent Forms and subscribe a contact when a form "
 "is submitted."
@@ -4069,13 +4094,13 @@ msgstr ""
 msgid "Connection successful! Your API key is valid."
 msgstr ""
 
-#: app/Services/TransStrings.php:631 app/Services/Helper.php:719
-#: app/Services/Helper.php:1841
+#: app/Services/TransStrings.php:631 app/Services/Helper.php:740
+#: app/Services/Helper.php:1883
 #: app/Modules/AbandonCart/Drivers/FluentCart/FluentCartAutomationTrigger.php:148
 msgid "Contact"
 msgstr "איש קשר"
 
-#: app/Services/Helper.php:1989
+#: app/Services/Helper.php:2031
 msgid "Contact Activities"
 msgstr ""
 
@@ -4108,7 +4133,7 @@ msgstr "איש הקשר כבר רשום"
 msgid "Contact can see all lists and manage subscriptions"
 msgstr ""
 
-#: app/Services/ExternalIntegrations/FluentForm/Bootstrap.php:376
+#: app/Services/ExternalIntegrations/FluentForm/Bootstrap.php:437
 #, fuzzy
 #| msgid ""
 #| "Contact creation has been skipped because contact already exist in the "
@@ -4126,7 +4151,7 @@ msgstr ""
 msgid "Contact Data"
 msgstr ""
 
-#: app/Services/Helper.php:751
+#: app/Services/Helper.php:772
 msgid "Contact Email"
 msgstr "דוא\"ל ליצירת קשר"
 
@@ -4175,7 +4200,7 @@ msgstr ""
 msgid "Contact has been added manually to this automation funnel"
 msgstr ""
 
-#: app/Services/ExternalIntegrations/FluentForm/Bootstrap.php:457
+#: app/Services/ExternalIntegrations/FluentForm/Bootstrap.php:521
 msgid "Contact has been created in FluentCRM. Contact ID: "
 msgstr "איש קשר נוצר ב- FluentCRM. מזהה איש קשר:"
 
@@ -4183,11 +4208,11 @@ msgstr "איש קשר נוצר ב- FluentCRM. מזהה איש קשר:"
 msgid "Contact has been successfully updated."
 msgstr ""
 
-#: app/Services/ExternalIntegrations/FluentForm/Bootstrap.php:517
+#: app/Services/ExternalIntegrations/FluentForm/Bootstrap.php:596
 msgid "Contact has been updated in FluentCRM. Contact ID: "
 msgstr "איש הקשר עודכן ב- FluentCRM. מזהה איש קשר:"
 
-#: app/Services/Helper.php:752
+#: app/Services/Helper.php:773
 msgid "Contact ID"
 msgstr "תעודת זהות ליצירת קשר"
 
@@ -4235,7 +4260,7 @@ msgstr "איש קשר הוסר מכל הרשימות שנבחרו"
 msgid "contact removed from any of the selected Lists"
 msgstr "איש קשר הוסר מכל אחת מהרשימות שנבחרו"
 
-#: app/Services/Helper.php:1937 app/Hooks/Handlers/EventTrackingHandler.php:266
+#: app/Services/Helper.php:1979 app/Hooks/Handlers/EventTrackingHandler.php:266
 #: app/Modules/AbandonCart/Drivers/FluentCart/FluentCartAutomationTrigger.php:188
 msgid "Contact Segment"
 msgstr ""
@@ -4260,10 +4285,6 @@ msgstr ""
 msgid "Contact Status"
 msgstr ""
 
-#: ../fluentcampaign-pro/app/Services/Funnel/Actions/ChangeContactStatusAction.php:101
-msgid "Contact Status Changed"
-msgstr ""
-
 #: app/Services/TransStrings.php:647
 msgid "Contact Tagging - Cart Abandoned"
 msgstr ""
@@ -4273,7 +4294,7 @@ msgid "Contact Tagging - Cart Lost"
 msgstr ""
 
 #: app/Services/TransStrings.php:649
-#: app/Services/ExternalIntegrations/FluentForm/Bootstrap.php:174
+#: app/Services/ExternalIntegrations/FluentForm/Bootstrap.php:184
 msgid "Contact Tags"
 msgstr "תגי קשר"
 
@@ -4289,7 +4310,7 @@ msgstr ""
 msgid "Contact Type"
 msgstr ""
 
-#: app/Http/Controllers/SubscriberController.php:1627
+#: app/Http/Controllers/SubscriberController.php:1636
 msgid "Contact Type has been updated for the selected subscribers"
 msgstr ""
 
@@ -4309,7 +4330,7 @@ msgstr ""
 msgid "contact_type is not a registered type."
 msgstr ""
 
-#: app/Services/TransStrings.php:656 app/Services/Helper.php:2982
+#: app/Services/TransStrings.php:656 app/Services/Helper.php:3024
 #: app/Hooks/Handlers/AdminMenu.php:87 app/Hooks/Handlers/AdminMenu.php:88
 #: app/Hooks/Handlers/AdminMenu.php:355 app/Hooks/Handlers/AdminMenu.php:537
 msgid "Contacts"
@@ -4475,10 +4496,6 @@ msgid ""
 "from the preference page."
 msgstr ""
 
-#: ../fluentcampaign-pro/app/Modules/Messaging/Http/Controllers/MessageThreadController.php:918
-msgid "Conversation marked as read."
-msgstr ""
-
 #: app/Services/TransStrings.php:676
 msgid "Conversion"
 msgstr ""
@@ -4583,10 +4600,6 @@ msgid ""
 "privileges or repair it manually."
 msgstr ""
 
-#: ../fluentcampaign-pro/app/Hooks/Handlers/DataExporter.php:584
-msgid "Could not create the template"
-msgstr ""
-
 #: app/Modules/MCP/Tools/ContactTools.php:1225
 msgid "Could not delete the contact"
 msgstr ""
@@ -4609,7 +4622,7 @@ msgstr ""
 msgid "Could not load OpenRouter models."
 msgstr ""
 
-#: app/Http/Controllers/FunnelController.php:1529
+#: app/Http/Controllers/FunnelController.php:1543
 msgid ""
 "Could not load template data. The template URL may be unavailable or not "
 "allowed."
@@ -4624,8 +4637,8 @@ msgid "Count"
 msgstr ""
 
 #: app/Models/Company.php:65 app/Models/Subscriber.php:775
-#: app/Services/TransStrings.php:695 app/Services/Helper.php:759
-#: app/Services/Helper.php:1888 app/Hooks/Handlers/PrefFormHandler.php:82
+#: app/Services/TransStrings.php:695 app/Services/Helper.php:780
+#: app/Services/Helper.php:1930 app/Hooks/Handlers/PrefFormHandler.php:82
 #: app/Services/CrmMigrator/BaseMigrator.php:41
 #: app/Modules/AbandonCart/Drivers/FluentCart/FluentCartAutomationTrigger.php:167
 msgid "Country"
@@ -4975,7 +4988,7 @@ msgstr ""
 msgid "Created"
 msgstr ""
 
-#: app/Services/TransStrings.php:767 app/Services/Helper.php:1929
+#: app/Services/TransStrings.php:767 app/Services/Helper.php:1971
 #: app/Modules/AbandonCart/Drivers/FluentCart/FluentCartAutomationTrigger.php:181
 msgid "Created At"
 msgstr ""
@@ -5170,7 +5183,7 @@ msgstr ""
 msgid "Custom date"
 msgstr ""
 
-#: app/Services/Helper.php:818
+#: app/Services/Helper.php:839
 msgid "Custom Date Format (Any PHP Date Format)"
 msgstr ""
 
@@ -5191,7 +5204,7 @@ msgid "Custom Email has been successfully sent"
 msgstr "דוא\"ל מותאם אישית נשלח בהצלחה"
 
 #. %s: recipient email address
-#: app/Services/Helper.php:2716
+#: app/Services/Helper.php:2758
 #, php-format
 msgid "Custom email to %s"
 msgstr ""
@@ -5212,8 +5225,8 @@ msgstr ""
 msgid "Custom Field Slug"
 msgstr ""
 
-#: app/Services/TransStrings.php:791 app/Services/Helper.php:783
-#: app/Services/Helper.php:2143 app/Hooks/Handlers/PrefFormHandler.php:86
+#: app/Services/TransStrings.php:791 app/Services/Helper.php:804
+#: app/Services/Helper.php:2185 app/Hooks/Handlers/PrefFormHandler.php:86
 #: app/Modules/AbandonCart/Drivers/FluentCart/FluentCartAutomationTrigger.php:260
 #, fuzzy
 #| msgid "Custom Field Slug"
@@ -5224,7 +5237,7 @@ msgstr "שדה שבלול מותאם אישית"
 msgid "Custom Fields Config"
 msgstr ""
 
-#: app/Http/Controllers/SubscriberController.php:1683
+#: app/Http/Controllers/SubscriberController.php:1692
 msgid "Custom Fields has been updated for the selected subscribers"
 msgstr ""
 
@@ -5331,7 +5344,7 @@ msgstr ""
 msgid "Customer-related smart codes"
 msgstr ""
 
-#: app/Services/Helper.php:1220
+#: app/Services/Helper.php:1241
 msgid "Cyan bluish gray"
 msgstr ""
 
@@ -5384,7 +5397,7 @@ msgstr ""
 msgid "Database Health"
 msgstr ""
 
-#: app/Http/Controllers/SettingsController.php:697
+#: app/Http/Controllers/SettingsController.php:701
 msgid "Database indexes repaired successfully."
 msgstr ""
 
@@ -5405,8 +5418,7 @@ msgstr ""
 #: app/Hooks/Handlers/PurchaseHistory.php:183
 #: app/Hooks/Handlers/PurchaseHistory.php:409
 #: app/Hooks/Handlers/PurchaseHistory.php:767
-#: app/Services/ExternalIntegrations/FluentCart/FluentCart.php:180
-#: ../fluentcampaign-pro/app/Services/Integrations/Voxel/VoxelInit.php:104
+#: app/Services/ExternalIntegrations/FluentCart/FluentCart.php:181
 msgid "Date"
 msgstr "תַאֲרִיך"
 
@@ -5434,8 +5446,8 @@ msgstr ""
 msgid "Date Of Birth"
 msgstr ""
 
-#: app/Services/TransStrings.php:835 app/Services/Helper.php:762
-#: app/Services/Helper.php:1919 app/Hooks/Handlers/PrefFormHandler.php:76
+#: app/Services/TransStrings.php:835 app/Services/Helper.php:783
+#: app/Services/Helper.php:1961 app/Hooks/Handlers/PrefFormHandler.php:76
 msgid "Date of Birth"
 msgstr "תאריך לידה"
 
@@ -5443,7 +5455,7 @@ msgstr "תאריך לידה"
 msgid "Date of Birth (Y-m-d Format only)"
 msgstr ""
 
-#: app/Services/TransStrings.php:833 app/Services/Helper.php:3046
+#: app/Services/TransStrings.php:833 app/Services/Helper.php:3088
 msgid "Date Time"
 msgstr ""
 
@@ -5781,7 +5793,7 @@ msgstr "דנמרק"
 msgid "Describe the email you want and AI will write it into the editor."
 msgstr ""
 
-#: app/Services/TransStrings.php:902 app/Services/Helper.php:3061
+#: app/Services/TransStrings.php:902 app/Services/Helper.php:3103
 msgid "Description"
 msgstr ""
 
@@ -5828,7 +5840,7 @@ msgstr ""
 msgid "detected"
 msgstr ""
 
-#: fluent-crm.php:67
+#: fluent-crm.php:78
 msgid "Developer Docs"
 msgstr ""
 
@@ -5966,10 +5978,10 @@ msgstr ""
 msgid "Do more with WooCommerce + FluentCRM"
 msgstr ""
 
-#: app/Services/ExternalIntegrations/FluentCart/FluentCart.php:413
-#: app/Services/ExternalIntegrations/FluentCart/FluentCart.php:426
-#: app/Services/ExternalIntegrations/FluentCart/FluentCart.php:437
-#: app/Services/ExternalIntegrations/FluentCart/FluentCart.php:450
+#: app/Services/ExternalIntegrations/FluentCart/FluentCart.php:415
+#: app/Services/ExternalIntegrations/FluentCart/FluentCart.php:428
+#: app/Services/ExternalIntegrations/FluentCart/FluentCart.php:439
+#: app/Services/ExternalIntegrations/FluentCart/FluentCart.php:452
 msgid "do not have"
 msgstr ""
 
@@ -6021,7 +6033,7 @@ msgstr ""
 msgid "Do you want to update the subscribers data if it's already exist?"
 msgstr ""
 
-#: fluent-crm.php:65
+#: fluent-crm.php:76
 msgid "Docs & FAQs"
 msgstr ""
 
@@ -6101,7 +6113,7 @@ msgstr "הגדרות ההצטרפות הכפולה עודכנו"
 msgid "Double OptIn email has been sent"
 msgstr "דוא\"ל OptIn כפול נשלח"
 
-#: app/Http/Controllers/SubscriberController.php:1391
+#: app/Http/Controllers/SubscriberController.php:1400
 msgid "Double optin sent to selected contacts"
 msgstr ""
 
@@ -6204,7 +6216,7 @@ msgstr ""
 msgid "Duplicate"
 msgstr ""
 
-#: app/Services/Helper.php:817
+#: app/Services/Helper.php:838
 msgid "Dynamic Date (ex: +2 days from now)"
 msgstr ""
 
@@ -6279,11 +6291,11 @@ msgid ""
 "written to."
 msgstr ""
 
-#: app/Services/Helper.php:2286
+#: app/Services/Helper.php:2328
 msgid "Earnings (Pro Required)"
 msgstr ""
 
-#: app/Services/Helper.php:1178
+#: app/Services/Helper.php:1199
 msgid "Easy Digital Downloads"
 msgstr "הורדות דיגיטליות קלות"
 
@@ -6295,7 +6307,7 @@ msgstr ""
 msgid "Ecuador"
 msgstr "אקוודור"
 
-#: app/Services/Helper.php:2207
+#: app/Services/Helper.php:2249
 #, fuzzy
 #| msgid "Add"
 msgid "EDD"
@@ -6305,7 +6317,7 @@ msgstr "הוספה"
 msgid "EDD Integration:"
 msgstr ""
 
-#: app/Services/Helper.php:1177
+#: app/Services/Helper.php:1198
 msgid "EDD Purchase History"
 msgstr "היסטוריית הרכישות של EDD"
 
@@ -6482,7 +6494,7 @@ msgid "Elementor Pro Form Integration"
 msgstr ""
 
 #: app/Models/Subscriber.php:767 app/Functions/helpers.php:732
-#: app/Services/TransStrings.php:1016 app/Services/Helper.php:1859
+#: app/Services/TransStrings.php:1016 app/Services/Helper.php:1901
 #: app/Hooks/Handlers/PrefFormHandler.php:74
 #: app/Hooks/Handlers/PrefFormHandler.php:497
 #: app/Services/Funnel/FunnelHelper.php:219
@@ -6492,7 +6504,7 @@ msgid "Email"
 msgstr "אימייל"
 
 #: app/Services/TransStrings.php:1017
-#: app/Services/ExternalIntegrations/FluentForm/Bootstrap.php:142
+#: app/Services/ExternalIntegrations/FluentForm/Bootstrap.php:152
 msgid "Email Address"
 msgstr "כתובת דוא\"ל"
 
@@ -6575,7 +6587,7 @@ msgstr ""
 msgid "Email Clicks"
 msgstr ""
 
-#: app/Http/Controllers/SettingsController.php:730
+#: app/Http/Controllers/SettingsController.php:734
 msgid "Email clicks"
 msgstr "קליקים בדוא\"ל"
 
@@ -6628,7 +6640,7 @@ msgid "Email History"
 msgstr ""
 
 #: app/Services/TransStrings.php:1037
-#: app/Http/Controllers/SettingsController.php:721
+#: app/Http/Controllers/SettingsController.php:725
 msgid "Email History Logs"
 msgstr "יומני היסטוריית דוא\"ל"
 
@@ -6687,7 +6699,7 @@ msgstr ""
 msgid "Email opened"
 msgstr ""
 
-#: app/Http/Controllers/SettingsController.php:739
+#: app/Http/Controllers/SettingsController.php:743
 msgid "Email Opens"
 msgstr ""
 
@@ -6707,7 +6719,7 @@ msgstr ""
 msgid "Email Pre-Header"
 msgstr ""
 
-#: app/Services/Libs/Parser/ShortcodeParser.php:240
+#: app/Services/Libs/Parser/ShortcodeParser.php:243
 msgid "Email Preference"
 msgstr ""
 
@@ -6764,7 +6776,7 @@ msgstr ""
 msgid "Email Sent From Funnel: "
 msgstr ""
 
-#: app/Services/Helper.php:2045
+#: app/Services/Helper.php:2087
 msgid "Email Sequence Activity -"
 msgstr ""
 
@@ -6827,7 +6839,7 @@ msgstr ""
 msgid "email_pre_header not set — better deliverability with a preheader"
 msgstr ""
 
-#: app/Services/TransStrings.php:1094 app/Services/Helper.php:486
+#: app/Services/TransStrings.php:1094 app/Services/Helper.php:507
 #: app/Hooks/Handlers/AdminMenu.php:424 app/Hooks/Handlers/AdminMenu.php:545
 msgid "Emails"
 msgstr "דוא\"ל"
@@ -7013,7 +7025,7 @@ msgstr "אפשר ליצור אנשי קשר חדשים ב- FluentCRM כאשר מ
 msgid "Enable Double Opt-in Confirmation"
 msgstr ""
 
-#: app/Services/ExternalIntegrations/FluentForm/Bootstrap.php:204
+#: app/Services/ExternalIntegrations/FluentForm/Bootstrap.php:214
 #, fuzzy
 #| msgid "Enable Double Option for new contacts"
 msgid "Enable Double opt-in for new contacts"
@@ -7025,7 +7037,7 @@ msgstr "אפשר אפשרות כפולה לאנשי קשר חדשים"
 msgid "Enable Double-Optin Email Confirmation"
 msgstr "הפעל אישור אימייל כפול אופטי"
 
-#: app/Services/ExternalIntegrations/FluentForm/Bootstrap.php:183
+#: app/Services/ExternalIntegrations/FluentForm/Bootstrap.php:193
 msgid "Enable Dynamic Tag Selection"
 msgstr "אפשר בחירת תגים דינמית"
 
@@ -7037,7 +7049,7 @@ msgstr ""
 msgid "Enable Event Tracking Module"
 msgstr ""
 
-#: app/Services/ExternalIntegrations/FluentForm/Bootstrap.php:210
+#: app/Services/ExternalIntegrations/FluentForm/Bootstrap.php:220
 msgid ""
 "Enable Force Subscribe if contact is not in subscribed status (Existing "
 "contact only)"
@@ -7152,7 +7164,7 @@ msgid ""
 "previous contacts easily from single contact screen"
 msgstr ""
 
-#: app/Services/ExternalIntegrations/FluentForm/Bootstrap.php:265
+#: app/Services/ExternalIntegrations/FluentForm/Bootstrap.php:291
 msgid "Enable This feed"
 msgstr "אפשר עדכון זה"
 
@@ -7219,23 +7231,23 @@ msgid ""
 "Enjoy a faster, more reliable experience by sharing non-sensitive usage data."
 msgstr ""
 
-#: app/Services/Helper.php:2349 app/Services/Helper.php:2405
+#: app/Services/Helper.php:2391 app/Services/Helper.php:2447
 msgid "Enrollment Categories (Pro Required)"
 msgstr ""
 
-#: app/Services/Helper.php:2331 app/Services/Helper.php:2388
+#: app/Services/Helper.php:2373 app/Services/Helper.php:2430
 msgid "Enrollment Courses (Pro Required)"
 msgstr ""
 
-#: app/Services/Helper.php:2339
+#: app/Services/Helper.php:2381
 msgid "Enrollment Groups (Pro Required)"
 msgstr ""
 
-#: app/Services/Helper.php:2396
+#: app/Services/Helper.php:2438
 msgid "Enrollment Memberships (Pro Required)"
 msgstr ""
 
-#: app/Services/Helper.php:2358 app/Services/Helper.php:2414
+#: app/Services/Helper.php:2400 app/Services/Helper.php:2456
 msgid "Enrollment Tags (Pro Required)"
 msgstr ""
 
@@ -7365,7 +7377,7 @@ msgstr ""
 msgid "Event Count"
 msgstr ""
 
-#: app/Http/Controllers/SubscriberController.php:2010
+#: app/Http/Controllers/SubscriberController.php:2019
 msgid "Event has been tracked"
 msgstr ""
 
@@ -7389,7 +7401,7 @@ msgstr ""
 msgid "Event Title"
 msgstr ""
 
-#: app/Http/Controllers/SubscriberController.php:1975
+#: app/Http/Controllers/SubscriberController.php:1984
 msgid "Event Tracker is not enabled"
 msgstr ""
 
@@ -7510,11 +7522,11 @@ msgstr ""
 msgid "Expired"
 msgstr ""
 
-#: app/Services/ExternalIntegrations/FluentCart/FluentCart.php:431
+#: app/Services/ExternalIntegrations/FluentCart/FluentCart.php:433
 msgid "Expired Licenses"
 msgstr ""
 
-#: app/Services/ExternalIntegrations/FluentCart/FluentCart.php:443
+#: app/Services/ExternalIntegrations/FluentCart/FluentCart.php:445
 msgid "Expired Variation Licenses"
 msgstr ""
 
@@ -7758,7 +7770,7 @@ msgstr ""
 msgid "February"
 msgstr ""
 
-#: app/Services/ExternalIntegrations/FluentForm/Bootstrap.php:117
+#: app/Services/ExternalIntegrations/FluentForm/Bootstrap.php:127
 msgid "Feed Name"
 msgstr "שם העדכון"
 
@@ -7815,7 +7827,7 @@ msgid "Field Value Options"
 msgstr ""
 
 #: app/Http/Controllers/CustomContactFieldsController.php:36
-#: app/Http/Controllers/CompanyController.php:856
+#: app/Http/Controllers/CompanyController.php:882
 msgid "Fields saved successfully!"
 msgstr "שדות נשמרו בהצלחה!"
 
@@ -7859,7 +7871,7 @@ msgstr ""
 msgid "Filter by status"
 msgstr ""
 
-#: app/Services/Helper.php:1984
+#: app/Services/Helper.php:2026
 msgid ""
 "Filter by user role, please make sure your users are synced with your "
 "FluentCRM contacts"
@@ -7869,7 +7881,7 @@ msgstr ""
 msgid "Filter Subscribers"
 msgstr ""
 
-#: app/Http/Controllers/SubscriberController.php:1759
+#: app/Http/Controllers/SubscriberController.php:1768
 msgid "filter_type and current_id are required"
 msgstr ""
 
@@ -7889,32 +7901,32 @@ msgstr ""
 msgid "Finland"
 msgstr "פינלנד"
 
-#: app/Services/Helper.php:2325 app/Services/Helper.php:2382
+#: app/Services/Helper.php:2367 app/Services/Helper.php:2424
 msgid "First Enrollment Date (Pro Required)"
 msgstr ""
 
 #: app/Models/Subscriber.php:764 app/Services/TransStrings.php:1253
-#: app/Services/Helper.php:749 app/Services/Helper.php:1849
+#: app/Services/Helper.php:770 app/Services/Helper.php:1891
 #: app/Hooks/Handlers/PrefFormHandler.php:71
 #: app/Hooks/Handlers/PrefFormHandler.php:456
 #: app/Views/external/manage_subscription_form.php:14
 #: app/Views/external/manage_subscription_form.php:16
 #: app/Services/CrmMigrator/BaseMigrator.php:25
 #: app/Services/Funnel/FunnelHelper.php:211
-#: app/Services/ExternalIntegrations/FluentForm/Bootstrap.php:148
+#: app/Services/ExternalIntegrations/FluentForm/Bootstrap.php:158
 #: app/Modules/AbandonCart/Drivers/FluentCart/FluentCartAutomationTrigger.php:152
 msgid "First Name"
 msgstr "שם פרטי"
 
-#: app/Services/ExternalIntegrations/FluentCart/FluentCart.php:289
+#: app/Services/ExternalIntegrations/FluentCart/FluentCart.php:291
 msgid "First Order"
 msgstr ""
 
-#: app/Services/ExternalIntegrations/FluentCart/FluentCart.php:342
+#: app/Services/ExternalIntegrations/FluentCart/FluentCart.php:344
 msgid "First Order Date"
 msgstr ""
 
-#: app/Services/Helper.php:2176 app/Services/Helper.php:2230
+#: app/Services/Helper.php:2218 app/Services/Helper.php:2272
 msgid "First Order Date (Pro Required)"
 msgstr ""
 
@@ -8063,9 +8075,9 @@ msgstr ""
 msgid "FluentCampaign Pro adds 4 more tools (sequences and dynamic segments)."
 msgstr ""
 
-#: app/Services/Helper.php:1164 app/Http/Controllers/SetupController.php:250
+#: app/Services/Helper.php:1185 app/Http/Controllers/SetupController.php:250
 #: app/Http/Controllers/ImporterController.php:65
-#: app/Services/ExternalIntegrations/FluentCart/FluentCart.php:468
+#: app/Services/ExternalIntegrations/FluentCart/FluentCart.php:470
 #: app/Modules/AbandonCart/Drivers/FluentCart/FluentCartAutomationTrigger.php:21
 #: app/Modules/AbandonCart/Drivers/FluentCart/FluentCartDriver.php:19
 #: app/Services/ExternalIntegrations/FluentCart/Triggers/SubscriptionEndOfTermTrigger.php:25
@@ -8099,7 +8111,7 @@ msgstr ""
 msgid "FluentCart Order Status Changed"
 msgstr ""
 
-#: app/Services/Helper.php:1163
+#: app/Services/Helper.php:1184
 msgid "FluentCart Purchase History"
 msgstr ""
 
@@ -8111,7 +8123,7 @@ msgstr ""
 #: app/Views/emails/raw_classic/Template.php:37
 #: app/Views/emails/simple/Template.php:92
 #: app/Views/emails/web_preview/Template.php:14
-#: app/Services/ExternalIntegrations/FluentForm/Bootstrap.php:27
+#: app/Services/ExternalIntegrations/FluentForm/Bootstrap.php:31
 msgid "FluentCRM"
 msgstr "מערכת דיוור"
 
@@ -8131,13 +8143,17 @@ msgstr "FluentCRM - אוטומציה שיווקית עבור וורדפרס"
 msgid "FluentCRM - Setup Wizard"
 msgstr "אשף ההתקנה של מערכת דיוור"
 
-#: app/Services/ExternalIntegrations/FluentForm/Bootstrap.php:354
+#: app/Services/ExternalIntegrations/FluentForm/Bootstrap.php:415
 msgid "FluentCRM API called skipped because no valid email available"
 msgstr "ממשק ה- API של FluentCRM התקשר, כי אין דוא\"ל חוקי זמין"
 
 #: app/Services/ExternalIntegrations/FluentCart/Actions/DynamicCouponService.php:55
 #, php-format
 msgid "FluentCRM Automation Coupon - %s"
+msgstr ""
+
+#: app/Services/ExternalIntegrations/FluentForm/Bootstrap.php:240
+msgid "FluentCRM Company Field"
 msgstr ""
 
 #: app/Hooks/Handlers/Cleanup.php:212 app/Hooks/Handlers/Cleanup.php:236
@@ -8149,8 +8165,8 @@ msgid "FluentCRM Email"
 msgstr ""
 
 #: app/Services/TransStrings.php:1267
-#: app/Services/ExternalIntegrations/FluentForm/Bootstrap.php:137
-#: app/Services/ExternalIntegrations/FluentForm/Bootstrap.php:167
+#: app/Services/ExternalIntegrations/FluentForm/Bootstrap.php:147
+#: app/Services/ExternalIntegrations/FluentForm/Bootstrap.php:177
 msgid "FluentCRM Field"
 msgstr "שדה FluentCRM"
 
@@ -8165,7 +8181,7 @@ msgstr ""
 msgid "FluentCRM Integration Feed"
 msgstr "עדכון אינטגרציה FluentCRM"
 
-#: app/Services/ExternalIntegrations/FluentForm/Bootstrap.php:54
+#: app/Services/ExternalIntegrations/FluentForm/Bootstrap.php:58
 #, fuzzy
 #| msgid ""
 #| "FluentCRM is not configured yet! Please configure your FluentCRM api first"
@@ -8174,7 +8190,7 @@ msgid ""
 msgstr ""
 "FluentCRM עדיין לא מוגדר! אנא הגדר תחילה את ממשק ה- API של FluentCRM שלך"
 
-#: app/Services/ExternalIntegrations/FluentForm/Bootstrap.php:124
+#: app/Services/ExternalIntegrations/FluentForm/Bootstrap.php:134
 msgid "FluentCRM List"
 msgstr "רשימת FluentCRM"
 
@@ -8400,8 +8416,9 @@ msgstr ""
 msgid "Form Entries"
 msgstr ""
 
-#: app/Services/ExternalIntegrations/FluentForm/Bootstrap.php:138
-#: app/Services/ExternalIntegrations/FluentForm/Bootstrap.php:168
+#: app/Services/ExternalIntegrations/FluentForm/Bootstrap.php:148
+#: app/Services/ExternalIntegrations/FluentForm/Bootstrap.php:178
+#: app/Services/ExternalIntegrations/FluentForm/Bootstrap.php:241
 #: app/Services/Funnel/Triggers/FluentFormSubmissionTrigger.php:86
 #: app/Services/Funnel/Triggers/FluentFormSubscriptionPaymentReceivedTrigger.php:76
 msgid "Form Field"
@@ -8441,7 +8458,7 @@ msgstr "הגשת טפסים"
 msgid "Form Title"
 msgstr ""
 
-#: app/Services/TransStrings.php:1302 app/Services/Helper.php:502
+#: app/Services/TransStrings.php:1302 app/Services/Helper.php:523
 #: app/Hooks/Handlers/AdminMenu.php:171 app/Hooks/Handlers/AdminMenu.php:172
 #: app/Hooks/Handlers/AdminMenu.php:501
 msgid "Forms"
@@ -8547,9 +8564,9 @@ msgstr ""
 msgid "Full HTML control"
 msgstr ""
 
-#: app/Models/Subscriber.php:766 app/Services/Helper.php:747
+#: app/Models/Subscriber.php:766 app/Services/Helper.php:768
 #: app/Services/CrmMigrator/BaseMigrator.php:27
-#: app/Services/ExternalIntegrations/FluentForm/Bootstrap.php:156
+#: app/Services/ExternalIntegrations/FluentForm/Bootstrap.php:166
 msgid "Full Name"
 msgstr "שם מלא"
 
@@ -8629,11 +8646,11 @@ msgstr ""
 msgid "GDPR Message"
 msgstr ""
 
-#: app/Services/Helper.php:790
+#: app/Services/Helper.php:811
 msgid "General"
 msgstr "כללי"
 
-#: app/Services/Helper.php:1845
+#: app/Services/Helper.php:1887
 msgid "General Properties"
 msgstr ""
 
@@ -8763,7 +8780,7 @@ msgstr ""
 msgid "Get started with adding an email to this sequence"
 msgstr ""
 
-#: fluent-crm.php:66 app/Services/TransStrings.php:1349
+#: fluent-crm.php:77 app/Services/TransStrings.php:1349
 msgid "Get Support"
 msgstr ""
 
@@ -8893,7 +8910,7 @@ msgid "Group Name"
 msgstr ""
 
 #: app/Http/Controllers/CustomContactFieldsController.php:48
-#: app/Http/Controllers/CompanyController.php:868
+#: app/Http/Controllers/CompanyController.php:894
 msgid "Group name updated successfully!"
 msgstr ""
 
@@ -8951,11 +8968,11 @@ msgstr "גיאנה"
 msgid "Haiti"
 msgstr "האיטי"
 
-#: app/Http/Controllers/SubscriberController.php:1287
+#: app/Http/Controllers/SubscriberController.php:1296
 msgid "Handled could not be found."
 msgstr ""
 
-#: app/Http/Controllers/CompanyController.php:906
+#: app/Http/Controllers/CompanyController.php:932
 msgid "Handler could not be found."
 msgstr ""
 
@@ -8969,7 +8986,7 @@ msgid ""
 "Cannot be undone."
 msgstr ""
 
-#: app/Services/ExternalIntegrations/FluentCart/FluentCart.php:455
+#: app/Services/ExternalIntegrations/FluentCart/FluentCart.php:457
 msgid "Has any active license?"
 msgstr ""
 
@@ -8977,10 +8994,10 @@ msgstr ""
 msgid "has been completed."
 msgstr ""
 
-#: app/Services/ExternalIntegrations/FluentCart/FluentCart.php:412
-#: app/Services/ExternalIntegrations/FluentCart/FluentCart.php:425
-#: app/Services/ExternalIntegrations/FluentCart/FluentCart.php:436
-#: app/Services/ExternalIntegrations/FluentCart/FluentCart.php:449
+#: app/Services/ExternalIntegrations/FluentCart/FluentCart.php:414
+#: app/Services/ExternalIntegrations/FluentCart/FluentCart.php:427
+#: app/Services/ExternalIntegrations/FluentCart/FluentCart.php:438
+#: app/Services/ExternalIntegrations/FluentCart/FluentCart.php:451
 msgid "have"
 msgstr ""
 
@@ -9144,7 +9161,7 @@ msgid ""
 "already in the automation. Otherwise, it will skip if it already exists"
 msgstr ""
 
-#: app/Services/ExternalIntegrations/FluentForm/Bootstrap.php:157
+#: app/Services/ExternalIntegrations/FluentForm/Bootstrap.php:167
 msgid ""
 "If First Name & Last Name is not available full name will be used to get "
 "first name and last name"
@@ -9183,7 +9200,7 @@ msgstr ""
 msgid "If you already have a good sending speed. Do not enable this feature."
 msgstr ""
 
-#: app/Services/ExternalIntegrations/FluentForm/Bootstrap.php:244
+#: app/Services/ExternalIntegrations/FluentForm/Bootstrap.php:270
 msgid ""
 "If you check any of the events, then this feed will only run for the "
 "selected events"
@@ -9214,7 +9231,7 @@ msgid ""
 "automatically from the given website url."
 msgstr ""
 
-#: app/Services/ExternalIntegrations/FluentForm/Bootstrap.php:212
+#: app/Services/ExternalIntegrations/FluentForm/Bootstrap.php:222
 msgid ""
 "If you enable this, the contact will be forcefully subscribed regardless of "
 "the contact's current status"
@@ -9535,7 +9552,7 @@ msgstr ""
 msgid "In"
 msgstr ""
 
-#: app/Services/ExternalIntegrations/FluentCart/FluentCart.php:397
+#: app/Services/ExternalIntegrations/FluentCart/FluentCart.php:399
 msgid "in"
 msgstr ""
 
@@ -9544,7 +9561,7 @@ msgid "in "
 msgstr ""
 
 #. %s: Human-readable time difference.
-#: app/Services/Helper.php:2491
+#: app/Services/Helper.php:2533
 #, php-format
 msgid "in %s"
 msgstr ""
@@ -9577,7 +9594,7 @@ msgstr ""
 msgid "INACTIVE"
 msgstr ""
 
-#: app/Services/TransStrings.php:1442 app/Services/Helper.php:2279
+#: app/Services/TransStrings.php:1442 app/Services/Helper.php:2321
 msgid "Inactive"
 msgstr ""
 
@@ -9917,7 +9934,7 @@ msgstr ""
 msgid "Invalid action specified."
 msgstr ""
 
-#: app/Http/Controllers/SubscriberController.php:1313
+#: app/Http/Controllers/SubscriberController.php:1322
 msgid "Invalid Advanced Filters"
 msgstr ""
 
@@ -9931,13 +9948,13 @@ msgstr ""
 msgid "Invalid AI provider."
 msgstr ""
 
-#: app/Http/Controllers/FunnelController.php:1070
+#: app/Http/Controllers/FunnelController.php:1084
 msgid ""
 "Invalid automation data. Please provide a valid automation with a trigger "
 "name."
 msgstr ""
 
-#: app/Http/Controllers/SubscriberController.php:1567
+#: app/Http/Controllers/SubscriberController.php:1576
 msgid "Invalid Automation Funnel ID"
 msgstr ""
 
@@ -9945,15 +9962,14 @@ msgstr ""
 msgid "Invalid blocks were auto-recovered and saved."
 msgstr ""
 
-#: app/Http/Controllers/FunnelController.php:947
+#: app/Http/Controllers/FunnelController.php:961
 #: app/Http/Controllers/CampaignController.php:1406
 #: app/Http/Controllers/TemplateController.php:362
-#: ../fluentcampaign-pro/app/Http/Controllers/RecurringCampaignController.php:518
 msgid "invalid bulk action"
 msgstr ""
 
-#: app/Http/Controllers/SubscriberController.php:1443
-#: app/Http/Controllers/SubscriberController.php:1491
+#: app/Http/Controllers/SubscriberController.php:1452
+#: app/Http/Controllers/SubscriberController.php:1500
 msgid "Invalid Company ID"
 msgstr ""
 
@@ -9973,7 +9989,7 @@ msgstr ""
 msgid "Invalid Data or Security Code"
 msgstr ""
 
-#: app/Http/Controllers/SubscriberController.php:1404
+#: app/Http/Controllers/SubscriberController.php:1413
 msgid "Invalid Email Sequence ID"
 msgstr ""
 
@@ -10015,11 +10031,11 @@ msgstr ""
 msgid "Invalid selection of lists and tags in subscribers included."
 msgstr ""
 
-#: app/Http/Controllers/FunnelController.php:830
+#: app/Http/Controllers/FunnelController.php:841
 msgid "Invalid status value"
 msgstr ""
 
-#: app/Http/Controllers/FunnelController.php:1130
+#: app/Http/Controllers/FunnelController.php:1144
 msgid "Invalid subscription status"
 msgstr ""
 
@@ -10076,15 +10092,15 @@ msgstr "אירלנד"
 msgid "is"
 msgstr ""
 
-#: app/Services/ExternalIntegrations/FluentCart/FluentCart.php:320
+#: app/Services/ExternalIntegrations/FluentCart/FluentCart.php:322
 msgid "Is a customer?"
 msgstr ""
 
-#: app/Services/Helper.php:2190
+#: app/Services/Helper.php:2232
 msgid "Is a customer? (Pro Required)"
 msgstr ""
 
-#: app/Services/Helper.php:2253
+#: app/Services/Helper.php:2295
 msgid "Is Affiliate (Pro Required)"
 msgstr ""
 
@@ -10171,7 +10187,7 @@ msgstr ""
 msgid "Kazakhstan"
 msgstr "קזחסטן"
 
-#: app/Services/TransStrings.php:3085 app/Services/Helper.php:3049
+#: app/Services/TransStrings.php:3085 app/Services/Helper.php:3091
 msgid "keep blank for current time"
 msgstr ""
 
@@ -10259,14 +10275,13 @@ msgstr ""
 msgid "Labels"
 msgstr ""
 
-#: app/Http/Controllers/FunnelController.php:942
+#: app/Http/Controllers/FunnelController.php:956
 #: app/Http/Controllers/CampaignController.php:1387
 msgid "Labels has been applied successfully"
 msgstr ""
 
-#: app/Http/Controllers/FunnelController.php:2004
+#: app/Http/Controllers/FunnelController.php:2018
 #: app/Http/Controllers/CampaignController.php:1872
-#: ../fluentcampaign-pro/app/Http/Controllers/RecurringCampaignController.php:590
 msgid "Labels has been updated"
 msgstr ""
 
@@ -10278,12 +10293,12 @@ msgstr ""
 msgid "Laos"
 msgstr "לאוס"
 
-#: app/Services/Helper.php:1285
+#: app/Services/Helper.php:1306
 #: app/Hooks/Handlers/FluentBlockEditorHandler.php:2322
 msgid "Large"
 msgstr ""
 
-#: app/Services/Helper.php:1291
+#: app/Services/Helper.php:1312
 msgid "Larger"
 msgstr ""
 
@@ -10291,7 +10306,7 @@ msgstr ""
 msgid "Last 3 months"
 msgstr ""
 
-#: app/Services/TransStrings.php:1508 app/Services/Helper.php:1924
+#: app/Services/TransStrings.php:1508 app/Services/Helper.php:1966
 msgid "Last Activity"
 msgstr ""
 
@@ -10307,19 +10322,19 @@ msgstr ""
 msgid "Last checked"
 msgstr ""
 
-#: app/Services/Helper.php:2004
+#: app/Services/Helper.php:2046
 msgid "Last Email Clicked"
 msgstr ""
 
-#: app/Services/Helper.php:1998
+#: app/Services/Helper.php:2040
 msgid "Last Email Open"
 msgstr ""
 
-#: app/Services/Helper.php:1993
+#: app/Services/Helper.php:2035
 msgid "Last Email Sent"
 msgstr ""
 
-#: app/Services/Helper.php:2319 app/Services/Helper.php:2376
+#: app/Services/Helper.php:2361 app/Services/Helper.php:2418
 msgid "Last Enrollment Date (Pro Required)"
 msgstr ""
 
@@ -10336,19 +10351,19 @@ msgid "Last month"
 msgstr ""
 
 #: app/Models/Subscriber.php:765 app/Services/TransStrings.php:1513
-#: app/Services/Helper.php:750 app/Services/Helper.php:1854
+#: app/Services/Helper.php:771 app/Services/Helper.php:1896
 #: app/Hooks/Handlers/PrefFormHandler.php:72
 #: app/Hooks/Handlers/PrefFormHandler.php:471
 #: app/Views/external/manage_subscription_form.php:20
 #: app/Views/external/manage_subscription_form.php:21
 #: app/Services/CrmMigrator/BaseMigrator.php:26
 #: app/Services/Funnel/FunnelHelper.php:215
-#: app/Services/ExternalIntegrations/FluentForm/Bootstrap.php:152
+#: app/Services/ExternalIntegrations/FluentForm/Bootstrap.php:162
 #: app/Modules/AbandonCart/Drivers/FluentCart/FluentCartAutomationTrigger.php:157
 msgid "Last Name"
 msgstr "שם משפחה"
 
-#: app/Services/ExternalIntegrations/FluentCart/FluentCart.php:292
+#: app/Services/ExternalIntegrations/FluentCart/FluentCart.php:294
 msgid "Last Order"
 msgstr ""
 
@@ -10357,11 +10372,11 @@ msgid "Last order"
 msgstr ""
 
 #: app/Services/TransStrings.php:1514
-#: app/Services/ExternalIntegrations/FluentCart/FluentCart.php:347
+#: app/Services/ExternalIntegrations/FluentCart/FluentCart.php:349
 msgid "Last Order Date"
 msgstr ""
 
-#: app/Services/Helper.php:2170 app/Services/Helper.php:2224
+#: app/Services/Helper.php:2212 app/Services/Helper.php:2266
 msgid "Last Order Date (Pro Required)"
 msgstr ""
 
@@ -10369,7 +10384,7 @@ msgstr ""
 msgid "Last page"
 msgstr ""
 
-#: app/Services/Helper.php:2304
+#: app/Services/Helper.php:2346
 msgid "Last Payout Date (Pro Required)"
 msgstr ""
 
@@ -10398,7 +10413,7 @@ msgstr ""
 msgid "Latest Action"
 msgstr ""
 
-#: app/Services/Helper.php:819
+#: app/Services/Helper.php:840
 msgid "Latest Post Title (Published)"
 msgstr ""
 
@@ -10430,7 +10445,7 @@ msgstr ""
 msgid "Learn more about FluentSMTP Plugin."
 msgstr ""
 
-#: app/Services/Helper.php:2314 app/Http/Controllers/ImporterController.php:313
+#: app/Services/Helper.php:2356 app/Http/Controllers/ImporterController.php:313
 msgid "LearnDash"
 msgstr ""
 
@@ -10519,11 +10534,11 @@ msgid "Lifetime"
 msgstr ""
 
 #: app/Functions/helpers.php:1341 app/Services/TransStrings.php:1542
-#: app/Services/ExternalIntegrations/FluentCart/FluentCart.php:332
+#: app/Services/ExternalIntegrations/FluentCart/FluentCart.php:334
 msgid "Lifetime Value"
 msgstr ""
 
-#: app/Services/Helper.php:2371 app/Http/Controllers/ImporterController.php:304
+#: app/Services/Helper.php:2413 app/Http/Controllers/ImporterController.php:304
 msgid "LifterLMS"
 msgstr ""
 
@@ -10535,7 +10550,7 @@ msgstr ""
 msgid "Light"
 msgstr ""
 
-#: app/Services/Helper.php:1245
+#: app/Services/Helper.php:1266
 msgid "Light green cyan"
 msgstr ""
 
@@ -10696,9 +10711,9 @@ msgid ""
 "call get-contact-filter-schema FIRST."
 msgstr ""
 
-#: app/Services/TransStrings.php:1567 app/Services/Helper.php:1968
-#: app/Hooks/CLI/Commands.php:166 app/Hooks/CLI/Commands.php:400
-#: app/Hooks/CLI/Commands.php:614 app/Hooks/Handlers/AdminMenu.php:109
+#: app/Services/TransStrings.php:1567 app/Services/Helper.php:2010
+#: app/Hooks/CLI/Commands.php:166 app/Hooks/CLI/Commands.php:410
+#: app/Hooks/CLI/Commands.php:624 app/Hooks/Handlers/AdminMenu.php:109
 #: app/Hooks/Handlers/AdminMenu.php:110 app/Hooks/Handlers/AdminMenu.php:375
 #: app/Hooks/Handlers/EventTrackingHandler.php:287
 #: app/Services/ExternalIntegrations/FluentCart/CustomerWidget.php:195
@@ -10807,7 +10822,7 @@ msgstr ""
 msgid "logo"
 msgstr ""
 
-#: app/Http/Controllers/CompanyController.php:318
+#: app/Http/Controllers/CompanyController.php:344
 msgid "Logo has been updated successfully"
 msgstr ""
 
@@ -10816,7 +10831,7 @@ msgid "Logs for FluentCRM activity events. Useful for tracking purpose."
 msgstr ""
 
 #. %d is the number of days; used to indicate how old the deleted logs were.
-#: app/Http/Controllers/SettingsController.php:852
+#: app/Http/Controllers/SettingsController.php:856
 msgid "Logs older than %d days have been deleted successfully"
 msgstr "יומנים מעל גיל% d ימים נמחקו בהצלחה"
 
@@ -10949,11 +10964,11 @@ msgstr ""
 msgid "Love this Plugin?"
 msgstr ""
 
-#: app/Services/Helper.php:1240
+#: app/Services/Helper.php:1261
 msgid "Luminous vivid amber"
 msgstr ""
 
-#: app/Services/Helper.php:1235
+#: app/Services/Helper.php:1256
 msgid "Luminous vivid orange"
 msgstr ""
 
@@ -11050,11 +11065,11 @@ msgstr ""
 msgid "Manage List"
 msgstr ""
 
-#: app/Services/Helper.php:824
+#: app/Services/Helper.php:845
 msgid "Manage Subscription Hyperlink HTML"
 msgstr ""
 
-#: app/Services/Helper.php:821
+#: app/Services/Helper.php:842
 msgid "Manage Subscription URL"
 msgstr "נהל את כתובת האתר למנוי"
 
@@ -11070,12 +11085,22 @@ msgstr ""
 msgid "Managers"
 msgstr ""
 
-#: app/Http/Controllers/FunnelController.php:1213
+#: app/Http/Controllers/FunnelController.php:1227
 msgid "Manually skipped by admin"
 msgstr ""
 
 #: app/Services/TransStrings.php:1606
 msgid "Map Columns"
+msgstr ""
+
+#: app/Services/ExternalIntegrations/FluentForm/Bootstrap.php:238
+msgid ""
+"Map Company Name to synchronize a company only when creating a new contact. "
+"If an exact-name company already exists, it will be attached without "
+"updating its data. Otherwise, a new company will be created from the mapped "
+"fields and attached. Existing contacts and their company relationships will "
+"remain unchanged. This mapping takes precedence over Primary Company in "
+"Other Fields. Leave Company Name unmapped for contact-only feeds."
 msgstr ""
 
 #: app/Services/TransStrings.php:1607
@@ -11281,7 +11306,7 @@ msgstr ""
 msgid "MCP tools enabled. New requests will see the FluentCRM abilities."
 msgstr ""
 
-#: app/Services/TransStrings.php:1642 app/Services/Helper.php:1279
+#: app/Services/TransStrings.php:1642 app/Services/Helper.php:1300
 #: app/Hooks/Handlers/FluentBlockEditorHandler.php:2321
 msgid "Medium"
 msgstr ""
@@ -11335,10 +11360,6 @@ msgstr ""
 
 #: app/Services/TransStrings.php:1646
 msgid "Message Module Settings"
-msgstr ""
-
-#: ../fluentcampaign-pro/app/Modules/Messaging/Http/Controllers/MessageThreadController.php:275
-msgid "Message sent."
 msgstr ""
 
 #: app/Services/TransStrings.php:1092
@@ -11505,15 +11526,15 @@ msgstr ""
 msgid "Mozambique"
 msgstr "מוזמביק"
 
-#: app/Services/Helper.php:1077
+#: app/Services/Helper.php:1098
 msgid "Mr"
 msgstr ""
 
-#: app/Services/Helper.php:1078
+#: app/Services/Helper.php:1099
 msgid "Mrs"
 msgstr ""
 
-#: app/Services/Helper.php:1079
+#: app/Services/Helper.php:1100
 msgid "Ms"
 msgstr ""
 
@@ -11570,12 +11591,12 @@ msgid "Name of this key"
 msgstr ""
 
 #: app/Models/Subscriber.php:763 app/Services/TransStrings.php:1679
-#: app/Services/Helper.php:748 app/Services/CrmMigrator/BaseMigrator.php:24
+#: app/Services/Helper.php:769 app/Services/CrmMigrator/BaseMigrator.php:24
 #: app/Services/Funnel/FunnelHelper.php:229
 msgid "Name Prefix"
 msgstr "קידומת שם"
 
-#: app/Services/Helper.php:1907
+#: app/Services/Helper.php:1949
 msgid "Name Prefix (Title)"
 msgstr ""
 
@@ -11758,9 +11779,9 @@ msgstr "ניגריה"
 msgid "Niue"
 msgstr "ניואה"
 
-#: app/Services/TransStrings.php:1706 app/Services/Helper.php:2257
-#: app/Services/ExternalIntegrations/FluentCart/FluentCart.php:327
-#: app/Services/ExternalIntegrations/FluentCart/FluentCart.php:462
+#: app/Services/TransStrings.php:1706 app/Services/Helper.php:2299
+#: app/Services/ExternalIntegrations/FluentCart/FluentCart.php:329
+#: app/Services/ExternalIntegrations/FluentCart/FluentCart.php:464
 msgid "No"
 msgstr "לא"
 
@@ -11898,11 +11919,11 @@ msgstr ""
 msgid "No content provided to process."
 msgstr ""
 
-#: app/Http/Controllers/FunnelController.php:1140
+#: app/Http/Controllers/FunnelController.php:1154
 msgid "No Corresponding report found"
 msgstr "לא נמצא דו\"ח מקביל"
 
-#: app/Http/Controllers/FunnelController.php:1172
+#: app/Http/Controllers/FunnelController.php:1186
 msgid "No corresponding subscriber found in this automation"
 msgstr ""
 
@@ -12039,7 +12060,7 @@ msgstr ""
 msgid "No Note found. Please add the first note"
 msgstr ""
 
-#: app/Http/Controllers/CompanyController.php:805
+#: app/Http/Controllers/CompanyController.php:831
 #: app/Http/Controllers/SubscriberController.php:1027
 msgid "No note IDs provided"
 msgstr ""
@@ -12071,11 +12092,11 @@ msgstr ""
 msgid "No products data"
 msgstr ""
 
-#: app/Services/ExternalIntegrations/FluentCart/FluentCart.php:305
+#: app/Services/ExternalIntegrations/FluentCart/FluentCart.php:307
 msgid "No purchased products found."
 msgstr ""
 
-#: app/Services/ExternalIntegrations/FluentCart/FluentCart.php:243
+#: app/Services/ExternalIntegrations/FluentCart/FluentCart.php:245
 msgid "No purchases found for this contact in FluentCart."
 msgstr ""
 
@@ -12149,7 +12170,7 @@ msgid ""
 "subscribed contact."
 msgstr ""
 
-#: app/Http/Controllers/FunnelController.php:1815
+#: app/Http/Controllers/FunnelController.php:1829
 msgid ""
 "No subscriber found to send test webhook. Please add at least one contact "
 "with subscribed status."
@@ -12198,23 +12219,23 @@ msgstr ""
 msgid "No user found with your query"
 msgstr ""
 
-#: app/Http/Controllers/SubscriberController.php:1422
-#: app/Http/Controllers/SubscriberController.php:1461
-#: app/Http/Controllers/SubscriberController.php:1509
-#: app/Http/Controllers/SubscriberController.php:1585
+#: app/Http/Controllers/SubscriberController.php:1431
+#: app/Http/Controllers/SubscriberController.php:1470
+#: app/Http/Controllers/SubscriberController.php:1518
+#: app/Http/Controllers/SubscriberController.php:1594
 msgid "No valid active subscribers found for this chunk"
 msgstr ""
 
-#: app/Http/Controllers/SubscriberController.php:1466
-#: app/Http/Controllers/SubscriberController.php:1514
+#: app/Http/Controllers/SubscriberController.php:1475
+#: app/Http/Controllers/SubscriberController.php:1523
 msgid "No valid active subscribers found for this company"
 msgstr ""
 
-#: app/Http/Controllers/SubscriberController.php:1590
+#: app/Http/Controllers/SubscriberController.php:1599
 msgid "No valid active subscribers found for this funnel"
 msgstr ""
 
-#: app/Http/Controllers/SubscriberController.php:1426
+#: app/Http/Controllers/SubscriberController.php:1435
 msgid "No valid active subscribers found for this sequence"
 msgstr ""
 
@@ -12262,7 +12283,7 @@ msgstr ""
 msgid "not equal"
 msgstr ""
 
-#: app/Services/ExternalIntegrations/FluentCart/FluentCart.php:398
+#: app/Services/ExternalIntegrations/FluentCart/FluentCart.php:400
 msgid "not in"
 msgstr ""
 
@@ -12279,9 +12300,9 @@ msgstr ""
 msgid "not includes in any"
 msgstr ""
 
-#: app/Services/ExternalIntegrations/FluentCart/FluentCart.php:358
-#: app/Services/ExternalIntegrations/FluentCart/FluentCart.php:371
-#: app/Services/ExternalIntegrations/FluentCart/FluentCart.php:385
+#: app/Services/ExternalIntegrations/FluentCart/FluentCart.php:360
+#: app/Services/ExternalIntegrations/FluentCart/FluentCart.php:373
+#: app/Services/ExternalIntegrations/FluentCart/FluentCart.php:387
 msgid "not purchased"
 msgstr ""
 
@@ -12305,7 +12326,7 @@ msgstr "פתק"
 msgid "Note (Optional)"
 msgstr ""
 
-#: app/Http/Controllers/CompanyController.php:726
+#: app/Http/Controllers/CompanyController.php:752
 msgid "Note has been successfully added"
 msgstr ""
 
@@ -12322,12 +12343,12 @@ msgstr ""
 msgid "Note successfully added"
 msgstr "ההערה נוספה בהצלחה"
 
-#: app/Http/Controllers/CompanyController.php:794
+#: app/Http/Controllers/CompanyController.php:820
 #: app/Http/Controllers/SubscriberController.php:1016
 msgid "Note successfully deleted"
 msgstr "ההערה נמחקה בהצלחה"
 
-#: app/Http/Controllers/CompanyController.php:769
+#: app/Http/Controllers/CompanyController.php:795
 #: app/Http/Controllers/SubscriberController.php:991
 msgid "Note successfully updated"
 msgstr "ההערה עודכנה בהצלחה"
@@ -12379,11 +12400,11 @@ msgstr ""
 msgid "note_id is required"
 msgstr ""
 
-#: app/Services/TransStrings.php:1791 app/Services/Helper.php:527
+#: app/Services/TransStrings.php:1791 app/Services/Helper.php:548
 msgid "Notes"
 msgstr ""
 
-#: app/Services/TransStrings.php:1792 app/Services/Helper.php:2987
+#: app/Services/TransStrings.php:1792 app/Services/Helper.php:3029
 msgid "Notes & Activities"
 msgstr "הערות ופעילויות"
 
@@ -12435,7 +12456,7 @@ msgstr ""
 msgid "Oman"
 msgstr "עומאן"
 
-#: app/Services/Helper.php:3376
+#: app/Services/Helper.php:3418
 msgid "On Draft"
 msgstr ""
 
@@ -12444,16 +12465,16 @@ msgstr ""
 msgid "On Hold"
 msgstr ""
 
-#: app/Services/ExternalIntegrations/FluentForm/Bootstrap.php:227
-#: app/Services/ExternalIntegrations/FluentForm/Bootstrap.php:234
+#: app/Services/ExternalIntegrations/FluentForm/Bootstrap.php:253
+#: app/Services/ExternalIntegrations/FluentForm/Bootstrap.php:260
 msgid "On Payment Refund"
 msgstr ""
 
-#: app/Services/ExternalIntegrations/FluentForm/Bootstrap.php:232
+#: app/Services/ExternalIntegrations/FluentForm/Bootstrap.php:258
 msgid "On Subscription Active"
 msgstr ""
 
-#: app/Services/ExternalIntegrations/FluentForm/Bootstrap.php:233
+#: app/Services/ExternalIntegrations/FluentForm/Bootstrap.php:259
 msgid "On Subscription Cancel"
 msgstr ""
 
@@ -12685,8 +12706,7 @@ msgid "Or Target Product Categories"
 msgstr ""
 
 #: app/Hooks/Handlers/PurchaseHistory.php:403
-#: app/Services/ExternalIntegrations/FluentCart/FluentCart.php:179
-#: ../fluentcampaign-pro/app/Services/Integrations/Voxel/VoxelInit.php:98
+#: app/Services/ExternalIntegrations/FluentCart/FluentCart.php:180
 msgid "Order"
 msgstr ""
 
@@ -12761,7 +12781,7 @@ msgstr ""
 msgid "Order Subtotal"
 msgstr ""
 
-#: app/Services/ExternalIntegrations/FluentCart/FluentCart.php:284
+#: app/Services/ExternalIntegrations/FluentCart/FluentCart.php:286
 msgid "Order Summary"
 msgstr ""
 
@@ -12777,7 +12797,7 @@ msgstr ""
 msgid "Other (fill in reason below)"
 msgstr "אחר (מלא את הסיבה למטה)"
 
-#: app/Services/ExternalIntegrations/FluentForm/Bootstrap.php:164
+#: app/Services/ExternalIntegrations/FluentForm/Bootstrap.php:174
 msgid "Other Fields"
 msgstr "תחומים אחרים"
 
@@ -12801,7 +12821,7 @@ msgstr ""
 msgid "Overdue: "
 msgstr ""
 
-#: app/Services/Helper.php:481
+#: app/Services/Helper.php:502
 msgid "Overview"
 msgstr "סקירה כללית"
 
@@ -12833,11 +12853,11 @@ msgstr ""
 msgid "Page Builder INTEGRATIONS:"
 msgstr ""
 
-#: app/Services/Helper.php:3379
+#: app/Services/Helper.php:3421
 msgid "Paid"
 msgstr ""
 
-#: app/Services/Helper.php:1192 app/Http/Controllers/ImporterController.php:331
+#: app/Services/Helper.php:1213 app/Http/Controllers/ImporterController.php:331
 msgid "Paid Membership Pro"
 msgstr ""
 
@@ -12845,7 +12865,7 @@ msgstr ""
 msgid "Paid Membership Pro integration."
 msgstr ""
 
-#: app/Services/Helper.php:1191
+#: app/Services/Helper.php:1212
 msgid "Paid Membership Pro Purchase History"
 msgstr ""
 
@@ -12853,11 +12873,11 @@ msgstr ""
 msgid "Pakistan"
 msgstr "פקיסטן"
 
-#: app/Services/Helper.php:1255
+#: app/Services/Helper.php:1276
 msgid "Pale cyan blue"
 msgstr ""
 
-#: app/Services/Helper.php:1230
+#: app/Services/Helper.php:1251
 msgid "Pale pink"
 msgstr ""
 
@@ -12953,11 +12973,11 @@ msgstr ""
 msgid "Paused"
 msgstr ""
 
-#: app/Services/Helper.php:1185
+#: app/Services/Helper.php:1206
 msgid "Paymattic"
 msgstr ""
 
-#: app/Services/Helper.php:1184
+#: app/Services/Helper.php:1205
 msgid "Paymattic Purchase History"
 msgstr ""
 
@@ -12981,7 +13001,7 @@ msgstr ""
 
 #: app/Functions/helpers.php:590 app/Functions/helpers.php:641
 #: app/Services/TransStrings.php:1847 app/Services/TransStrings.php:3115
-#: app/Services/Helper.php:2280 app/Services/Helper.php:3367
+#: app/Services/Helper.php:2322 app/Services/Helper.php:3409
 #: app/Services/Funnel/Triggers/FluentFormSubscriptionCancelledTrigger.php:58
 msgid "Pending"
 msgstr "ממתין ל"
@@ -13051,14 +13071,14 @@ msgid "Philippines"
 msgstr "הפיליפינים"
 
 #: app/Models/Subscriber.php:777 app/Services/TransStrings.php:1856
-#: app/Services/Helper.php:1897 app/Hooks/Handlers/PrefFormHandler.php:512
+#: app/Services/Helper.php:1939 app/Hooks/Handlers/PrefFormHandler.php:512
 #: app/Services/CrmMigrator/BaseMigrator.php:28
 #: app/Services/Funnel/FunnelHelper.php:257
 #: app/Modules/AbandonCart/Drivers/FluentCart/FluentCartAutomationTrigger.php:176
 msgid "Phone"
 msgstr "טלפון"
 
-#: app/Services/TransStrings.php:1857 app/Services/Helper.php:760
+#: app/Services/TransStrings.php:1857 app/Services/Helper.php:781
 msgid "Phone Number"
 msgstr "מספר טלפון"
 
@@ -13086,11 +13106,11 @@ msgstr "פיטקארן"
 msgid "Plain"
 msgstr ""
 
-#: app/Services/Helper.php:972
+#: app/Services/Helper.php:993
 msgid "Plain Centered"
 msgstr "ממוקד רגיל"
 
-#: app/Services/Helper.php:979
+#: app/Services/Helper.php:1000
 msgid "Plain Left"
 msgstr ""
 
@@ -13254,7 +13274,7 @@ msgid ""
 "the current state"
 msgstr ""
 
-#: app/Services/Helper.php:2001
+#: app/Services/Helper.php:2043
 msgid ""
 "Please note that, some email clients send false-positive for email open "
 "pixel tracking so it may not 100% correct."
@@ -13374,7 +13394,7 @@ msgstr ""
 msgid "Please provide a time"
 msgstr ""
 
-#: app/Http/Controllers/SubscriberController.php:1638
+#: app/Http/Controllers/SubscriberController.php:1647
 msgid "Please provide a valid custom field key"
 msgstr ""
 
@@ -13391,15 +13411,15 @@ msgstr ""
 msgid "Please provide at least two Subject Lines for A/B Test."
 msgstr ""
 
-#: app/Http/Controllers/FunnelController.php:859
+#: app/Http/Controllers/FunnelController.php:873
 msgid "Please provide automation IDs"
 msgstr ""
 
-#: app/Http/Controllers/FunnelController.php:796
+#: app/Http/Controllers/FunnelController.php:807
 msgid "Please provide automation subscriber IDs"
 msgstr ""
 
-#: app/Http/Controllers/SubscriberController.php:1732
+#: app/Http/Controllers/SubscriberController.php:1741
 msgid "Please provide bulk options"
 msgstr ""
 
@@ -13448,9 +13468,8 @@ msgstr ""
 msgid "Please provide label slug"
 msgstr ""
 
-#: app/Http/Controllers/FunnelController.php:931
+#: app/Http/Controllers/FunnelController.php:945
 #: app/Http/Controllers/CampaignController.php:1376
-#: ../fluentcampaign-pro/app/Http/Controllers/RecurringCampaignController.php:495
 msgid "Please provide labels"
 msgstr ""
 
@@ -13551,19 +13570,19 @@ msgstr ""
 msgid "Please select companies first"
 msgstr ""
 
-#: app/Http/Controllers/CompanyController.php:464
+#: app/Http/Controllers/CompanyController.php:490
 msgid "Please select new category"
 msgstr ""
 
-#: app/Http/Controllers/CompanyController.php:443
-#: app/Http/Controllers/SubscriberController.php:1612
+#: app/Http/Controllers/CompanyController.php:469
+#: app/Http/Controllers/SubscriberController.php:1621
 msgid "Please select new type"
 msgstr ""
 
-#: app/Http/Controllers/FunnelController.php:867
-#: app/Http/Controllers/CompanyController.php:421
+#: app/Http/Controllers/FunnelController.php:881
+#: app/Http/Controllers/CompanyController.php:447
 #: app/Http/Controllers/TemplateController.php:329
-#: app/Http/Controllers/SubscriberController.php:1538
+#: app/Http/Controllers/SubscriberController.php:1547
 msgid "Please select status"
 msgstr ""
 
@@ -13691,8 +13710,8 @@ msgid "Post Request Status"
 msgstr ""
 
 #: app/Models/Company.php:62 app/Models/Subscriber.php:774
-#: app/Services/TransStrings.php:1922 app/Services/Helper.php:758
-#: app/Services/Helper.php:1883 app/Services/CrmMigrator/BaseMigrator.php:38
+#: app/Services/TransStrings.php:1922 app/Services/Helper.php:779
+#: app/Services/Helper.php:1925 app/Services/CrmMigrator/BaseMigrator.php:38
 #: app/Services/Funnel/FunnelHelper.php:241
 msgid "Postal Code"
 msgstr "מיקוד"
@@ -13853,7 +13872,7 @@ msgid "Primary Company"
 msgstr ""
 
 #: app/Services/TransStrings.php:1953
-#: app/Services/ExternalIntegrations/FluentForm/Bootstrap.php:134
+#: app/Services/ExternalIntegrations/FluentForm/Bootstrap.php:144
 msgid "Primary Fields"
 msgstr "שדות ראשוניים"
 
@@ -13890,7 +13909,7 @@ msgstr ""
 msgid "Problem with loading the editor?"
 msgstr ""
 
-#: app/Services/TransStrings.php:1968 app/Services/Helper.php:3378
+#: app/Services/TransStrings.php:1968 app/Services/Helper.php:3420
 #: app/Http/Controllers/UsersController.php:96 app/Hooks/CLI/Commands.php:144
 #: app/Modules/AbandonCart/Drivers/FluentCart/FluentCartDriver.php:244
 msgid "Processing"
@@ -13938,7 +13957,7 @@ msgstr ""
 msgid "Product"
 msgstr ""
 
-#: app/Services/ExternalIntegrations/FluentCart/FluentCart.php:376
+#: app/Services/ExternalIntegrations/FluentCart/FluentCart.php:378
 msgid "Product Categories"
 msgstr ""
 
@@ -13958,12 +13977,12 @@ msgid ""
 "be in the cart in order for the \"Fixed cart discount\" to be applied."
 msgstr ""
 
-#: app/Services/ExternalIntegrations/FluentCart/FluentCart.php:231
-#: app/Services/ExternalIntegrations/FluentCart/FluentCart.php:242
+#: app/Services/ExternalIntegrations/FluentCart/FluentCart.php:233
+#: app/Services/ExternalIntegrations/FluentCart/FluentCart.php:244
 msgid "Product History"
 msgstr ""
 
-#: app/Services/ExternalIntegrations/FluentCart/FluentCart.php:364
+#: app/Services/ExternalIntegrations/FluentCart/FluentCart.php:366
 msgid "Product Variations"
 msgstr ""
 
@@ -13976,7 +13995,7 @@ msgid "Product-X User, Product-Y User, Influencer etc"
 msgstr ""
 
 #: app/Services/TransStrings.php:1979
-#: app/Services/ExternalIntegrations/FluentCart/FluentCart.php:352
+#: app/Services/ExternalIntegrations/FluentCart/FluentCart.php:354
 msgid "Products"
 msgstr ""
 
@@ -14119,22 +14138,22 @@ msgstr ""
 msgid "Purchase one here"
 msgstr ""
 
-#: app/Services/ExternalIntegrations/FluentCart/FluentCart.php:357
-#: app/Services/ExternalIntegrations/FluentCart/FluentCart.php:370
-#: app/Services/ExternalIntegrations/FluentCart/FluentCart.php:384
+#: app/Services/ExternalIntegrations/FluentCart/FluentCart.php:359
+#: app/Services/ExternalIntegrations/FluentCart/FluentCart.php:372
+#: app/Services/ExternalIntegrations/FluentCart/FluentCart.php:386
 msgid "purchased"
 msgstr ""
 
 #: app/Hooks/Handlers/PurchaseHistory.php:530
-#: app/Services/ExternalIntegrations/FluentCart/FluentCart.php:296
+#: app/Services/ExternalIntegrations/FluentCart/FluentCart.php:298
 msgid "Purchased Products"
 msgstr ""
 
-#: app/Services/Helper.php:2182 app/Services/Helper.php:2236
+#: app/Services/Helper.php:2224 app/Services/Helper.php:2278
 msgid "Purchased Products (Pro Required)"
 msgstr ""
 
-#: app/Services/Helper.php:494
+#: app/Services/Helper.php:515
 msgid "Purchases"
 msgstr ""
 
@@ -14209,7 +14228,7 @@ msgstr ""
 msgid "Raw Classic"
 msgstr ""
 
-#: app/Services/TransStrings.php:2008 app/Services/Helper.php:995
+#: app/Services/TransStrings.php:2008 app/Services/Helper.php:1016
 #: app/Modules/MCP/Tools/ContextTools.php:631
 msgid "Raw HTML"
 msgstr "HTML גולמי"
@@ -14429,7 +14448,7 @@ msgstr ""
 msgid "Regenerate"
 msgstr ""
 
-#: app/Services/Helper.php:2298
+#: app/Services/Helper.php:2340
 msgid "Registration Date (Pro Required)"
 msgstr ""
 
@@ -14449,7 +14468,7 @@ msgstr ""
 msgid "Reminder: Upcoming Event"
 msgstr ""
 
-#: app/Http/Controllers/FunnelController.php:1784
+#: app/Http/Controllers/FunnelController.php:1798
 msgid "Remote URL is required"
 msgstr ""
 
@@ -14490,7 +14509,7 @@ msgstr "הסר איש קשר מהרשימות שנבחרו"
 msgid "Remove Contact from the Selected Tags"
 msgstr "הסר איש קשר מהתגיות שנבחרו"
 
-#: app/Services/ExternalIntegrations/FluentForm/Bootstrap.php:251
+#: app/Services/ExternalIntegrations/FluentForm/Bootstrap.php:277
 msgid "Remove Contact Tags"
 msgstr ""
 
@@ -14790,6 +14809,7 @@ msgstr ""
 
 #: app/Models/Campaign.php:855 app/Models/CampaignUrlMetric.php:232
 #: app/Services/TransStrings.php:2123
+#: app/Http/Controllers/ReportingController.php:509
 #: app/Http/Controllers/CampaignController.php:175
 msgid "Revenue"
 msgstr ""
@@ -14873,7 +14893,7 @@ msgstr "הפעל אם תג כלשהו שנבחר הוסר מאיש קשר"
 msgid "Run Manually"
 msgstr ""
 
-#: app/Services/ExternalIntegrations/FluentForm/Bootstrap.php:241
+#: app/Services/ExternalIntegrations/FluentForm/Bootstrap.php:267
 msgid "Run only on events"
 msgstr ""
 
@@ -15087,17 +15107,17 @@ msgstr ""
 msgid "Scheduled at:"
 msgstr ""
 
-#: app/Http/Controllers/SettingsController.php:588
-#: app/Http/Controllers/SettingsController.php:610
+#: app/Http/Controllers/SettingsController.php:592
+#: app/Http/Controllers/SettingsController.php:614
 msgid "Scheduled Automation Tasks"
 msgstr "משימות אוטומציה מתוזמנות"
 
-#: app/Http/Controllers/SettingsController.php:579
-#: app/Http/Controllers/SettingsController.php:611
+#: app/Http/Controllers/SettingsController.php:583
+#: app/Http/Controllers/SettingsController.php:615
 msgid "Scheduled Email Processing"
 msgstr ""
 
-#: app/Http/Controllers/SettingsController.php:609
+#: app/Http/Controllers/SettingsController.php:613
 msgid "Scheduled Email Sending"
 msgstr "שליחת דוא\"ל מתוזמנת"
 
@@ -15564,7 +15584,7 @@ msgstr ""
 msgid "Select Filter"
 msgstr ""
 
-#: app/Services/ExternalIntegrations/FluentForm/Bootstrap.php:125
+#: app/Services/ExternalIntegrations/FluentForm/Bootstrap.php:135
 msgid "Select FluentCRM List"
 msgstr "בחר FluentCRM List"
 
@@ -15826,7 +15846,7 @@ msgstr "בחר תג"
 #: app/Services/TransStrings.php:2286
 #: app/Http/Controllers/SettingsController.php:208
 #: app/Services/ExternalIntegrations/BricksBuilderIntegration.php:61
-#: app/Services/ExternalIntegrations/FluentForm/Bootstrap.php:175
+#: app/Services/ExternalIntegrations/FluentForm/Bootstrap.php:185
 #: app/Services/Funnel/Benchmarks/RemoveFromTagBenchmark.php:55
 #: app/Services/Funnel/Benchmarks/TagAppliedBenchmark.php:56
 #: app/Services/Funnel/Benchmarks/TagAppliedBenchmark.php:57
@@ -15847,7 +15867,7 @@ msgstr ""
 msgid "Select tags (Optional)"
 msgstr ""
 
-#: app/Services/ExternalIntegrations/FluentForm/Bootstrap.php:252
+#: app/Services/ExternalIntegrations/FluentForm/Bootstrap.php:278
 msgid "Select Tags (remove from contact)"
 msgstr ""
 
@@ -15871,7 +15891,7 @@ msgstr ""
 msgid "Select the fields that user can manage"
 msgstr ""
 
-#: app/Services/ExternalIntegrations/FluentForm/Bootstrap.php:126
+#: app/Services/ExternalIntegrations/FluentForm/Bootstrap.php:136
 msgid "Select the FluentCRM List you would like to add your contacts to."
 msgstr "בחר את רשימת FluentCRM שאליה תרצה להוסיף את אנשי הקשר שלך."
 
@@ -15960,7 +15980,7 @@ msgstr ""
 msgid "Select which day you want to send email?"
 msgstr ""
 
-#: app/Services/ExternalIntegrations/FluentForm/Bootstrap.php:165
+#: app/Services/ExternalIntegrations/FluentForm/Bootstrap.php:175
 msgid ""
 "Select which Fluent Form fields pair with their<br /> respective FluentCRM "
 "fields."
@@ -16004,16 +16024,16 @@ msgstr "בחר את הטופס שלך"
 msgid "selected"
 msgstr ""
 
-#: app/Http/Controllers/SubscriberController.php:1696
+#: app/Http/Controllers/SubscriberController.php:1705
 msgid "Selected Action is not valid"
 msgstr ""
 
-#: app/Http/Controllers/FunnelController.php:918
+#: app/Http/Controllers/FunnelController.php:932
 msgid "Selected automations have been deleted permanently"
 msgstr ""
 
-#: app/Http/Controllers/CompanyController.php:486
-#: app/Http/Controllers/SubscriberController.php:1747
+#: app/Http/Controllers/CompanyController.php:512
+#: app/Http/Controllers/SubscriberController.php:1756
 msgid "Selected bulk action has been successfully completed"
 msgstr ""
 
@@ -16025,11 +16045,11 @@ msgstr ""
 msgid "Selected carts have been deleted successfully"
 msgstr ""
 
-#: app/Http/Controllers/CompanyController.php:147
+#: app/Http/Controllers/CompanyController.php:173
 msgid "Selected Companies have been attached successfully"
 msgstr ""
 
-#: app/Http/Controllers/CompanyController.php:415
+#: app/Http/Controllers/CompanyController.php:441
 msgid "Selected Companies have been deleted permanently"
 msgstr ""
 
@@ -16037,11 +16057,11 @@ msgstr ""
 msgid "selected contact(s)"
 msgstr ""
 
-#: app/Http/Controllers/SubscriberController.php:1384
+#: app/Http/Controllers/SubscriberController.php:1393
 msgid "Selected Contacts have been deleted permanently"
 msgstr ""
 
-#: app/Http/Controllers/SettingsController.php:623
+#: app/Http/Controllers/SettingsController.php:627
 msgid "Selected CRON Event successfully ran"
 msgstr "אירוע CRON שנבחר רץ בהצלחה"
 
@@ -16094,7 +16114,7 @@ msgstr ""
 msgid "Selected Subscribers have been deleted"
 msgstr "מנויים שנבחרו נמחקו"
 
-#: app/Http/Controllers/FunnelController.php:811
+#: app/Http/Controllers/FunnelController.php:822
 msgid "Selected subscribers have been removed from this automation"
 msgstr ""
 
@@ -16307,12 +16327,6 @@ msgstr ""
 msgid "Sending Conditions"
 msgstr ""
 
-#: ../fluentcampaign-pro/app/Modules/Messaging/Http/Controllers/MessageThreadController.php:232
-msgid ""
-"Sending is not available. Check that FluentCampaign Pro is active and this "
-"channel is configured."
-msgstr ""
-
 #: app/Services/TransStrings.php:2365
 msgid "Sending Time"
 msgstr ""
@@ -16357,7 +16371,7 @@ msgstr ""
 msgid "Sequence Subscribers"
 msgstr ""
 
-#: app/Http/Controllers/FunnelController.php:644
+#: app/Http/Controllers/FunnelController.php:655
 #: app/Hooks/Handlers/FunnelHandler.php:390
 msgid "Sequence successfully updated"
 msgstr "הרצף עודכן בהצלחה"
@@ -16441,7 +16455,7 @@ msgstr ""
 msgid "Set Email Subject & Body"
 msgstr ""
 
-#: app/Services/ExternalIntegrations/FluentForm/Bootstrap.php:55
+#: app/Services/ExternalIntegrations/FluentForm/Bootstrap.php:59
 msgid "Set FluentCRM"
 msgstr "הגדר FluentCRM"
 
@@ -16464,7 +16478,7 @@ msgid "Set Property"
 msgstr ""
 
 #: app/Services/TransStrings.php:2389
-#: app/Services/ExternalIntegrations/FluentForm/Bootstrap.php:185
+#: app/Services/ExternalIntegrations/FluentForm/Bootstrap.php:195
 msgid "Set Tag"
 msgstr "הגדר תג"
 
@@ -16521,12 +16535,12 @@ msgstr ""
 msgid "Settings has been saved successfully"
 msgstr ""
 
-#: app/Http/Controllers/SettingsController.php:1142
+#: app/Http/Controllers/SettingsController.php:1146
 msgid "Settings has been successfully updated"
 msgstr ""
 
 #: app/Http/Controllers/SettingsController.php:557
-#: app/Http/Controllers/SettingsController.php:1225
+#: app/Http/Controllers/SettingsController.php:1229
 msgid "Settings has been updated"
 msgstr "ההגדרות עודכנו"
 
@@ -16720,7 +16734,7 @@ msgstr "סיירה לאון"
 msgid "Sign me up for the newsletter!"
 msgstr ""
 
-#: app/Services/Helper.php:965
+#: app/Services/Helper.php:986
 msgid "Simple Boxed"
 msgstr "Boxed Simple"
 
@@ -16758,7 +16772,7 @@ msgstr "סינגפור"
 msgid "Single Line Text"
 msgstr ""
 
-#: app/Services/TransStrings.php:2445 app/Services/Helper.php:816
+#: app/Services/TransStrings.php:2445 app/Services/Helper.php:837
 msgid "Site URL"
 msgstr "כתובת אתר"
 
@@ -16774,13 +16788,13 @@ msgstr ""
 msgid "Skip if already in DB"
 msgstr ""
 
-#: app/Services/ExternalIntegrations/FluentForm/Bootstrap.php:192
+#: app/Services/ExternalIntegrations/FluentForm/Bootstrap.php:202
 #, fuzzy
 #| msgid "Skip if contact already exist in FluentCRM"
 msgid "Skip if contact already exists in FluentCRM"
 msgstr "דלג אם איש קשר כבר קיים ב- FluentCRM"
 
-#: app/Services/ExternalIntegrations/FluentForm/Bootstrap.php:198
+#: app/Services/ExternalIntegrations/FluentForm/Bootstrap.php:208
 msgid ""
 "Skip name update if an existing contact has old data (per primary field)"
 msgstr ""
@@ -16825,7 +16839,7 @@ msgstr ""
 msgid "Slug (Optional)"
 msgstr ""
 
-#: app/Services/Helper.php:1273
+#: app/Services/Helper.php:1294
 msgid "Small"
 msgstr ""
 
@@ -16876,8 +16890,6 @@ msgid "SMS are sending at this moment"
 msgstr ""
 
 #: app/Services/TransStrings.php:2138
-#: ../fluentcampaign-pro/app/Services/Funnel/Actions/SendCustomSmsAction.php:73
-#: ../fluentcampaign-pro/app/Services/Funnel/Actions/SendCustomSmsAction.php:74
 msgid "SMS Body"
 msgstr ""
 
@@ -17025,7 +17037,7 @@ msgstr "איי שלמה"
 msgid "Somalia"
 msgstr "סומליה"
 
-#: app/Http/Controllers/SettingsController.php:690
+#: app/Http/Controllers/SettingsController.php:694
 msgid ""
 "Some database indexes could not be repaired. Please check your database user "
 "privileges or contact your host."
@@ -17045,7 +17057,7 @@ msgid ""
 "Click here to open Database Health."
 msgstr ""
 
-#: app/Http/Controllers/SettingsController.php:896
+#: app/Http/Controllers/SettingsController.php:900
 msgid "Something is wrong"
 msgstr ""
 
@@ -17161,13 +17173,13 @@ msgstr ""
 msgid "Sorry, No subscribers found based on your filters"
 msgstr "מצטערים, לא נמצאו מנויים על בסיס המסננים שלך"
 
-#: app/Http/Controllers/SettingsController.php:1109
+#: app/Http/Controllers/SettingsController.php:1113
 msgid "Sorry, the provided provider does not exist"
 msgstr ""
 
-#: app/Http/Controllers/SettingsController.php:870
-#: app/Http/Controllers/SettingsController.php:990
-#: app/Http/Controllers/SettingsController.php:1004
+#: app/Http/Controllers/SettingsController.php:874
+#: app/Http/Controllers/SettingsController.php:994
+#: app/Http/Controllers/SettingsController.php:1008
 msgid "Sorry, the provided user does not have FluentCRM access"
 msgstr ""
 
@@ -17175,7 +17187,7 @@ msgstr ""
 msgid "Sorry, the selected plugins could not be installed"
 msgstr ""
 
-#: app/Http/Controllers/CompanyController.php:324
+#: app/Http/Controllers/CompanyController.php:350
 msgid "Sorry, we could not find the logo from website. Please upload manually"
 msgstr ""
 
@@ -17191,11 +17203,11 @@ msgstr ""
 msgid "Sorry, You do not have admin permission to reset database"
 msgstr "מצטערים, אין לך הרשאת מנהל לאיפוס מסד הנתונים"
 
-#: app/Http/Controllers/SettingsController.php:996
+#: app/Http/Controllers/SettingsController.php:1000
 msgid "Sorry, You do not have permission to create REST API"
 msgstr ""
 
-#: app/Http/Controllers/SettingsController.php:876
+#: app/Http/Controllers/SettingsController.php:880
 msgid "Sorry, You do not have permission to delete REST API"
 msgstr ""
 
@@ -17218,7 +17230,7 @@ msgid "Sorting By"
 msgstr ""
 
 #: app/Models/Subscriber.php:778 app/Services/TransStrings.php:2487
-#: app/Services/Helper.php:1915
+#: app/Services/Helper.php:1957
 #: app/Http/Controllers/CampaignAnalyticsController.php:366
 msgid "Source"
 msgstr "מָקוֹר"
@@ -17244,7 +17256,7 @@ msgid "Spain"
 msgstr "סְפָרַד"
 
 #: app/Functions/helpers.php:595 app/Functions/helpers.php:646
-#: app/Services/TransStrings.php:2489 app/Services/Helper.php:3372
+#: app/Services/TransStrings.php:2489 app/Services/Helper.php:3414
 msgid "Spammed"
 msgstr ""
 
@@ -17345,8 +17357,8 @@ msgid "starts with"
 msgstr ""
 
 #: app/Models/Company.php:64 app/Models/Subscriber.php:773
-#: app/Services/TransStrings.php:2502 app/Services/Helper.php:757
-#: app/Services/Helper.php:1878 app/Hooks/Handlers/PrefFormHandler.php:80
+#: app/Services/TransStrings.php:2502 app/Services/Helper.php:778
+#: app/Services/Helper.php:1920 app/Hooks/Handlers/PrefFormHandler.php:80
 #: app/Hooks/Handlers/PrefFormHandler.php:601
 #: app/Services/CrmMigrator/BaseMigrator.php:40
 #: app/Services/Funnel/FunnelHelper.php:249
@@ -17364,18 +17376,16 @@ msgstr ""
 msgid "Stats"
 msgstr ""
 
-#: app/Services/TransStrings.php:2504 app/Services/Helper.php:761
-#: app/Services/Helper.php:1941
+#: app/Services/TransStrings.php:2504 app/Services/Helper.php:782
+#: app/Services/Helper.php:1983
 #: app/Http/Controllers/CampaignAnalyticsController.php:360
-#: app/Hooks/CLI/Commands.php:170 app/Hooks/CLI/Commands.php:404
-#: app/Hooks/CLI/Commands.php:618 app/Hooks/Handlers/FormSubmissions.php:120
+#: app/Hooks/CLI/Commands.php:170 app/Hooks/CLI/Commands.php:414
+#: app/Hooks/CLI/Commands.php:628 app/Hooks/Handlers/FormSubmissions.php:120
 #: app/Hooks/Handlers/PurchaseHistory.php:188
 #: app/Hooks/Handlers/PurchaseHistory.php:414
 #: app/Hooks/Handlers/PurchaseHistory.php:772
-#: app/Services/ExternalIntegrations/FluentForm/Bootstrap.php:263
-#: app/Services/ExternalIntegrations/FluentCart/FluentCart.php:182
-#: ../fluentcampaign-pro/app/Services/Integrations/Voxel/VoxelInit.php:109
-#: ../fluentcampaign-pro/app/Services/Funnel/Conditions/FunnelCondition.php:193
+#: app/Services/ExternalIntegrations/FluentForm/Bootstrap.php:289
+#: app/Services/ExternalIntegrations/FluentCart/FluentCart.php:183
 msgid "Status"
 msgstr "סטָטוּס"
 
@@ -17383,7 +17393,7 @@ msgstr "סטָטוּס"
 msgid "status"
 msgstr ""
 
-#: app/Services/Helper.php:2275
+#: app/Services/Helper.php:2317
 msgid "Status (Pro Required)"
 msgstr ""
 
@@ -17407,15 +17417,15 @@ msgstr ""
 msgid "Status for your new contacts who are not exist in FluentCRM Database"
 msgstr ""
 
-#: app/Http/Controllers/FunnelController.php:884
+#: app/Http/Controllers/FunnelController.php:898
 msgid "Status has been changed for the selected automations"
 msgstr ""
 
-#: app/Http/Controllers/CompanyController.php:437
+#: app/Http/Controllers/CompanyController.php:463
 msgid "Status has been changed for the selected companies"
 msgstr ""
 
-#: app/Http/Controllers/SubscriberController.php:1554
+#: app/Http/Controllers/SubscriberController.php:1563
 msgid "Status has been changed for the selected subscribers"
 msgstr ""
 
@@ -17424,8 +17434,8 @@ msgid "Status has been changed for the selected templates"
 msgstr ""
 
 #. %s: subscription status
-#: app/Http/Controllers/FunnelController.php:845
-#: app/Http/Controllers/FunnelController.php:1160
+#: app/Http/Controllers/FunnelController.php:859
+#: app/Http/Controllers/FunnelController.php:1174
 #, php-format
 msgid "Status has been updated to %s"
 msgstr "הסטטוס עודכן ל-%s"
@@ -17478,11 +17488,11 @@ msgstr ""
 msgid "step saved"
 msgstr ""
 
-#: app/Http/Controllers/FunnelController.php:1969
+#: app/Http/Controllers/FunnelController.php:1983
 msgid "Sticky note has been removed"
 msgstr ""
 
-#: app/Http/Controllers/FunnelController.php:1977
+#: app/Http/Controllers/FunnelController.php:1991
 msgid "Sticky note has been saved"
 msgstr ""
 
@@ -17554,7 +17564,7 @@ msgstr "הירשם לעדכונים"
 
 #: app/Functions/helpers.php:589 app/Functions/helpers.php:640
 #: app/Services/TransStrings.php:2524 app/Services/TransStrings.php:3151
-#: app/Services/Helper.php:3366
+#: app/Services/Helper.php:3408
 #: app/Services/Funnel/Triggers/FluentFormSubscriptionCancelledTrigger.php:54
 msgid "Subscribed"
 msgstr "מנויים"
@@ -17589,11 +17599,11 @@ msgstr ""
 msgid "Subscriber Fields"
 msgstr ""
 
-#: app/Http/Controllers/FunnelController.php:1259
+#: app/Http/Controllers/FunnelController.php:1273
 msgid "Subscriber has been advanced"
 msgstr ""
 
-#: app/Http/Controllers/FunnelController.php:1103
+#: app/Http/Controllers/FunnelController.php:1117
 #, fuzzy
 #| msgid "Subscribed has been removed from this automation funnel"
 msgid "Subscriber has been removed from this automation"
@@ -17626,7 +17636,7 @@ msgstr ""
 msgid "Subscriber's status need to be subscribed."
 msgstr "על סטטוס המנוי להיות רשום כמנוי"
 
-#: app/Http/Controllers/FunnelController.php:1096
+#: app/Http/Controllers/FunnelController.php:1110
 msgid "subscriber_ids parameter is required"
 msgstr ""
 
@@ -17650,7 +17660,7 @@ msgstr ""
 msgid "Subscribers imported successfully."
 msgstr ""
 
-#: app/Http/Controllers/SubscriberController.php:1375
+#: app/Http/Controllers/SubscriberController.php:1384
 msgid "Subscribers selection is required"
 msgstr ""
 
@@ -17745,7 +17755,7 @@ msgstr ""
 msgid "Subtract Value"
 msgstr ""
 
-#: app/Services/TransStrings.php:2535 app/Services/Helper.php:3380
+#: app/Services/TransStrings.php:2535 app/Services/Helper.php:3422
 msgid "Success"
 msgstr ""
 
@@ -17862,7 +17872,7 @@ msgstr ""
 msgid "Supercharge your WooCommerce store by upgrading FluentCRM Pro"
 msgstr ""
 
-#: fluent-crm.php:66
+#: fluent-crm.php:77
 msgid "Support"
 msgstr ""
 
@@ -17928,7 +17938,7 @@ msgid ""
 "patterns are copied on insert."
 msgstr ""
 
-#: app/Http/Controllers/FunnelController.php:1419
+#: app/Http/Controllers/FunnelController.php:1433
 msgid "Synced successfully"
 msgstr ""
 
@@ -17961,7 +17971,7 @@ msgid "System Labels"
 msgstr ""
 
 #: app/Services/TransStrings.php:2551
-#: app/Http/Controllers/SettingsController.php:748
+#: app/Http/Controllers/SettingsController.php:752
 msgid "System Logs"
 msgstr ""
 
@@ -18018,9 +18028,9 @@ msgstr "התג הוסר"
 msgid "Tag Removed From Contact"
 msgstr "התג הוסר מאיש קשר"
 
-#: app/Services/TransStrings.php:2560 app/Services/Helper.php:1959
-#: app/Hooks/CLI/Commands.php:162 app/Hooks/CLI/Commands.php:396
-#: app/Hooks/CLI/Commands.php:610 app/Hooks/Handlers/AdminMenu.php:118
+#: app/Services/TransStrings.php:2560 app/Services/Helper.php:2001
+#: app/Hooks/CLI/Commands.php:162 app/Hooks/CLI/Commands.php:406
+#: app/Hooks/CLI/Commands.php:620 app/Hooks/Handlers/AdminMenu.php:118
 #: app/Hooks/Handlers/AdminMenu.php:119 app/Hooks/Handlers/AdminMenu.php:384
 #: app/Hooks/Handlers/EventTrackingHandler.php:279
 #: app/Services/ExternalIntegrations/FluentCart/CustomerWidget.php:196
@@ -18116,7 +18126,7 @@ msgstr ""
 msgid "Target Products (Subscription Only)"
 msgstr ""
 
-#: app/Http/Controllers/FunnelController.php:1193
+#: app/Http/Controllers/FunnelController.php:1207
 msgid "Target sequence not found"
 msgstr ""
 
@@ -18207,11 +18217,11 @@ msgid ""
 "in email_history."
 msgstr ""
 
-#: app/Http/Controllers/FunnelController.php:1880
+#: app/Http/Controllers/FunnelController.php:1894
 msgid "Test Webhook failed to send"
 msgstr ""
 
-#: app/Http/Controllers/FunnelController.php:1885
+#: app/Http/Controllers/FunnelController.php:1899
 msgid "Test Webhook has been sent successfully"
 msgstr ""
 
@@ -18386,10 +18396,6 @@ msgid ""
 "product discounts. Leave blank to apply to all qualifying items in cart."
 msgstr ""
 
-#: ../fluentcampaign-pro/app/Modules/Messaging/Http/Controllers/MessageThreadController.php:268
-msgid "The message could not be sent."
-msgstr ""
-
 #: app/Hooks/Handlers/ExternalPages.php:1340
 msgid ""
 "The new email has been used to another account. Please use a new email "
@@ -18404,7 +18410,7 @@ msgstr ""
 msgid "The night's still young!"
 msgstr ""
 
-#: app/Http/Controllers/SettingsController.php:616
+#: app/Http/Controllers/SettingsController.php:620
 msgid "The provided hook name is not valid"
 msgstr "שם הוו שצוין אינו חוקי"
 
@@ -18458,7 +18464,7 @@ msgstr ""
 msgid "The sequences payload is missing. Funnel steps were not saved."
 msgstr ""
 
-#: app/Http/Controllers/FunnelController.php:1146
+#: app/Http/Controllers/FunnelController.php:1160
 msgid "The status already completed state"
 msgstr "המצב כבר הושלם"
 
@@ -18544,8 +18550,8 @@ msgstr ""
 msgid "These Tags will be removed to a contact whenever this link is clicked"
 msgstr ""
 
-#: app/Http/Controllers/SubscriberController.php:1396
-#: app/Http/Controllers/SubscriberController.php:1559
+#: app/Http/Controllers/SubscriberController.php:1405
+#: app/Http/Controllers/SubscriberController.php:1568
 msgid "This action requires FluentCRM Pro"
 msgstr ""
 
@@ -18636,8 +18642,8 @@ msgstr ""
 msgid "This feature only available on FluentCRM Pro."
 msgstr ""
 
-#: app/Http/Controllers/FunnelController.php:1400
-#: app/Http/Controllers/FunnelController.php:1408
+#: app/Http/Controllers/FunnelController.php:1414
+#: app/Http/Controllers/FunnelController.php:1422
 msgid "This feature requires the latest version of FluentCRM Pro"
 msgstr ""
 
@@ -18653,24 +18659,24 @@ msgid ""
 "coupon."
 msgstr ""
 
-#: app/Services/Helper.php:2194
-#: app/Services/ExternalIntegrations/FluentCart/FluentCart.php:324
+#: app/Services/Helper.php:2236
+#: app/Services/ExternalIntegrations/FluentCart/FluentCart.php:326
 msgid "This filter will check if a contact has at least one shop order or not"
 msgstr ""
 
-#: app/Services/ExternalIntegrations/FluentCart/FluentCart.php:447
+#: app/Services/ExternalIntegrations/FluentCart/FluentCart.php:449
 msgid ""
 "This filter will check if a contact has at least one specific variation "
 "expired license or not"
 msgstr ""
 
-#: app/Services/ExternalIntegrations/FluentCart/FluentCart.php:423
+#: app/Services/ExternalIntegrations/FluentCart/FluentCart.php:425
 msgid ""
 "This filter will check if a contact has at least one specific variation "
 "license or not"
 msgstr ""
 
-#: app/Services/ExternalIntegrations/FluentCart/FluentCart.php:368
+#: app/Services/ExternalIntegrations/FluentCart/FluentCart.php:370
 msgid ""
 "This filter will check if a contact has purchased at least one specific "
 "product variation or not"
@@ -18824,12 +18830,6 @@ msgstr ""
 msgid "this value will be skipped"
 msgstr ""
 
-#: ../fluentcampaign-pro/app/Modules/Messaging/Http/Controllers/MessageThreadController.php:224
-msgid ""
-"This WhatsApp conversation is outside its 24-hour window, so only an "
-"approved template can be sent."
-msgstr ""
-
 #: app/Services/TransStrings.php:3153
 msgid "This will be used for your email campaign, Subscriber's front pages"
 msgstr ""
@@ -18838,7 +18838,7 @@ msgstr ""
 msgid "This will filter all available contacts"
 msgstr ""
 
-#: app/Services/Helper.php:2024
+#: app/Services/Helper.php:2066
 msgid ""
 "This will get only the contacts who got email in the selected campaign and "
 "then filter by email open/link clicked or not. <br />Please note that, some "
@@ -18966,7 +18966,7 @@ msgstr ""
 msgid "Thursday"
 msgstr ""
 
-#: app/Services/Helper.php:520
+#: app/Services/Helper.php:541
 msgid "Tickets"
 msgstr ""
 
@@ -19006,7 +19006,7 @@ msgstr ""
 msgid "Tips"
 msgstr ""
 
-#: app/Services/TransStrings.php:2618 app/Services/Helper.php:3054
+#: app/Services/TransStrings.php:2618 app/Services/Helper.php:3096
 #: app/Hooks/Handlers/PrefFormHandler.php:73
 msgid "Title"
 msgstr "כותרת"
@@ -19020,7 +19020,7 @@ msgid "Title field is required"
 msgstr ""
 
 #. %s: the new funnel title
-#: app/Http/Controllers/FunnelController.php:1943
+#: app/Http/Controllers/FunnelController.php:1957
 #, php-format
 msgid "Title has been updated to %s"
 msgstr ""
@@ -19160,7 +19160,7 @@ msgstr ""
 msgid "Too many contacts match the filter"
 msgstr ""
 
-#: app/Http/Controllers/CompanyController.php:811
+#: app/Http/Controllers/CompanyController.php:837
 #: app/Http/Controllers/SubscriberController.php:1033
 msgid "Too many notes selected. Please delete 200 or fewer notes at a time."
 msgstr ""
@@ -19202,8 +19202,7 @@ msgstr ""
 #: app/Hooks/Handlers/PurchaseHistory.php:191
 #: app/Hooks/Handlers/PurchaseHistory.php:419
 #: app/Hooks/Handlers/PurchaseHistory.php:776
-#: app/Services/ExternalIntegrations/FluentCart/FluentCart.php:184
-#: ../fluentcampaign-pro/app/Services/Integrations/Voxel/VoxelInit.php:114
+#: app/Services/ExternalIntegrations/FluentCart/FluentCart.php:185
 msgid "Total"
 msgstr ""
 
@@ -19264,19 +19263,19 @@ msgstr ""
 msgid "Total Order Count"
 msgstr ""
 
-#: app/Services/Helper.php:2158 app/Services/Helper.php:2212
+#: app/Services/Helper.php:2200 app/Services/Helper.php:2254
 msgid "Total Order Count (Pro Required)"
 msgstr ""
 
-#: app/Services/Helper.php:2218
+#: app/Services/Helper.php:2260
 msgid "Total Order Value (Pro Required)"
 msgstr ""
 
-#: app/Services/Helper.php:2164
+#: app/Services/Helper.php:2206
 msgid "Total Order value (Pro Required)"
 msgstr ""
 
-#: app/Services/ExternalIntegrations/FluentCart/FluentCart.php:286
+#: app/Services/ExternalIntegrations/FluentCart/FluentCart.php:288
 msgid "Total Orders"
 msgstr ""
 
@@ -19300,7 +19299,7 @@ msgstr ""
 msgid "Total Records:"
 msgstr ""
 
-#: app/Services/Helper.php:2269
+#: app/Services/Helper.php:2311
 msgid "Total Referrals (Pro Required)"
 msgstr ""
 
@@ -19328,11 +19327,11 @@ msgstr ""
 msgid "Total SMSs"
 msgstr ""
 
-#: app/Services/ExternalIntegrations/FluentCart/FluentCart.php:287
+#: app/Services/ExternalIntegrations/FluentCart/FluentCart.php:289
 msgid "Total Spent"
 msgstr ""
 
-#: app/Hooks/CLI/Commands.php:606
+#: app/Hooks/CLI/Commands.php:616
 msgid "Total Students"
 msgstr ""
 
@@ -19377,7 +19376,7 @@ msgid "Transaction"
 msgstr ""
 
 #: app/Functions/helpers.php:592 app/Functions/helpers.php:643
-#: app/Services/TransStrings.php:2661 app/Services/Helper.php:3369
+#: app/Services/TransStrings.php:2661 app/Services/Helper.php:3411
 msgid "Transactional"
 msgstr ""
 
@@ -19408,7 +19407,7 @@ msgstr ""
 msgid "Trigger"
 msgstr ""
 
-#: app/Http/Controllers/FunnelController.php:508
+#: app/Http/Controllers/FunnelController.php:511
 msgid "Trigger name is same"
 msgstr ""
 
@@ -19502,7 +19501,7 @@ msgid "Two Button Row"
 msgstr ""
 
 #: app/Models/Company.php:57 app/Services/TransStrings.php:2674
-#: app/Services/Helper.php:1950 app/Services/Helper.php:3037
+#: app/Services/Helper.php:1992 app/Services/Helper.php:3079
 #: app/Hooks/Handlers/EventTrackingHandler.php:270
 msgid "Type"
 msgstr "סוּג"
@@ -19667,7 +19666,7 @@ msgstr ""
 msgid "Unopened"
 msgstr ""
 
-#: app/Services/Helper.php:2292
+#: app/Services/Helper.php:2334
 msgid "Unpaid Earnings (Pro Required)"
 msgstr ""
 
@@ -19679,7 +19678,7 @@ msgstr ""
 #: app/Hooks/Handlers/ExternalPages.php:384
 #: app/Views/external/manage_subscription_form.php:39
 #: app/Views/external/unsubscribe.php:19
-#: app/Services/Libs/Parser/ShortcodeParser.php:227
+#: app/Services/Libs/Parser/ShortcodeParser.php:230
 msgid "Unsubscribe"
 msgstr "בטל את הרישום"
 
@@ -19688,7 +19687,7 @@ msgstr "בטל את הרישום"
 msgid "Unsubscribe (%d)"
 msgstr ""
 
-#: app/Services/Helper.php:823
+#: app/Services/Helper.php:844
 msgid "Unsubscribe Hyperlink HTML"
 msgstr ""
 
@@ -19696,13 +19695,13 @@ msgstr ""
 msgid "Unsubscribe Stats"
 msgstr ""
 
-#: app/Services/Helper.php:820
+#: app/Services/Helper.php:841
 msgid "Unsubscribe URL"
 msgstr "בטל את הרישום לכתובת האתר"
 
 #: app/Functions/helpers.php:591 app/Functions/helpers.php:642
 #: app/Services/TransStrings.php:2704 app/Services/TransStrings.php:3179
-#: app/Services/Helper.php:3368 app/Hooks/Handlers/ExternalPages.php:723
+#: app/Services/Helper.php:3410 app/Hooks/Handlers/ExternalPages.php:723
 msgid "Unsubscribed"
 msgstr "לא מנויים"
 
@@ -19874,7 +19873,7 @@ msgstr ""
 msgid "Upgrade To Pro"
 msgstr ""
 
-#: fluent-crm.php:71 app/Services/TransStrings.php:2735
+#: fluent-crm.php:82 app/Services/TransStrings.php:2735
 #: app/Http/Controllers/DashboardController.php:121
 #: app/Http/Controllers/DashboardController.php:129
 #: app/Http/Controllers/DashboardController.php:140
@@ -20099,7 +20098,7 @@ msgstr ""
 msgid "Use ↑↓ keys to move through results"
 msgstr ""
 
-#: app/Services/ExternalIntegrations/FluentCart/FluentCart.php:390
+#: app/Services/ExternalIntegrations/FluentCart/FluentCart.php:392
 msgid "Used Coupons"
 msgstr ""
 
@@ -20119,7 +20118,7 @@ msgstr ""
 msgid "User Email Address"
 msgstr ""
 
-#: app/Services/TransStrings.php:2771 app/Services/Helper.php:753
+#: app/Services/TransStrings.php:2771 app/Services/Helper.php:774
 #: app/Services/ExternalIntegrations/FluentCart/SmartCode/SmartCodeRegister.php:38
 msgid "User ID"
 msgstr "תעודת זהות של משתמש"
@@ -20186,8 +20185,8 @@ msgstr ""
 msgid "Value"
 msgstr ""
 
-#: app/Http/Controllers/CompanyController.php:300
-#: app/Http/Controllers/CompanyController.php:304
+#: app/Http/Controllers/CompanyController.php:326
+#: app/Http/Controllers/CompanyController.php:330
 #: app/Http/Controllers/SubscriberController.php:212
 #: app/Http/Controllers/SubscriberController.php:216
 msgid "Value is not valid"
@@ -20287,7 +20286,6 @@ msgid "View Custom Preference Page"
 msgstr ""
 
 #: app/Hooks/Handlers/PurchaseHistory.php:399
-#: ../fluentcampaign-pro/app/Services/Integrations/Voxel/VoxelInit.php:128
 msgid "View Customer Profile"
 msgstr ""
 
@@ -20324,7 +20322,7 @@ msgstr ""
 msgid "View entries for %s"
 msgstr ""
 
-#: fluent-crm.php:65
+#: fluent-crm.php:76
 msgid "View FluentCRM Documentation"
 msgstr ""
 
@@ -20344,12 +20342,8 @@ msgstr ""
 msgid "View in new tab"
 msgstr ""
 
-#: app/Services/Helper.php:822
+#: app/Services/Helper.php:843
 msgid "View On Browser URL"
-msgstr ""
-
-#: ../fluentcampaign-pro/app/Services/Integrations/Voxel/VoxelInit.php:71
-msgid "View Order"
 msgstr ""
 
 #: app/Services/TransStrings.php:2818
@@ -20392,7 +20386,7 @@ msgstr ""
 msgid "View subscribers"
 msgstr ""
 
-#: app/Services/ExternalIntegrations/FluentCart/FluentCart.php:232
+#: app/Services/ExternalIntegrations/FluentCart/FluentCart.php:234
 msgid "View your purchase history from FluentCart."
 msgstr ""
 
@@ -20408,7 +20402,7 @@ msgstr ""
 msgid "Visual"
 msgstr ""
 
-#: app/Services/TransStrings.php:2822 app/Services/Helper.php:1007
+#: app/Services/TransStrings.php:2822 app/Services/Helper.php:1028
 msgid "Visual Builder"
 msgstr ""
 
@@ -20426,15 +20420,15 @@ msgstr ""
 msgid "Visually design your email with Drag & Drop Builder"
 msgstr ""
 
-#: app/Services/Helper.php:1260
+#: app/Services/Helper.php:1281
 msgid "Vivid cyan blue"
 msgstr ""
 
-#: app/Services/Helper.php:1250
+#: app/Services/Helper.php:1271
 msgid "Vivid green cyan"
 msgstr ""
 
-#: app/Services/Helper.php:1265
+#: app/Services/Helper.php:1286
 msgid "Vivid purple"
 msgstr ""
 
@@ -20768,7 +20762,7 @@ msgstr ""
 msgid "Which time you would like to schedule"
 msgstr ""
 
-#: app/Services/Helper.php:1225
+#: app/Services/Helper.php:1246
 msgid "White"
 msgstr ""
 
@@ -20828,17 +20822,17 @@ msgstr ""
 msgid "Will be stored from your last saved email contents"
 msgstr ""
 
-#: app/Services/ExternalIntegrations/FluentCart/FluentCart.php:415
+#: app/Services/ExternalIntegrations/FluentCart/FluentCart.php:417
 msgid "Will filter the contacts who have at least one active licenses or not"
 msgstr ""
 
-#: app/Services/ExternalIntegrations/FluentCart/FluentCart.php:439
+#: app/Services/ExternalIntegrations/FluentCart/FluentCart.php:441
 msgid "Will filter the contacts who have at least one expired licenses or not"
 msgstr ""
 
-#: app/Services/ExternalIntegrations/FluentCart/FluentCart.php:360
-#: app/Services/ExternalIntegrations/FluentCart/FluentCart.php:382
-#: app/Services/ExternalIntegrations/FluentCart/FluentCart.php:400
+#: app/Services/ExternalIntegrations/FluentCart/FluentCart.php:362
+#: app/Services/ExternalIntegrations/FluentCart/FluentCart.php:384
+#: app/Services/ExternalIntegrations/FluentCart/FluentCart.php:402
 msgid "Will filter the contacts who have at least one order"
 msgstr ""
 
@@ -20871,7 +20865,7 @@ msgstr ""
 msgid "within days"
 msgstr ""
 
-#: app/Services/Helper.php:1171 app/Services/Helper.php:2153
+#: app/Services/Helper.php:1192 app/Services/Helper.php:2195
 msgid "WooCommerce"
 msgstr "WooCommerce"
 
@@ -20887,7 +20881,7 @@ msgstr ""
 msgid "WooCommerce Integration:"
 msgstr ""
 
-#: app/Services/Helper.php:1170
+#: app/Services/Helper.php:1191
 msgid "Woocommerce Purchase History"
 msgstr "היסטוריית רכישות Woocommerce "
 
@@ -20989,13 +20983,13 @@ msgstr ""
 msgid "WP Email Newsletter Team - FluentCRM"
 msgstr ""
 
-#: app/Services/Helper.php:1902
+#: app/Services/Helper.php:1944
 #, fuzzy
 #| msgid "WP Users"
 msgid "WP User ID"
 msgstr "משתמשי WP"
 
-#: app/Services/Helper.php:1977
+#: app/Services/Helper.php:2019
 #: app/Modules/AbandonCart/Drivers/FluentCart/FluentCartAutomationTrigger.php:208
 msgid "WP User Role"
 msgstr ""
@@ -21010,10 +21004,6 @@ msgstr ""
 
 #: app/Services/TransStrings.php:2829
 msgid "WPFusion Integration"
-msgstr ""
-
-#: ../fluentcampaign-pro/app/Modules/Messaging/Http/Controllers/MessageThreadController.php:213
-msgid "Write a message first."
 msgstr ""
 
 #: app/Services/TransStrings.php:2892
@@ -21041,9 +21031,9 @@ msgstr ""
 msgid "Yemen"
 msgstr "תֵימָן"
 
-#: app/Services/TransStrings.php:2897 app/Services/Helper.php:2256
-#: app/Services/ExternalIntegrations/FluentCart/FluentCart.php:326
-#: app/Services/ExternalIntegrations/FluentCart/FluentCart.php:461
+#: app/Services/TransStrings.php:2897 app/Services/Helper.php:2298
+#: app/Services/ExternalIntegrations/FluentCart/FluentCart.php:328
+#: app/Services/ExternalIntegrations/FluentCart/FluentCart.php:463
 msgid "Yes"
 msgstr "כן"
 
@@ -21120,13 +21110,13 @@ msgstr ""
 msgid "You can do this action if campaign is in archived status only"
 msgstr ""
 
-#: app/Services/Helper.php:2042
+#: app/Services/Helper.php:2084
 msgid ""
 "You can filter your contacts based on activity in a specific automation "
 "funnel."
 msgstr ""
 
-#: app/Services/Helper.php:2059
+#: app/Services/Helper.php:2101
 msgid ""
 "You can filter your contacts based on activity in a specific email sequences."
 msgstr ""
@@ -21249,7 +21239,10 @@ msgid ""
 "You can use multiple email campaign archives with the following shortcode: "
 "[fluent_crm_campaign_archives ids=1101,5,1100,1072 status=all search=Summer "
 "limit=50]. Each parameter can be used on its own; any parameter you leave "
-"out falls back to the global campaign archive settings."
+"out falls back to the global campaign archive settings. For a card grid, add "
+"layout=card with optional columns=1-4, excerpt_length=5-100, and "
+"hide_date=yes, hide_excerpt=yes or hide_read_more=yes. In the block editor "
+"you can use the Campaign Archives block instead."
 msgstr ""
 
 #: app/Services/TransStrings.php:2911
@@ -21411,8 +21404,11 @@ msgstr "נושא הדואר האלקטרוני שלך עם opt-optin"
 
 #: app/Services/TransStrings.php:2922 app/Hooks/Handlers/ExternalPages.php:382
 #: app/Views/external/manage_subscription_form.php:9
+#: app/Views/external/manage_subscription_form.php:10
 #: app/Views/external/manage_subscription_request_form.php:38
+#: app/Views/external/manage_subscription_request_form.php:39
 #: app/Views/external/unsubscribe_request_form.php:38
+#: app/Views/external/unsubscribe_request_form.php:39
 msgid "Your Email Address"
 msgstr "כתובת המייל שלך"
 
@@ -21428,7 +21424,7 @@ msgstr ""
 msgid "Your emails are sending right now...."
 msgstr ""
 
-#: app/Services/ExternalIntegrations/FluentForm/Bootstrap.php:119
+#: app/Services/ExternalIntegrations/FluentForm/Bootstrap.php:129
 msgid "Your Feed Name"
 msgstr "שם הפיד שלך"
 
@@ -21472,7 +21468,7 @@ msgstr ""
 msgid "Your link title so you do not forget it"
 msgstr ""
 
-#: app/Services/TransStrings.php:2925 app/Services/Helper.php:3056
+#: app/Services/TransStrings.php:2925 app/Services/Helper.php:3098
 msgid "Your Note Title"
 msgstr ""
 

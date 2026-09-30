@@ -572,9 +572,13 @@ class SettingsController extends Controller
             'interval'   => 60
         );
 
+        // 'hook' must name the event this row actually describes: it is both the
+        // v-for key in _CronJobMonitor.vue and the payload its "Run Manually"
+        // button posts to runCron(). Naming the hourly hook here gave two rows
+        // the same key and made this row fire the hourly task instead.
         $nextFiverMinutesRun = wp_next_scheduled('fluentcrm_scheduled_five_minute_tasks');
         $events[] = (object)array(
-            'hook'       => 'fluentcrm_scheduled_hourly_tasks',
+            'hook'       => 'fluentcrm_scheduled_five_minute_tasks',
             'is_overdue' => ($nextFiverMinutesRun - time()) < -60,
             'human_name' => __('Scheduled Email Processing', 'fluent-crm'),
             'next_run'   => human_time_diff($nextFiverMinutesRun, time()),
@@ -686,9 +690,14 @@ class SettingsController extends Controller
         }
 
         if ($result['failed']) {
+            // Lead with the specific cause(s) found by the service; several indexes
+            // on one table usually fail for the same reason, so de-duplicate.
+            $reasons = array_unique(array_values($result['errors']));
+
             return $this->sendError([
-                'message' => __('Some database indexes could not be repaired. Please check your database user privileges or contact your host.', 'fluent-crm'),
+                'message' => $reasons ? implode(' ', $reasons) : __('Some database indexes could not be repaired. Please contact your host.', 'fluent-crm'),
                 'failed'  => $result['failed'],
+                'errors'  => $result['errors'],
                 'indexes' => array_values($result['health'])
             ], 422);
         }

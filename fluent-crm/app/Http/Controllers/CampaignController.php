@@ -169,12 +169,15 @@ class CampaignController extends Controller
                     $revenueRaw = $campMeta['_campaign_revenue'] ?? null;
                     if ($revenueRaw) {
                         $data = (array) maybe_unserialize($revenueRaw);
+                        // Order count feeds the revenue chip's hover text in the list.
+                        $orderCount = isset($data['orderIds']) && is_array($data['orderIds']) ? count($data['orderIds']) : 0;
                         foreach ($data as $currency => $cents) {
                             if ($cents && $currency !== 'orderIds') {
                                 $stats['revenue'] = [
                                     'label'    => __('Revenue', 'fluent-crm') . ' (' . $currency . ')',
                                     'total'    => number_format($cents / 100, 2),
-                                    'currency' => $currency
+                                    'currency' => $currency,
+                                    'orders'   => $orderCount
                                 ];
                             }
                         }
@@ -223,7 +226,10 @@ class CampaignController extends Controller
             ]);
             $data['title'] = sanitize_text_field($data['title']);
         } else {
-            $defaultTitle = __('Untitled', 'fluent-crm');
+            $defaultTitle = sprintf(
+                __('Untitled Title %s', 'fluent-crm'),
+                current_time('mysql')
+            );
             $data['title'] = $this->ensureUniqueDefaultTitle($defaultTitle);
         }
 
@@ -253,7 +259,7 @@ class CampaignController extends Controller
     }
 
     /**
-     * Return a unique title for default "Untitled" (e.g. Untitled, Untitled 2, ...).
+     * Make an automatically generated campaign title unique within campaign rows.
      */
     protected function ensureUniqueDefaultTitle($baseTitle)
     {

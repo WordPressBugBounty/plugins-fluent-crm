@@ -85,9 +85,26 @@ return function ($file) {
             wp_schedule_event(time() + 100, 'hourly', $hourlyHook);
         }
 
+        /*
+         * Compare the stored SCHEDULE NAME, not merely "is it scheduled".
+         *
+         * Sites upgraded from earlier versions still hold this event under the
+         * 'fluentcrm_every_minute' (60s) schedule, and WP re-derives a recurring
+         * event's interval from that saved name -- not from the code that
+         * scheduled it. A plain !wp_next_scheduled() guard is therefore a no-op
+         * on every existing install, which would leave the five-minute task
+         * running once a minute forever.
+         *
+         * Clearing first also collapses duplicate copies left under the old
+         * name. It does not deduplicate copies that already carry the current
+         * name -- wp_get_schedule() reports only the next matching event -- but
+         * wp_schedule_event() never created those on its own; the one code path
+         * that did was fixed in efbc291e6 (Aug 2024).
+         */
         $hookName = 'fluentcrm_scheduled_five_minute_tasks';
-        if (!wp_next_scheduled($hookName)) {
-            wp_schedule_event(time() + 5, 'fluentcrm_every_minute', $hookName);
+        if (wp_get_schedule($hookName) !== 'fluentcrm_scheduled_five_minute_tasks') {
+            wp_clear_scheduled_hook($hookName);
+            wp_schedule_event(time() + 5, 'fluentcrm_scheduled_five_minute_tasks', $hookName);
         }
 
         $weeklyHook = 'fluentcrm_scheduled_weekly_tasks';
@@ -107,46 +124,6 @@ return function ($file) {
         if (false === as_next_scheduled_action('fluent_crm_ascheduler_runs_daily')) {
             as_schedule_recurring_action(strtotime('midnight today'), DAY_IN_SECONDS, 'fluent_crm_ascheduler_runs_daily', [], 'fluent-crm');
         }
-        /*
-         *
-         * @todo: Handle Duplicate Schedules and we can remove this code at the end of October 2024
-         */
-        $crons = _get_cron_array();
-        $cronMaps = [
-            'fluentcrm_scheduled_minute_tasks'      => 'fluentcrm_every_minute',
-            'fluentcrm_scheduled_hourly_tasks'      => 'hourly',
-            'fluentcrm_scheduled_five_minute_tasks' => 'fluentcrm_every_minute',
-            'fluentcrm_scheduled_weekly_tasks'      => 'weekly',
-            'fluentcrm_scheduled_daily_tasks'       => 'daily'
-        ];
-
-        $occurrences = [];
-        $multiples = [];
-
-        foreach ($crons as $time => $hooks) {
-            foreach ($hooks as $hook => $hook_events) {
-                if (!isset($cronMaps[$hook])) {
-                    continue;
-                }
-
-                if (isset($occurrences[$hook])) {
-                    $multiples[$hook] = isset($multiples[$hook]) ? $multiples[$hook] + 1 : 1;
-                    continue;
-                }
-
-                $occurrences[$hook] = 1;
-            }
-        }
-
-        if ($multiples) {
-            foreach ($multiples as $scheduleKey => $multiple) {
-                wp_clear_scheduled_hook($scheduleKey);
-                $mapName = $cronMaps[$scheduleKey];
-                wp_schedule_event(time() + 100, $mapName, $scheduleKey);
-            }
-        }
-
-        // <--- Done Handling Duplicate Schedules
 
     }, 10);
 };
