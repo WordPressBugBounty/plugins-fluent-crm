@@ -8,13 +8,8 @@ use FluentCrm\App\Services\Funnel\FunnelHelper;
 use FluentCrm\Framework\Support\Arr;
 
 /**
- * Adds a newsletter opt-in checkbox to the FluentCart checkout form and
- * subscribes the customer to FluentCRM when the order is paid.
- *
- * Controlled by the 'FluentCart Checkout Subscription Field' panel in
- * FluentCRM -> Settings -> General Settings (option key:
- * fluent_cart_checkout_form_subscribe_settings, defined in the base plugin's
- * AutoSubscribe service).
+ * Adds a newsletter opt-in checkbox to the FluentCart checkout and subscribes the customer when the order is paid.
+ * Settings option: fluent_cart_checkout_form_subscribe_settings (AutoSubscribe service).
  */
 class CheckoutSubscription
 {
@@ -31,16 +26,13 @@ class CheckoutSubscription
 
     public function init()
     {
-        // Renders inside the checkout <form> on both the standard checkout
-        // page and the modal checkout (FormData picks the value up on submit)
+        // Renders inside the checkout form on both the standard and modal checkout.
         add_action('fluent_cart/before_payment_methods', [$this, 'renderOptinCheckbox']);
 
-        // Fires while the order is being created from the checkout request —
-        // the only point where the raw POST data is available
+        // The only point where the raw POST data is available.
         add_action('fluent_cart/checkout/prepare_other_data', [$this, 'captureOptinState']);
 
-        // Async (Action Scheduler) hook recommended by FluentCart for
-        // third-party post-payment processing
+        // Async post-payment hook.
         add_action('fluent_cart/order_paid_done', [$this, 'maybeSubscribeContact'], 20);
     }
 
@@ -110,9 +102,7 @@ class CheckoutSubscription
     }
 
     /**
-     * Creates/updates the FluentCRM contact when a paid order has the
-     * opt-in flag. Runs async via fluent_cart/order_paid_done. Idempotent —
-     * payment retries or hook re-runs will not duplicate processing.
+     * Creates or updates the contact when a paid order has the opt-in flag. Idempotent.
      */
     public function maybeSubscribeContact($eventData)
     {
@@ -123,10 +113,7 @@ class CheckoutSubscription
             return false;
         }
 
-        // Treat both the final marker and an in-flight claim as processed so
-        // serial retries of the paid-order event (e.g. Action Scheduler
-        // re-runs) cannot double-process. This read-then-write guard is not
-        // atomic, so it does not protect against truly concurrent invocations
+        // An in-flight claim counts as processed. Not atomic against truly concurrent runs.
         $processedState = $order->getMeta(self::PROCESSED_META);
         if ($processedState == 'yes' || $processedState == 'processing') {
             return false;
@@ -181,27 +168,23 @@ class CheckoutSubscription
 
         $subscriberData = apply_filters('fluent_crm/fluent_cart_checkout_auto_subscribe_data', $subscriberData, $order);
 
-        // Claim the order before contact creation / email side effects so an
-        // Action Scheduler retry re-entering this handler cannot run them twice
+        // Claim the order before any side effects.
         $order->updateMeta(self::PROCESSED_META, 'processing');
 
         try {
             $contact = FunnelHelper::createOrUpdateContact($subscriberData);
 
             if (!$contact) {
-                // Release the claim so a later retry can attempt processing again
                 $order->updateMeta(self::PROCESSED_META, '0');
                 return false;
             }
 
-            // The purchase is the re-consent event, so re-invite any non-subscribed
-            // contact when the checkout feed has double opt-in enabled.
+            // With double opt-in on, the purchase re-invites any non-subscribed contact.
             if (Arr::get($settings, 'double_optin') == 'yes' && $contact->status != 'subscribed') {
                 $contact->sendDoubleOptinEmail();
             }
         } catch (\Throwable $e) {
-            // Release the claim on failure too — otherwise the order would be
-            // stuck in 'processing' and permanently skipped by the guard above
+            // Release the claim so the order is not stuck in 'processing'.
             $order->updateMeta(self::PROCESSED_META, '0');
             throw $e;
         }

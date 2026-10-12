@@ -171,17 +171,11 @@
 
 <script>
 /* global Rest, Notify */
-// Runs inside FluentCart's constrained vue-template runtime: only the
-// injected Rest / Notify globals are available, and the whole script is
-// scanned against a blocklist - keep names and comments plain. Talk to the
-// server through the injected Rest / Notify only; do not reach for
-// FluentCart's app mixin (this.$post / this.handleSuccess) - it is not part
-// of the sandbox contract and could be scoped away from dynamic widgets.
+// Runs in FluentCart's sandboxed vue-template runtime, scanned against a blocklist.
+// Use only the injected Rest / Notify globals, not FluentCart's app mixin.
 export default {
   name: 'FluentCrmContactWidget',
-  // FluentCart mounts us with v-bind="{...widget}", so every non-prop key -
-  // including the whole raw component source - would otherwise land on the
-  // root element as a stray attribute.
+  // FluentCart mounts with v-bind="{...widget}"; non-prop keys must not land on the root element.
   inheritAttrs: false,
   props: {
     payload: {
@@ -272,9 +266,7 @@ export default {
     detachItem(type, item) {
       this.syncSegments(type, [], [item.id]);
     },
-    // Single round trip handles both attach and detach; ids avoid
-    // slug edge cases. The response carries the refreshed subscriber,
-    // which becomes the new local state.
+    // One request attaches and detaches; the response's subscriber becomes local state.
     syncSegments(type, attach, detach) {
       const body = {
         type: type,

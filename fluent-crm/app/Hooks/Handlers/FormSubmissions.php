@@ -68,7 +68,9 @@ class FormSubmissions
             ])
             ->join('fluentform_forms', 'fluentform_forms.id', '=', 'fluentform_submissions.form_id')
             ->where(function ($query) use ($subscriber) {
-                $query->where('fluentform_submissions.response', 'LIKE', '%' . $subscriber->email . '%');
+                global $wpdb;
+                // The whole JSON string value, so ann@acme.com does not match joann@acme.com or ann@acme.com.au.
+                $query->where('fluentform_submissions.response', 'LIKE', '%"' . $wpdb->esc_like($subscriber->email) . '"%');
                 if ($subscriber->user_id) {
                     $query->orWhere('fluentform_submissions.user_id', $subscriber->user_id);
                 }
@@ -157,18 +159,18 @@ class FormSubmissions
         }
 
         $submittedData = json_decode($submission->response, true);
-        $html = '<b>Submission Details</b><br/><br/><div>{all_data}</div>';
+        $html = '<b>' . esc_html__('Submission Details', 'fluent-crm') . '</b><br/><br/><div>{all_data}</div>';
         if ($submission->payment_status) {
-            $html .= '<h2>Payment Details</h2>';
+            $html .= '<h2>' . esc_html__('Payment Details', 'fluent-crm') . '</h2>';
             $html .= '{payment.receipt}';
         }
 
-        $html .= '<h4>Additional Details:</h4>';
+        $html .= '<h4>' . esc_html__('Additional Details:', 'fluent-crm') . '</h4>';
         $html .= '<ul>';
-        $html .= '<li><strong>Source URL:</strong> {submission.source_url}</li>';
-        $html .= '<li><strong>Serial #:</strong> {submission.serial_number}</li>';
-        $html .= '<li><strong>Browser:</strong> {submission.browser} / {submission.device}</li>';
-        $html .= '<li><strong>Date:</strong> {submission.created_at}</li>';
+        $html .= '<li><strong>' . esc_html__('Source URL:', 'fluent-crm') . '</strong> {submission.source_url}</li>';
+        $html .= '<li><strong>' . esc_html__('Serial #:', 'fluent-crm') . '</strong> {submission.serial_number}</li>';
+        $html .= '<li><strong>' . esc_html__('Browser:', 'fluent-crm') . '</strong> {submission.browser} / {submission.device}</li>';
+        $html .= '<li><strong>' . esc_html__('Date:', 'fluent-crm') . '</strong> {submission.created_at}</li>';
         $html .= '</ul>';
 
         $body = ShortCodeParser::parse(
@@ -180,10 +182,13 @@ class FormSubmissions
             true
         );
 
-        $dataView['title'] = sprintf(__('Submission #%d - %s', 'fluent-crm'), $submission->id, $form->title);
-        $dataView['content_html'] = '<style>.fc-crm-form-submission-view table { width: 100% !important; }</style><div class="fc-crm-form-submission-view">' . $body . '</div>';
+        /* translators: %1$d is the Fluent Forms submission ID, %2$s is the form title */
+        $dataView['title'] = sprintf(__('Submission #%1$d - %2$s', 'fluent-crm'), $submission->id, $form->title);
+        // Table width lives in resources/styles/modules/_forms.scss: the admin
+        // sanitizer strips inline <style> blocks.
+        $dataView['content_html'] = '<div class="fc-crm-form-submission-view">' . $body . '</div>';
 
-        $dataView['footer_content'] = '<a class="el-button fcrm_primary_btn" target="_blank" rel="noopener" href="' . admin_url('admin.php?page=fluent_forms&route=entries&form_id=' . $form->id . '#/entries/' . $submission->id) . '">View in FluentForms</a>';
+        $dataView['footer_content'] = '<a class="el-button fcrm_primary_btn" target="_blank" rel="noopener" href="' . admin_url('admin.php?page=fluent_forms&route=entries&form_id=' . $form->id . '#/entries/' . $submission->id) . '">' . esc_html__('View in Fluent Forms', 'fluent-crm') . '</a>';
 
         return $dataView;
 

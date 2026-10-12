@@ -10,7 +10,7 @@
     <meta http-equiv="Content-type" content="text/html; charset=utf-8"/>
     <meta http-equiv="Imagetoolbar" content="No"/>
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title><?php esc_html_e('Request Manage Subscription', 'fluent-crm') ?></title>
+    <title><?php esc_html_e('Request Subscription Management Link', 'fluent-crm') ?></title>
     <meta name="robots" content="noindex">
     <?php
         wp_head();
@@ -29,8 +29,8 @@
         <?php endif; ?>
     </div>
     <div class="fluentcrm_un_form_wrapper">
-        <h4><?php esc_html_e('Get Email Subscription Management Link', 'fluent-crm') ?></h4>
-        <p><?php esc_html_e('Looks like we could not determine your info. Please fill out the form and get your email subscription management link via email.', 'fluent-crm'); ?></p>
+        <h4><?php esc_html_e('Get a link to manage your subscription', 'fluent-crm') ?></h4>
+        <p><?php esc_html_e('We could not identify you. Enter your email address and we will email you a link to manage your subscription.', 'fluent-crm'); ?></p>
 
         <form method="POST" class="fluentcrm_public_pref_form fc_public_form" action="/" id="fc_unsub_req_form">
             <input type="hidden" name="action" value="fluentcrm_request_manage_subscription_ajax"/>

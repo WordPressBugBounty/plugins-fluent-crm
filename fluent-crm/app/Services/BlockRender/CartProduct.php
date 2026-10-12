@@ -65,7 +65,7 @@ class CartProduct
 
         $contentHtml = sprintf(
             '<h2 style="%1$smargin:0;"><a href="%2$s" target="_blank" style="%1$stext-decoration:none;">%3$s</a></h2>',
-            $contentColorStyle,
+            esc_attr($contentColorStyle),
             esc_url($product['permalink']),
             wp_kses_post($product['name'])
         );
@@ -73,7 +73,7 @@ class CartProduct
         if ($showDescription && !empty($product['short_description'])) {
             $contentHtml .= sprintf(
                 '<div style="%1$smargin-bottom:5px;">%2$s</div>',
-                $contentColorStyle,
+                esc_attr($contentColorStyle),
                 wp_kses_post($product['short_description'])
             );
         }
@@ -81,7 +81,7 @@ class CartProduct
         if ($showPrice) {
             $contentHtml .= sprintf(
                 '<div style="%1$smargin:5px 0;">%2$s</div>',
-                $priceStyle,
+                esc_attr($priceStyle),
                 ProductListRenderer::preparePriceHtml($product['price_html'], __('Free', 'fluent-crm'))
             );
         }
@@ -118,7 +118,7 @@ class CartProduct
 
         ob_start();
         ?>
-        <table class="fce_row" border="0" cellpadding="0" cellspacing="0" width="100%" style="table-layout:fixed;border-collapse:collapse;mso-table-lspace:0pt;mso-table-rspace:0pt;-ms-text-size-adjust:100%;-webkit-text-size-adjust:100%;margin-bottom:20px;margin-top:20px;<?php echo $tableStyle; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>"><tbody><tr>
+        <table class="fce_row" border="0" cellpadding="0" cellspacing="0" width="100%" style="table-layout:fixed;border-collapse:collapse;mso-table-lspace:0pt;mso-table-rspace:0pt;-ms-text-size-adjust:100%;-webkit-text-size-adjust:100%;margin-bottom:20px;margin-top:20px;<?php echo esc_attr($tableStyle); ?>"><tbody><tr>
             <?php
             if ($imageTd) {
                 echo $imageTd; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped

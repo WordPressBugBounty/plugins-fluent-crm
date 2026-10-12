@@ -48,11 +48,8 @@ class ActivationHandler
         }
 
         /*
-         * Match on the stored schedule NAME, as boot/app.php does. This method
-         * also runs on a LIVE site (SettingsController::reInstallDb and the
-         * WP-CLI activate command both call it without a deactivation first),
-         * so the event can already exist under the old 'fluentcrm_every_minute'
-         * (60s) schedule. Re-check rather than trusting "is it scheduled".
+         * Match on the stored schedule name, as boot/app.php does. This also runs on a live site,
+         * where the event may exist under the old 'fluentcrm_every_minute' schedule.
          */
         $hookName = 'fluentcrm_scheduled_five_minute_tasks';
         if (wp_get_schedule($hookName) !== 'fluentcrm_scheduled_five_minute_tasks') {

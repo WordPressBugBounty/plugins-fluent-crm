@@ -7,50 +7,33 @@
  * @var array         $cssAssets
  */
 
-/*
- * Pass the email payload and renderer through WordPress's script loader instead
- * of emitting a hardcoded inline <script>. Both the email payload and the
- * renderer go via wp_add_inline_script (see below for why not wp_localize_script
- * for the payload), attached to the DOMPurify handle — so a site owner's
- * CSP/nonce plugin can filter the tags (the page no longer requires
- * `script-src 'unsafe-inline'`) and there's nothing to ship under assets/,
- * which the build wipes and regenerates from resources/.
- */
+// The payload and renderer go through the script loader (attached to DOMPurify), so no hardcoded inline script.
 foreach ((array) $cssAssets as $cssIndex => $cssAsset) {
-    // Version is already baked into the URL as a query arg, so pass null for $ver.
+    // The version is already in the URL.
     wp_enqueue_style('fluentcrm_view_on_browser_' . $cssIndex, $cssAsset, [], null);
 }
 
-// DOMPurify ships from node_modules via the vite copy step, so the cache buster
-// is derived from the built file itself. A hardcoded version string would go
-// stale on a dependency bump and keep serving a cached, outdated sanitizer.
+// Cache buster derived from the built file so a dependency bump is picked up.
 $domPurifyAsset = FLUENTCRM_PLUGIN_PATH . 'assets/libs/purify/purify.min.js';
 $domPurifyVersion = file_exists($domPurifyAsset) ? (string) filemtime($domPurifyAsset) : FLUENTCRM_PLUGIN_VERSION;
 wp_enqueue_script('fluentcrm_dompurify', fluentCrmMix('libs/purify/purify.min.js'), [], $domPurifyVersion, true);
 
-// Normalize the body shape: callers pass either ['rendered' => $html] (success)
-// or a plain HTML string (error states). The renderer always expects `rendered`.
+// Callers pass ['rendered' => $html] or a plain HTML string (error states).
 if (is_array($email_body)) {
     $renderedBody = isset($email_body['rendered']) ? $email_body['rendered'] : '';
 } else {
     $renderedBody = (string) $email_body;
 }
 
-// Email payload as window.fluentCrmEmail, printed BEFORE DOMPurify's tag.
-// Deliberately NOT wp_localize_script: that runs html_entity_decode() on the
-// value (WP_Scripts::localize), which would turn escaped entities in the email
-// body (e.g. `&lt;style&gt;`) into live HTML before DOMPurify ever sees it.
-// wp_add_inline_script preserves the payload verbatim; the JSON_HEX_* flags
-// neutralize any `</script>` breakout from the inline script context.
+// Not wp_localize_script: it html_entity_decode()s the value, turning escaped entities into live HTML.
+// The JSON_HEX_* flags prevent a `</script>` breakout.
 $fcEmailData = wp_json_encode(
     ['rendered' => $renderedBody],
     JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT
 );
 wp_add_inline_script('fluentcrm_dompurify', 'window.fluentCrmEmail = ' . $fcEmailData . ';', 'before');
 
-// Renderer: sanitize the email document and mount it inside a closed shadow root
-// so its styles stay isolated from (and can't leak into) the surrounding page.
-// Runs after DOMPurify loads (default 'after' position).
+// Sanitize the email and mount it in a closed shadow root to isolate its styles.
 $fcViewOnBrowserScript = <<<'JS'
 (function () {
     var data = window.fluentCrmEmail;

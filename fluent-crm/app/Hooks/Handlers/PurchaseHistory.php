@@ -194,7 +194,7 @@ class PurchaseHistory
                     'key'      => 'total_amount'
                 ],
                 'actions' => [
-                    'label' => __('', 'fluent-crm'),
+                    'label' => '',
                     'width' => '50px'
                 ]
             ]
@@ -378,20 +378,6 @@ class PurchaseHistory
          */
         $beforeHtml = apply_filters('fluent_crm/edd_purchase_sidebar_html', '', $subscriber, $page);
 
-//        if (!$beforeHtml && $subscriber->user_id && $page == 1 && $formattedOrders) {
-//            $summaryData = [
-//                'order_count'     => $customer->purchase_count,
-//                'lifetime_value'  => $customer->purchase_value,
-//                'avg_value'       => ($customer->purchase_count) ? round($customer->purchase_value / $customer->purchase_count, 2) : 'n/a',
-//                'stat_avg_count'  => 0,
-//                'stat_avg_spend'  => 0,
-//                'stat_avg_value'  => 0,
-//                'currency_sign'   => edd_currency_symbol(),
-//                'last_order_date' => $lasOrderData
-//            ];
-//            $beforeHtml = $this->formatSummaryData($summaryData);
-//        }
-
         return [
             'data'           => $formattedOrders,
             'total'          => $totalCount,
@@ -458,7 +444,6 @@ class PurchaseHistory
                     $query->orWhere('wpf_submissions.user_id', '=', $subscriber->user_id);
                 }
             })
-            // ->where('wpf_submissions.payment_total', '>', 0)
             ->limit($per_page)
             ->offset($per_page * ($page - 1))
             ->orderBy('wpf_submissions.id', 'desc');
@@ -652,17 +637,12 @@ class PurchaseHistory
     }
 
     /**
-     * Sorts an array of WooCommerce orders by their total amount.
+     * Sorts an array of WooCommerce orders by their total amount, in place.
      *
-     * This method sorts an array of WooCommerce order objects based on the total order amount.
-     * The sorting can be done in either ascending ('ASC') or descending ('DESC') order,
-     * as specified by the $sort_type parameter.
+     * @param array $orders WooCommerce order objects.
+     * @param string $sort_type 'ASC' or 'DESC'.
      *
-     * @param array $orders Array of WooCommerce order objects to be sorted.
-     * @param string $sort_type Specifies the sorting order.
-     *                          Accepts 'ASC' for ascending or 'DESC' for descending.
-     *
-     * @return void The $orders array is sorted in place.
+     * @return void
      */
     public function wooSortOrdersByTotalAmount(&$orders, $sort_type) {
         usort($orders, function ($a, $b) use ($sort_type) {
@@ -712,7 +692,6 @@ class PurchaseHistory
             $sort_type = 'DESC';
         }
 
-        // Fetch the array of MemberOrder OBJECTS
         $user_order_objects = \MemberOrder::get_orders([
             'user_id' => $subscriber->user_id,
             'status'  => 'success',
@@ -720,7 +699,6 @@ class PurchaseHistory
             'order'   => $sort_type
         ]);
 
-        // Create a new, simple array to hold the data for JSON conversion
         $formattedOrders = [];
 
         $totalOrders = count($user_order_objects);
@@ -728,9 +706,7 @@ class PurchaseHistory
 
 
         if (!empty($orders)) {
-            // Loop through each PHP object and extract its data into a simple array
             foreach ($orders as $order) {
-                // Construct the URL using WordPress's admin_url() function
                 $order_page_url = admin_url('admin.php?page=pmpro-orders&order=' . $order->id);
                 $level = pmpro_getLevel($order->membership_id);
                 $actionsHtml = '<td><a href="' . esc_url($order_page_url) . '" target="_blank">View Order</a></td>';

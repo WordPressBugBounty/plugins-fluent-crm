@@ -68,8 +68,8 @@ class PrefFormHandler
          * }
          */
         $labels = apply_filters('fluent_crm/pref_labels', [
-            'first_name'      => __('First Name', 'fluent-crm'),
-            'last_name'       => __('Last Name', 'fluent-crm'),
+            'first_name'      => __('First name', 'fluent-crm'),
+            'last_name'       => __('Last name', 'fluent-crm'),
             'prefix'          => __('Title', 'fluent-crm'),
             'email'           => __('Email', 'fluent-crm'),
             'phone'           => __('Phone/Mobile', 'fluent-crm'),
@@ -80,10 +80,10 @@ class PrefFormHandler
             'state'           => __('State', 'fluent-crm'),
             'postal_code'     => __('ZIP Code', 'fluent-crm'),
             'country'         => __('Country', 'fluent-crm'),
-            'update'          => __('Update info', 'fluent-crm'),
+            'update'          => __('Update Info', 'fluent-crm'),
             'address_heading' => __('Address Information', 'fluent-crm'),
             'list_label'      => __('Mailing List Groups', 'fluent-crm'),
-            'custom_fields'   => __('Custom Fields', 'fluent-crm')
+            'custom_fields'   => __('Custom fields', 'fluent-crm')
         ]);
 
         $formFields = $this->getFormFields($settings, $subscriber, $labels, false);
@@ -162,7 +162,7 @@ class PrefFormHandler
             'fields'     => $formFields,
             'submitBtn'  => [
                 'container_class' => 'fc_pref_submit',
-                'btn_text'        => __('Update info', 'fluent-crm'),
+                'btn_text'        => __('Update Info', 'fluent-crm'),
                 'atts'            => [
                     'type'  => 'submit',
                     'id'    => 'fluentcrm_preferences_submit',
@@ -203,14 +203,15 @@ class PrefFormHandler
             }, $text);
         }
 
-        return \FluentCrm\App\Services\Libs\Parser\Parser::parse($text, $subscriber);
+        // The post author may not be the viewer (a Contributor's post previewed by an Editor).
+        return \FluentCrm\App\Services\Libs\Parser\Parser::parse($text, $subscriber, 'basic');
     }
 
     public function handleAjax()
     {
         if (!isset($_POST['_fc_nonce']) || !wp_verify_nonce($_POST['_fc_nonce'], 'fluent_crm_account_form_fields')) {
             wp_send_json_error([
-                'message' => __('Sorry, your nonce did not verify.', 'fluent-crm')
+                'message' => __('Your session could not be verified. Please refresh the page and try again.', 'fluent-crm')
             ], 422);
         }
 
@@ -243,9 +244,7 @@ class PrefFormHandler
 
         $validData = Arr::only($_REQUEST, $validKeys);
 
-        // The email field is display-only on this form. Never accept an email change from
-        // the raw POST: it would bypass the uniqueness check, the re-opt-in flow, and the
-        // email-changed hooks that handleManageSubPref enforces.
+        // Email is display-only here; changes go through handleManageSubPref.
         $validData['email'] = $subscriber->email;
 
         $errors = [];
@@ -266,22 +265,14 @@ class PrefFormHandler
             $errors[] = 'date_of_birth';
         }
 
-        /*
-         * The loop above normalizes every enabled-but-unsubmitted field to '',
-         * which is right for the varchar columns but not for date_of_birth: that
-         * maps to a DATE column, where '' is rejected outright wherever
-         * STRICT_TRANS_TABLES is on (the MySQL 8 default) and silently stored as
-         * the sentinel '0000-00-00' everywhere else. Clearing an omitted optional
-         * date is the existing intent; NULL is how this column already expresses
-         * "unset", so clear to that instead.
-         */
+        // date_of_birth is a DATE column; clear an omitted value to NULL, not ''.
         if (array_key_exists('date_of_birth', $validData) && $validData['date_of_birth'] === '') {
             $validData['date_of_birth'] = null;
         }
 
         if ($errors) {
             wp_send_json_error([
-                'message' => __('Please fill up all required fields', 'fluent-crm'),
+                'message' => __('Please fill in all required fields', 'fluent-crm'),
                 'errors'  => $errors,
                 'inputs'  => $validData
             ], 422);
@@ -388,10 +379,8 @@ class PrefFormHandler
             }
 
         } else {
-            // No `lists` in the payload means either the user unchecked every public list
-            // or the form rendered no lists field at all (pref_list_type = 'none').
-            // Only ever detach PUBLIC lists here — private/admin segmentation lists must
-            // survive a profile update, and a form without a lists field must not touch lists.
+            // No `lists` means every public list was unchecked or the form has no lists field.
+            // Only public lists are ever detached here.
             $publicLists = Helper::getPublicLists();
 
             if ($publicLists) {
@@ -453,7 +442,7 @@ class PrefFormHandler
                     'id'       => 'fc_first_name',
                     'atts'     => [
                         'type'        => 'text',
-                        'placeholder' => __('First Name', 'fluent-crm')
+                        'placeholder' => __('First name', 'fluent-crm')
                     ],
                     'required' => true,
                     'label'    => Arr::get($labels, 'first_name', 'First Name'),
@@ -468,7 +457,7 @@ class PrefFormHandler
                     'id'       => 'fc_last_name',
                     'atts'     => [
                         'type'        => 'text',
-                        'placeholder' => __('Last Name', 'fluent-crm')
+                        'placeholder' => __('Last name', 'fluent-crm')
                     ],
                     'required' => true,
                     'label'    => Arr::get($labels, 'last_name', 'Last Name'),
@@ -609,7 +598,7 @@ class PrefFormHandler
                         'id'    => 'fc_address_postal_code',
                         'atts'  => [
                             'type'        => 'text',
-                            'placeholder' => __('Zip Code', 'fluent-crm')
+                            'placeholder' => __('ZIP Code', 'fluent-crm')
                         ],
                         'label' => Arr::get($labels, 'postal_code', 'Zip Code'),
                         'value' => $subscriber->postal_code
@@ -618,7 +607,7 @@ class PrefFormHandler
                         'type'        => 'select',
                         'name'        => 'country',
                         'id'          => 'fc_address_country',
-                        'placeholder' => __('Select Country', 'fluent-crm'),
+                        'placeholder' => __('Select country', 'fluent-crm'),
                         'label'       => Arr::get($labels, 'country', 'Country'),
                         'value'       => $subscriber->country,
                         'options'     => $formattedCountries

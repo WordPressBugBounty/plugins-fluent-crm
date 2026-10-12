@@ -74,18 +74,12 @@ class SetupWizard
         }
 
 
-        // Inject Vite HMR client — mirrors AdminMenu::loadCssJs().
-        // Without this, Vue <style> blocks are not applied in dev mode.
+        // Vite HMR client, as in AdminMenu::loadCssJs().
         add_action('admin_head', function () {
             Vite::injectViteClient();
         }, 1);
 
-        // style.css is the merged bundle of all Vue component CSS + Element Plus CSS,
-        // produced by vite.config.mjs's mergeCssChunksPlugin. The manifest is
-        // stripped of references to the merged files at build time
-        // (moveManifestPlugin), so Vite::enqueueScript's auto-enqueue won't
-        // pick it up — load it explicitly here. In dev mode, Vite HMR
-        // injects the styles via the client above.
+        // style.css is stripped from the manifest at build time, so enqueue it explicitly.
         if (!Vite::underDevelopment()) {
             wp_enqueue_style(
                 'fluentcrm_vendor',
@@ -101,8 +95,7 @@ class SetupWizard
             ['dashicons']
         );
 
-        // Use Vite::enqueueScript so handles are added to $moduleScripts,
-        // ensuring type="module" is applied correctly in both dev and production.
+        // Vite::enqueueScript() adds type="module".
         Vite::enqueueScript('fluentcrm-boot', 'admin/boot.js', ['jquery'], FLUENTCRM_PLUGIN_VERSION, true);
         Vite::enqueueScript('fluentcrm-setup', 'admin/setup-wizard.js', ['fluentcrm-boot'], FLUENTCRM_PLUGIN_VERSION, true);
 
@@ -122,9 +115,7 @@ class SetupWizard
             'business_settings' => (object) $businessSettings,
             'has_fluentform'    => defined('FLUENTFORM'),
             'has_fluentcart'    => defined('FLUENTCART_VERSION'),
-            // The wizard only offers a companion-plugin install to users who can
-            // actually perform one; SettingsPolicy::CompleteWizard() rejects the
-            // install flags from anyone else, which would strand the last step.
+            // SettingsPolicy::CompleteWizard() rejects install flags from users without install_plugins.
             'can_install_plugins' => current_user_can('install_plugins'),
             'auth' => [
                 'permissions' => PermissionManager::currentUserPermissions(),

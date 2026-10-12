@@ -75,15 +75,15 @@ class DocsController extends Controller
                 'learn_more_url' => 'https://wordpress.org/plugins/fluentform/',
                 'settings_url'   => admin_url('admin.php?page=fluent_forms'),
                 'action_text'    => $this->isPluginInstalled('fluent-form/fluent-form.php') ? __('Activate Fluent Forms', 'fluent-crm') : __('Install Fluent Forms', 'fluent-crm'),
-                'description'    => __('Collect leads and build any type of forms, accept payments, connect with your CRM with the Fastest Contact Form Builder Plugin for WordPress', 'fluent-crm')
+                'description'    => __('Collect leads, build any type of form, accept payments, and connect to your CRM with the fastest contact form builder plugin for WordPress.', 'fluent-crm')
             ],
             'fluentsmtp'     => [
-                'title'          => __('Fluent SMTP', 'fluent-crm'),
+                'title'          => __('FluentSMTP', 'fluent-crm'),
                 'logo'           => fluentCrmMix('images/fluent-smtp.svg'),
                 'is_installed'   => defined('FLUENTMAIL'),
                 'learn_more_url' => 'https://wordpress.org/plugins/fluent-smtp/',
                 'settings_url'   => admin_url('options-general.php?page=fluent-mail#/'),
-                'action_text'    => $this->isPluginInstalled('fluent-smtp/fluent-smtp.php') ? __('Activate Fluent SMTP', 'fluent-crm') : __('Install Fluent SMTP', 'fluent-crm'),
+                'action_text'    => $this->isPluginInstalled('fluent-smtp/fluent-smtp.php') ? __('Activate FluentSMTP', 'fluent-crm') : __('Install FluentSMTP', 'fluent-crm'),
                 'description'    => __('The Ultimate SMTP and SES Plugin for WordPress. Connect with any SMTP, SendGrid, Mailgun, SES, Sendinblue, PepiPost, Google, Microsoft and more.', 'fluent-crm')
             ],
             'fluent-support' => [
@@ -96,12 +96,12 @@ class DocsController extends Controller
                 'description'    => __('WordPress Helpdesk and Customer Support Ticket Plugin. Provide awesome support and manage customer queries right from your WordPress dashboard.', 'fluent-crm')
             ],
             'fluent-cart' => [
-                'title'          => __('Fluent Cart', 'fluent-crm'),
+                'title'          => __('FluentCart', 'fluent-crm'),
                 'logo'           => fluentCrmMix('images/fluent-cart-dark.svg'),
                 'is_installed'   => defined('FLUENTCART_VERSION'),
                 'learn_more_url' => 'https://wordpress.org/plugins/fluent-cart/',
                 'settings_url'   => admin_url('admin.php?page=fluent-cart#/'),
-                'action_text'    => $this->isPluginInstalled('fluent-cart/fluent-cart.php') ? __('Activate Fluent Cart', 'fluent-crm') : __('Install Fluent Cart', 'fluent-crm'),
+                'action_text'    => $this->isPluginInstalled('fluent-cart/fluent-cart.php') ? __('Activate FluentCart', 'fluent-crm') : __('Install FluentCart', 'fluent-crm'),
                 'description'    => __('WordPress eCommerce and Shopping Cart Plugin. Build an online store and manage products, orders, and customers right from your WordPress dashboard.', 'fluent-crm')
             ],
             'fluent-boards' => [

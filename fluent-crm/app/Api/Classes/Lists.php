@@ -62,12 +62,12 @@ class Lists
             $list['slug']  = sanitize_text_field($list['slug']);
 
             $list = \FluentCrm\App\Models\Lists::updateOrCreate(
+                ['slug' => $list['slug']],
+                // A description that is not passed keeps the stored one.
                 array_filter([
-                    'slug' => $list['slug'],
-                    'title' => sanitize_text_field($list['title']),
+                    'title'       => sanitize_text_field($list['title']),
                     'description' => sanitize_textarea_field(Arr::get($list, 'description'))
-                ]),
-                ['slug' => $list['slug']]
+                ])
             );
 
             if($list->wasRecentlyCreated) {
@@ -90,7 +90,6 @@ class Lists
             return call_user_func_array([$this->instance, $method], $params);
         }
 
-        /* translators: %s: method name */
         throw new \Exception(sprintf('Method %s does not exist.', esc_html($method)));
     }
 }

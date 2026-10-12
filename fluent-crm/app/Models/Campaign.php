@@ -312,7 +312,10 @@ class Campaign extends Model
             if ($excludeItems = Arr::get($settings, 'excludedSubscribers')) {
                 $formattedExcludedItems = [];
                 foreach ($excludeItems as $item) {
-                    if (empty($item['list']) && empty($item['tag'])) {
+                    // No list and no specific tag is the editor's untouched "+" placeholder
+                    // ({list: null, tag: 'all'}), saved as is by older screens; read as
+                    // "all lists x all tags" it excluded every contact.
+                    if (empty($item['list']) && (empty($item['tag']) || $item['tag'] === 'all')) {
                         continue;
                     }
                     $formattedExcludedItems[] = $item;
@@ -489,9 +492,7 @@ class Campaign extends Model
             $listId = Arr::get($item, 'list');
             $tagId = Arr::get($item, 'tag');
 
-            // The UI submits 'all' for the unused side, but REST/MCP/partial payloads can
-            // send ''/null. Interpret a single empty side as 'all' (the evident intent);
-            // a row with BOTH sides empty carries no information and is skipped.
+            // A single empty side means 'all'; a row with both sides empty is skipped.
             if (!$listId && !$tagId) {
                 continue;
             }
@@ -521,9 +522,7 @@ class Campaign extends Model
         }
 
         if (!$willSkip && !$hasListFilter && !$queryGroups && !$tagIds) {
-            // Fail closed: no valid targeting row at all (empty or fully-invalid payload).
-            // Degrading to the unconstrained base query would target every subscriber on
-            // the include path — or exclude every subscriber on the exclude path.
+            // Fail closed when no valid targeting row exists.
             $query->whereRaw('1 = 0');
         } else if (!$willSkip && !$hasListFilter && $tagIds) {
             $query->filterByTags($tagIds);
@@ -559,6 +558,16 @@ class Campaign extends Model
     }
 
     /**
+     * Contact statuses a campaign email may be queued for.
+     *
+     * @return string[]
+     */
+    public static function sendableStatuses()
+    {
+        return ['subscribed', 'transactional'];
+    }
+
+    /**
      * Add one or more subscribers to the campaign
      * @param array $subscriberIds
      * @param array $emailArgs extra campaign_email args
@@ -575,12 +584,9 @@ class Campaign extends Model
             $subscribers = Subscriber::whereIn('id', $subscriberIds)->get();
         }
 
-        $validStatuses = ['subscribed', 'transactional'];
+        $validStatuses = self::sendableStatuses();
 
-        // Rows are collected and written with ONE multi-row INSERT per chunk
-        // instead of a model create() per row — materialization of large
-        // campaigns was insert-bound. The hash map lets us recover the new ids
-        // afterward (email_hash is generated here and indexed).
+        // One multi-row INSERT per chunk; new ids are recovered by email_hash.
         $rows = [];
         $subscribersByHash = [];
 
@@ -592,19 +598,13 @@ class Campaign extends Model
             $time = fluentCrmTimestamp();
             $email = [
                 'campaign_id'   => $this->id,
-                // Default new queue rows to 'pending' (claimable by the senders), NOT
-                // the campaign's own status: a caller adding recipients while the
-                // campaign is 'working' would otherwise create rows in a status the
-                // senders never pick up — a silent never-send. Callers that need a
-                // different row status (e.g. the materializer's 'scheduling') pass it
-                // explicitly via $emailArgs.
+                // Rows default to 'pending' (claimable by senders), not the campaign status.
                 'status'        => 'pending',
                 'subscriber_id' => $subscriber->id,
                 'email_address' => $subscriber->email,
                 'email_headers' => $mailHeaders,
                 'email_hash'    => Helper::generateEmailHash(),
-                // Multi-row INSERT needs uniform columns across rows, so the
-                // A/B subject id is always present (null when no subject wins).
+                // Multi-row INSERT needs uniform columns across rows.
                 'email_subject_id' => null,
                 'created_at'    => $time,
                 'updated_at'    => $time
@@ -630,22 +630,14 @@ class Campaign extends Model
              */
             $email['email_subject'] = apply_filters('fluent_crm/parse_campaign_email_text', $emailSubject, $subscriber);
 
-            // When a campaign row exists, the queue row carries NO body copy:
-            // send-time rendering (CampaignEmail::getEmailBody) and the admin
-            // preview both read from $campaign->email_body, so the per-row
-            // LONGTEXT copy was write-then-erase churn (~10GB for a 100KB email
-            // to 100k contacts) that nothing ever read. Callers that need a
-            // per-row body either have no campaign row (falsy id, keeps the
-            // copy) or pass email_body via $emailArgs, which overrides below
-            // (funnel/sequence/SMS models override subscribe() entirely).
+            // With a campaign row, the body is read from $campaign->email_body at send time.
             $email['email_body'] = $this->id ? '' : $this->email_body;
 
             if ($emailArgs) {
                 $email = wp_parse_args($emailArgs, $email);
             }
 
-            // The raw multi-row INSERT bypasses model mutators, so apply the
-            // email_headers serialization (setEmailHeadersAttribute) here.
+            // The raw INSERT bypasses setEmailHeadersAttribute().
             if (isset($email['email_headers']) && !is_string($email['email_headers'])) {
                 $email['email_headers'] = maybe_serialize($email['email_headers']);
             }
@@ -660,15 +652,9 @@ class Campaign extends Model
             return [];
         }
 
-        // One bulk INSERT per chunk. Safe to bypass the ORM here: CampaignEmail
-        // registers no creating/created hooks, timestamps are set explicitly in
-        // each row, and email_type falls back to the column default exactly as
-        // create() did.
+        // CampaignEmail registers no creating/created hooks, so bypassing the ORM is safe.
         CampaignEmail::insert($rows);
 
-        // Recover the new ids with one indexed lookup on the hashes generated
-        // above — preserves this method's contract of returning the inserted
-        // ids and the in-memory $subscriber->email_id side effect.
         $updateIds = [];
         $insertedRows = CampaignEmail::whereIn('email_hash', array_keys($subscribersByHash))
             ->get(['id', 'email_hash']);
@@ -680,20 +666,12 @@ class Campaign extends Model
             }
         }
 
-        // Increment by the rows actually inserted in this chunk instead of running a
-        // growing-range COUNT(*) over fc_campaign_emails after every chunk (~5,000
-        // full counts across a 100k materialization). The increment is DB-side
-        // atomic: concurrent subscribe() callers on separate model instances
-        // (funnel enrollments into a reference campaign, overlapping chunk
-        // workers) would lose updates with a read-modify-write attribute save.
-        // maybeDeleteDuplicates() additionally reconciles the total against the
-        // queue when a materialization completes.
+        // Atomic DB-side increment; maybeDeleteDuplicates() reconciles the total at completion.
         if ($updateIds) {
             fluentCrmDb()->table('fc_campaigns')->where('id', $this->id)
                 ->increment('recipients_count', count($updateIds));
 
-            // Keep the in-memory model consistent without marking the column
-            // dirty, so a later unrelated save() can't write a stale total back.
+            // Not marked dirty, so a later save() cannot write a stale total back.
             $this->recipients_count = absint($this->recipients_count) + count($updateIds);
             $this->syncOriginalAttribute('recipients_count');
         }
@@ -723,8 +701,7 @@ class Campaign extends Model
      */
     public function guessEmailSubject()
     {
-        // Cache subjects per campaign to avoid repeated DB queries during batch processing.
-        // The weighted random selection still runs per call for proper A/B distribution.
+        // Subjects are cached per campaign; the weighted pick still runs per call.
         static $subjectsCache = [];
 
         if (isset($subjectsCache[$this->id])) {
@@ -747,9 +724,7 @@ class Campaign extends Model
             return $subjects[wp_rand(0, $count - 1)];
         }
 
-        // wp_rand(1, total) with cumulative comparison: a 0-weight subject can never
-        // be selected and each weight unit maps to exactly one outcome — the old
-        // wp_rand(0, total) both allowed 0-weight picks and skewed by ±1.
+        // wp_rand(1, total) so a 0-weight subject is never picked.
         $num = wp_rand(1, $total);
 
         $i = $n = 0;
@@ -806,7 +781,7 @@ class Campaign extends Model
             ->count();
 
         $totalSent = CampaignEmail::where('campaign_id', $this->id)
-            ->where('status', 'sent')
+            ->whereIn('status', CampaignEmail::SENT_STATUSES)
             ->count();
 
         if ($this->getOpenTrackingStatus(false) === 'anonymous') {
@@ -839,20 +814,21 @@ class Campaign extends Model
 
         $revenue = fluentcrm_get_campaign_meta($this->id, '_campaign_revenue');
 
-        $stats = [
+        $stats = array_merge([
             'total'         => $totalEmails,
             'sent'          => $totalSent,
             'clicks'        => $clicks,
             'views'         => $views,
             'unsubscribers' => $unSubscribed
-        ];
+        ], $this->anonymousStatFlags());
 
         if ($revenue && $revenue->value) {
             $data = (array)$revenue->value;
             foreach ($data as $currency => $cents) {
                 if ($cents && $currency !== 'orderIds') {
                     $stats['revenue'] = [
-                        'label'    => __('Revenue', 'fluent-crm') . ' (' . $currency . ')',
+                        /* translators: %s: currency code, e.g. USD */
+                        'label'    => sprintf(__('Revenue (%s)', 'fluent-crm'), $currency),
                         'total'    => number_format($cents / 100, 2),
                         'currency' => $currency
                     ];
@@ -872,25 +848,20 @@ class Campaign extends Model
     }
 
     /**
-     * Delete duplicate queue rows for this campaign — same subscriber, keep the
-     * lowest id — regardless of row status. Safe to call at any point of
-     * materialization; the pre-check short-circuits on one indexed probe when
-     * there are no duplicates (the common case).
+     * Delete duplicate queue rows per subscriber, keeping the lowest id, regardless of status.
      */
     public function deleteDuplicateEmails()
     {
         global $wpdb;
         $table = $wpdb->prefix . 'fc_campaign_emails';
 
-        // Quick check: do any duplicates exist? Most campaigns won't have any.
-        // Exclude NULL subscriber_ids — SQL NULL != NULL so the self-join can't match them.
+        // NULL subscriber_ids are excluded; the self-join cannot match them.
         $hasDuplicates = $wpdb->get_var($wpdb->prepare(
             "SELECT 1 FROM {$table} WHERE campaign_id = %d AND subscriber_id IS NOT NULL GROUP BY subscriber_id HAVING COUNT(*) > 1 LIMIT 1",
             $this->id
         ));
 
         if ($hasDuplicates) {
-            // Delete duplicates, keeping the row with the lowest id per subscriber.
             $wpdb->query($wpdb->prepare(
                 "DELETE e1 FROM {$table} e1
                  INNER JOIN {$table} e2
@@ -910,14 +881,10 @@ class Campaign extends Model
     {
         $this->deleteDuplicateEmails();
 
-        // Authoritative recount, deliberately NOT gated on duplicates: this is the
-        // completion-time reconciliation that guarantees the persisted total
-        // matches the queue even if incremental accounting drifted for any reason.
+        // Recount always runs, even without duplicates, to reconcile drift.
         $emailCount = $this->getEmailCount();
         if ($emailCount != $this->recipients_count) {
-            // Targeted write: a whole-model save() would also persist any other
-            // dirty attribute the caller happens to hold (e.g. status), racing
-            // concurrent status writes like an admin un-schedule.
+            // Targeted write so other dirty attributes (status) are not persisted.
             $this->recipients_count = $emailCount;
             fluentCrmDb()->table('fc_campaigns')->where('id', $this->id)
                 ->update(['recipients_count' => $emailCount]);
@@ -940,6 +907,43 @@ class Campaign extends Model
         fluentcrm_update_campaign_meta($this->id, '_campaign_hash', $hash);
 
         return $hash;
+    }
+
+    /**
+     * Whether a scheduled campaign is already being sent.
+     *
+     * A campaign keeps the status "scheduled" through its send until its report page is opened,
+     * so the status alone cannot tell. It has started once any of its emails has been claimed by
+     * the mailer or sent (CampaignEmail::STARTED_STATUSES). A passed send time alone is not a
+     * start: before cron picks it up nothing has gone out and it can still return to draft.
+     */
+    public function hasStartedSending()
+    {
+        if (!in_array($this->status, ['scheduled', 'working'], true)) {
+            return false;
+        }
+
+        return CampaignEmail::where('campaign_id', $this->id)
+            ->whereIn('status', CampaignEmail::STARTED_STATUSES)
+            ->exists();
+    }
+
+    /**
+     * Pause sending: the campaign becomes "paused" and its unsent emails are held. Sent emails
+     * and their history are kept, and resuming sends the rest.
+     */
+    public function pauseSending()
+    {
+        $this->status = 'paused';
+        $this->save();
+
+        CampaignEmail::where('campaign_id', $this->id)
+            ->whereIn('status', ['scheduled', 'pending', 'scheduling'])
+            ->update([
+                'status' => 'paused'
+            ]);
+
+        return $this;
     }
 
     public function deleteCampaignData()
@@ -1082,11 +1086,28 @@ class Campaign extends Model
         return $this;
     }
 
+    /**
+     * Whether this campaign's open and click numbers are anonymous totals.
+     *
+     * Anonymous tracking stores no per-recipient data, so it counts every pixel load and click:
+     * re-opens, image-proxy prefetches and forwards included. Those totals are not unique
+     * counts and must not be shown as a rate of emails sent.
+     *
+     * @return array ['opens_are_totals' => bool, 'clicks_are_totals' => bool]
+     */
+    public function anonymousStatFlags()
+    {
+        return [
+            'opens_are_totals'  => $this->getOpenTrackingStatus(false) === 'anonymous',
+            'clicks_are_totals' => $this->getClickTrackingStatus(false) === 'anonymous',
+        ];
+    }
+
     public function getOpenTrackingStatus($globalFallback = true)
     {
         $settings = $this->settings;
         if (isset($settings['open_tracker'])) {
-            $status = $settings['open_tracker'];
+            $status = $this->normalizeTrackingStatus($settings['open_tracker']);
             return $status;
         }
 
@@ -1102,7 +1123,7 @@ class Campaign extends Model
     {
         $settings = $this->settings;
         if (isset($settings['click_tracker'])) {
-            $status = $settings['click_tracker'];
+            $status = $this->normalizeTrackingStatus($settings['click_tracker']);
             return $status;
         }
 
@@ -1112,6 +1133,22 @@ class Campaign extends Model
         }
 
         return null;
+    }
+
+    /**
+     * Normalize legacy/MCP yes-no settings while preserving anonymous and boolean values.
+     */
+    private function normalizeTrackingStatus($status)
+    {
+        if ($status === 'yes') {
+            return true;
+        }
+
+        if ($status === 'no') {
+            return false;
+        }
+
+        return $status;
     }
 
 }

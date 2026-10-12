@@ -24,7 +24,7 @@ class Mailer
         if (self::willIncludeName()) {
             if ($name = Arr::get($data, 'to.name')) {
                 $name = sanitize_text_field($name);
-                // If the name contains a comma, we need to wrap it in double quotes to prevent issues with email clients
+                // Quote names containing a comma.
                 if (strpos($name, ',') !== false) {
                     $name = '"' . str_replace('"', '\"', $name) . '"';
                 }
@@ -33,17 +33,7 @@ class Mailer
             }
         }
 
-        // Global cross-process rate cap. Every email — campaigns, automation,
-        // double opt-in, transactional — funnels through here, so this is the
-        // single point that holds the install's aggregate send rate within the
-        // provider's per-second limit. Fail-open: never blocks if its store is
-        // unavailable. Placed after the simulated-mail / empty-recipient guards
-        // so only real dispatches consume a slot.
-        //
-        // The bulk handlers reserve their slot BEFORE marking the row sent (so a
-        // crash mid-wait leaves it recoverable) and pass $preThrottled=true to
-        // skip a second reservation here. Direct callers (double opt-in, etc.)
-        // leave it false and get throttled here.
+        // Global rate cap for every send. Bulk handlers throttle earlier and pass $preThrottled.
         if (!$preThrottled) {
             GlobalRateLimiter::throttle($data);
         }

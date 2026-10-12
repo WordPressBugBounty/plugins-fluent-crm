@@ -4,6 +4,7 @@ namespace FluentCrm\App\Services\CrmMigrator;
 
 use FluentCrm\App\Models\Lists;
 use FluentCrm\App\Models\Tag;
+use FluentCrm\App\Services\Helper;
 use FluentCrm\Framework\Support\Arr;
 
 abstract class BaseMigrator
@@ -22,8 +23,8 @@ abstract class BaseMigrator
     {
         $mainFields = [
             'prefix'     => __('Name Prefix', 'fluent-crm'),
-            'first_name' => __('First Name', 'fluent-crm'),
-            'last_name'  => __('Last Name', 'fluent-crm'),
+            'first_name' => __('First name', 'fluent-crm'),
+            'last_name'  => __('Last name', 'fluent-crm'),
             'full_name'  => __('Full Name', 'fluent-crm'),
             'phone'      => __('Phone', 'fluent-crm')
         ];
@@ -35,7 +36,7 @@ abstract class BaseMigrator
         $addressFields = [
             'address_line_1' => __('Address Line 1', 'fluent-crm'),
             'address_line_2' => __('Address Line 2', 'fluent-crm'),
-            'postal_code'    => __('Postal Code', 'fluent-crm'),
+            'postal_code'    => __('Postal code', 'fluent-crm'),
             'city'           => __('City', 'fluent-crm'),
             'state'          => __('State', 'fluent-crm'),
             'country'        => __('Country', 'fluent-crm'),
@@ -64,6 +65,40 @@ abstract class BaseMigrator
 
     }
 
+    /**
+     * Parse a remote date value into Y-m-d.
+     *
+     * Mailchimp sends its display format (MM/DD/YYYY, DD/MM/YYYY), whose letters mean month and
+     * day names in PHP, so the tokens are translated first; month and day may be unpadded (2/3/1990).
+     * A value that does not match falls back to Helper::parseImportDate(), never to a guess.
+     *
+     * @param string $value
+     * @param string $format remote date format
+     * @return string|false Y-m-d, or false when the value is not a date (the field is then skipped)
+     */
+    protected function parseRemoteDate($value, $format)
+    {
+        $value = trim((string)$value);
+        $order = strtoupper((string)$format);
+
+        if (preg_match('/^(\d{1,4})\D(\d{1,4})\D(\d{1,4})$/', $value, $m)) {
+            $positions = [];
+            foreach (['YYYY', 'MM', 'DD'] as $token) {
+                $positions[$token] = strpos($order, $token);
+            }
+            if (!in_array(false, $positions, true)) {
+                asort($positions);
+                $parts = array_combine(array_keys($positions), array_slice($m, 1, 3));
+                if (strlen($parts['YYYY']) === 4 && checkdate((int)$parts['MM'], (int)$parts['DD'], (int)$parts['YYYY'])) {
+                    return sprintf('%04d-%02d-%02d', $parts['YYYY'], $parts['MM'], $parts['DD']);
+                }
+                return false;
+            }
+        }
+
+        return Helper::parseImportDate($value);
+    }
+
     public function getMergedData($remoteData, $fieldMaps)
     {
         $formattedData = [];
@@ -79,9 +114,10 @@ abstract class BaseMigrator
             $fluentCrmTag = $fieldMap['fluentcrm_field'];
 
             if (!empty($fieldMap['date_format'])) {
-                $givenValue = $remoteData[$tagName];
-                $myDateTime = \DateTime::createFromFormat($fieldMap['date_format'], $givenValue);
-                $formattedData[$fluentCrmTag] = $myDateTime->format('Y-m-d');
+                $date = $this->parseRemoteDate($remoteData[$tagName], $fieldMap['date_format']);
+                if ($date) {
+                    $formattedData[$fluentCrmTag] = $date;
+                }
             } else {
                 $formattedData[$fluentCrmTag] = $remoteData[$tagName];
             }

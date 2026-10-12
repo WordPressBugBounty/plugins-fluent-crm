@@ -7,11 +7,7 @@ use FluentCrm\Framework\Support\Arr;
 class FormElementBuilder
 {
     /**
-     * Per-request guards so each library / the initializer is enqueued at most
-     * once, even when renderFields() recurses into nested containers or multiple
-     * forms render on the same page. Assets are enqueued lazily from the field
-     * render methods that actually need them, so a basic form (text/email/etc.)
-     * loads no extra JS/CSS.
+     * Per-request guards so each library is enqueued at most once, lazily by the fields that need it.
      */
     private static $initEnqueued = false;
     private static $datePickerEnqueued = false;
@@ -227,15 +223,11 @@ class FormElementBuilder
 
     public function renderDate($field)
     {
-        // Legacy combodate field. combodate requires moment.js (not bundled on
-        // public pages), so custom_date (flatpickr) is preferred for new fields.
-        // Kept for backward compatibility.
+        // Legacy combodate field (needs moment.js); new fields use custom_date.
         wp_enqueue_script('combodate', FLUENTCRM_PLUGIN_URL . 'assets/libs/combodate/combodate.js', ['jquery'], '1.0.7', true);
         $this->ensureFieldInitializer();
 
-        // Tag the input so the externalized initializer (form-fields.js) can find
-        // it, instead of emitting an inline <script> that would require
-        // `script-src 'unsafe-inline'`.
+        // form-fields.js initializes inputs by this class; no inline script.
         $atts = Arr::get($field, 'atts', []);
         $atts['class'] = trim((isset($atts['class']) ? $atts['class'] : '') . ' fc-js-combodate');
         $field['atts'] = $atts;
@@ -262,7 +254,7 @@ class FormElementBuilder
         $currentYear = (int) gmdate('Y');
         $minYear = $currentYear - 120;
 
-        // Day select (id for label for= so clicking label focuses first visible control)
+        // The day select carries the id so the label targets it.
         $html = '<div class="fc_date_dropdowns" id="' . $id . '_wrap">';
         $html .= '<select class="fc_date_dropdown fc_date_day" id="' . $id . '_day" data-role="day">';
         $html .= '<option value="">' . esc_html__('Day', 'fluent-crm') . '</option>';
@@ -272,7 +264,6 @@ class FormElementBuilder
         }
         $html .= '</select>';
 
-        // Month select
         $html .= '<select class="fc_date_dropdown fc_date_month" data-role="month">';
         $html .= '<option value="">' . esc_html__('Month', 'fluent-crm') . '</option>';
         for ($mo = 1; $mo <= 12; $mo++) {
@@ -281,7 +272,6 @@ class FormElementBuilder
         }
         $html .= '</select>';
 
-        // Year select
         $html .= '<select class="fc_date_dropdown fc_date_year" data-role="year">';
         $html .= '<option value="">' . esc_html__('Year', 'fluent-crm') . '</option>';
         for ($y = $currentYear; $y >= $minYear; $y--) {
@@ -293,9 +283,7 @@ class FormElementBuilder
         $html .= '<input type="hidden" name="' . $name . '" id="' . $id . '" value="' . esc_attr($value) . '" />';
         $html .= '</div>';
 
-        // Day/month/year sync is handled by form-fields.js, which scans for
-        // `.fc_date_dropdowns` wrappers on the page — no inline <script> required.
-        // No third-party library needed here (vanilla JS).
+        // form-fields.js syncs the selects into the hidden input.
         $this->ensureFieldInitializer();
 
         return $html;
@@ -383,7 +371,6 @@ class FormElementBuilder
         $this->enqueueDatePickerAssets();
         $this->ensureFieldInitializer();
 
-        // Build attributes for the input field
         $atts = $this->buildAttributes([
             'type'        => 'text',
             'id'          => Arr::get($field, 'id'),
@@ -393,7 +380,6 @@ class FormElementBuilder
             'placeholder' => esc_attr(Arr::get($field, 'placeholder', 'Select date & time')),
         ]);
 
-        // Return the input element
         return '<input ' . $atts . ' />';
     }
     public function renderDatePicker($field)
@@ -401,7 +387,6 @@ class FormElementBuilder
         $this->enqueueDatePickerAssets();
         $this->ensureFieldInitializer();
 
-        // Build attributes for the input field
         $atts = $this->buildAttributes([
             'type'        => 'text',
             'id'          => Arr::get($field, 'id'),
@@ -411,23 +396,12 @@ class FormElementBuilder
             'placeholder' => esc_attr(Arr::get($field, 'placeholder', 'Select date')),
         ]);
 
-        // Return the input element
         return '<input ' . $atts . ' />';
     }
 
     /**
-     * Enqueue the externalized field initializer + its i18n, once per request.
-     * Called lazily by the field render methods that need JS (date / datetime /
-     * multi-select / combodate / date_dropdowns). form-fields.js depends only on
-     * jQuery and feature-detects flatpickr/Choices at runtime (deferred to
-     * DOMContentLoaded), so it works whether or not those libs were enqueued —
-     * letting a date_dropdowns-only form skip flatpickr/Choices entirely.
-     *
-     * Enqueued directly rather than via the wp_enqueue_scripts hook: forms
-     * render inside the_content (shortcode) or a standalone page body, by which
-     * point wp_enqueue_scripts has already fired. Direct enqueue lets WordPress
-     * print these as late footer items (scripts via the footer queue, styles via
-     * print_late_styles()).
+     * Enqueue form-fields.js and its i18n once per request.
+     * Enqueued directly because forms render after wp_enqueue_scripts has fired.
      */
     private function ensureFieldInitializer()
     {
@@ -436,10 +410,7 @@ class FormElementBuilder
         }
         self::$initEnqueued = true;
 
-        // Source lives in resources/libs/fluentcrm/form-fields.js; the build
-        // copies resources/libs -> assets/libs (viteStaticCopy). Routed through
-        // the script loader so a site owner's CSP/nonce plugin can filter the
-        // tag — no inline <script>.
+        // Source: resources/libs/fluentcrm/form-fields.js, copied to assets/libs by the build.
         wp_enqueue_script(
             'fluentcrm_form_fields',
             FLUENTCRM_PLUGIN_URL . 'assets/libs/fluentcrm/form-fields.js',
@@ -448,7 +419,6 @@ class FormElementBuilder
             true
         );
 
-        // Translatable strings passed via the loader (nonce-able).
         wp_localize_script('fluentcrm_form_fields', 'fluentcrmFormFields', [
             'i18n' => [
                 'selectOptions' => __('Select options', 'fluent-crm'),
@@ -479,10 +449,7 @@ class FormElementBuilder
         wp_enqueue_style('choices-css', FLUENTCRM_PLUGIN_URL . 'assets/libs/choices/choices.min.css', [], '10.0.0');
         wp_enqueue_script('choices-js', FLUENTCRM_PLUGIN_URL . 'assets/libs/choices/choices.min.js', ['jquery'], '10.0.0', true);
 
-        // Dropdown positioning overrides. Printed on wp_footer (still pending
-        // when forms render) instead of wp_head (already fired). NOTE: this is
-        // still an inline <style> — a `style-src` concern tracked separately
-        // from the `script-src` work.
+        // Printed on wp_footer because wp_head has already fired when forms render.
         add_action('wp_footer', function () {
         ?>
             <style>

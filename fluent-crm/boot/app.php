@@ -86,20 +86,9 @@ return function ($file) {
         }
 
         /*
-         * Compare the stored SCHEDULE NAME, not merely "is it scheduled".
-         *
-         * Sites upgraded from earlier versions still hold this event under the
-         * 'fluentcrm_every_minute' (60s) schedule, and WP re-derives a recurring
-         * event's interval from that saved name -- not from the code that
-         * scheduled it. A plain !wp_next_scheduled() guard is therefore a no-op
-         * on every existing install, which would leave the five-minute task
-         * running once a minute forever.
-         *
-         * Clearing first also collapses duplicate copies left under the old
-         * name. It does not deduplicate copies that already carry the current
-         * name -- wp_get_schedule() reports only the next matching event -- but
-         * wp_schedule_event() never created those on its own; the one code path
-         * that did was fixed in efbc291e6 (Aug 2024).
+         * Compare the stored schedule name, not merely "is it scheduled". WP derives a recurring
+         * event's interval from its saved name, and older installs hold this event under the
+         * 60s 'fluentcrm_every_minute' schedule. Clearing first also collapses those duplicates.
          */
         $hookName = 'fluentcrm_scheduled_five_minute_tasks';
         if (wp_get_schedule($hookName) !== 'fluentcrm_scheduled_five_minute_tasks') {

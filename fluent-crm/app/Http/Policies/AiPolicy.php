@@ -21,6 +21,11 @@ class AiPolicy extends BasePolicy
         return $this->currentUserCan('fcrm_manage_settings');
     }
 
+    public function getModels(Request $request)
+    {
+        return $this->currentUserCan('fcrm_manage_settings');
+    }
+
     public function generate(Request $request)
     {
         return $this->currentUserCan('fcrm_manage_emails');

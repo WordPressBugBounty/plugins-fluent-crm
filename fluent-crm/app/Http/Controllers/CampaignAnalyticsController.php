@@ -21,8 +21,8 @@ class CampaignAnalyticsController extends Controller
     public function getLinksReport(CampaignUrlMetric $campaignUrlMetric, $campaignId)
     {
         $campaign = Campaign::withoutGlobalScopes()->findOrFail($campaignId);
-        $clickStatus = $campaign->settings['click_tracker'] ?? '';
-        $openStatus = $campaign->settings['open_tracker'] ?? '';
+        $clickStatus = $campaign->getClickTrackingStatus();
+        $openStatus = $campaign->getOpenTrackingStatus();
 
         if ($clickStatus === '') {
             $clickStatus = fluentcrmTrackClicking();
@@ -57,8 +57,7 @@ class CampaignAnalyticsController extends Controller
             ];
         }
 
-        // Build a single newest-first index across every active commerce source so
-        // pagination spans them all. Within each source, ids stay in DB-newest order.
+        // One index across all active sources so pagination spans them; newest first within each source.
         $index = [];
         foreach ($sources as $source) {
             foreach ($this->getAttributedOrderIds($source, $campaignId) as $orderId) {
@@ -93,18 +92,10 @@ class CampaignAnalyticsController extends Controller
             ];
         }
 
-        // `auto=yes` is the silent recount the campaign report fires on page load.
-        // It may correct the stored total but must never destroy revenue that a
-        // currently inactive commerce plugin recorded (e.g. after a store moved
-        // from WooCommerce to FluentCart), so it only runs when every stored
-        // order is still visible, and it never clears the record. The manual
-        // re-sync button keeps the destructive rebuild.
+        // auto=yes is the silent recount on page load: it runs only when every stored order is still visible and never clears the record.
         $isAuto = $request->get('auto') === 'yes';
 
-        // A WooCommerce/EDD rebuild loads every attributed order, so the automatic
-        // run happens at most once per 10 minutes per campaign, however many times
-        // or tabs the report is opened. The transient is set before the work so
-        // concurrent visits do not all rebuild. The manual button is not throttled.
+        // Auto re-sync runs at most once per 10 minutes per campaign; manual re-sync is not throttled.
         if ($isAuto) {
             $throttleKey = 'fcrm_revenue_auto_resync_' . (int) $campaignId;
             if (get_transient($throttleKey)) {
@@ -149,18 +140,10 @@ class CampaignAnalyticsController extends Controller
                 ];
             }
 
-            // The currently-active sources hold no attributed orders, so the
-            // cached total is stale — typically a pre-orderIds legacy record
-            // whose orders were purged. The deletion-reversal path skips
-            // legacy records by design, so re-sync is the intentional
-            // clearing point. Caveat: if the plugin that recorded the revenue
-            // is deactivated, its orders are invisible here and the meta is
-            // cleared too; re-activating it and re-syncing rebuilds the
-            // record from the orders' _fc_cid meta.
+            // Manual re-sync clears stale revenue, including revenue from a deactivated store plugin.
             if (fluentcrm_get_campaign_meta($campaignId, '_campaign_revenue')) {
                 fluentcrm_delete_campaign_meta($campaignId, '_campaign_revenue');
 
-                // `total` feeds the revenue widget (ViewCampaign.vue).
                 return [
                     'message' => __('No attributed orders found. Stale revenue data has been cleared.', 'fluent-crm'),
                     'total'   => number_format(0, 2)
@@ -178,22 +161,14 @@ class CampaignAnalyticsController extends Controller
         $primaryTotal = $primaryCurrency ? $revenueData[$primaryCurrency] : 0;
 
         return [
-            'message' => __('Revenue has been re-synced successfully', 'fluent-crm'),
+            'message' => __('The revenue has been re-synced.', 'fluent-crm'),
             'total'   => number_format($primaryTotal / 100, 2)
         ];
     }
 
     /**
-     * Active commerce sources that participate in campaign revenue attribution.
-     * Order matters: it determines display precedence within the merged report.
-     */
-    /**
-     * Whether every order ID in the stored revenue record is still attributed to
-     * this campaign in one of the active sources. Fully refunded or cancelled
-     * orders keep their `_fc_cid` meta, so they count as visible and a rebuild
-     * still lowers the total for them; orders from a deactivated plugin (or
-     * permanently deleted ones) do not. A legacy record without order IDs has
-     * nothing to check.
+     * Whether every stored revenue order is still attributed to this campaign in an active source.
+     * Refunded or cancelled orders keep their _fc_cid meta and count as visible.
      */
     protected function storedRevenueOrdersAreVisible($campaignId, $sources)
     {
@@ -210,6 +185,9 @@ class CampaignAnalyticsController extends Controller
         return !array_diff(array_map('intval', $stored['orderIds']), $visible);
     }
 
+    /**
+     * Active commerce sources for campaign revenue, in display order.
+     */
     protected function getActiveRevenueSources()
     {
         $sources = [];
@@ -226,8 +204,7 @@ class CampaignAnalyticsController extends Controller
     }
 
     /**
-     * Lightweight index query — returns just order IDs attributed to this campaign,
-     * newest-first per source. Used both for paginated report rendering and re-sync.
+     * Order IDs attributed to this campaign in one source, newest first.
      */
     protected function getAttributedOrderIds($source, $campaignId)
     {
@@ -257,10 +234,7 @@ class CampaignAnalyticsController extends Controller
         }
 
         if ($source === 'edd') {
-            /*
-             * EDD 3 writes order attribution meta to edd_ordermeta via the
-             * order meta API. Do not read legacy postmeta/edd_payment records.
-             */
+            // EDD 3 stores attribution in edd_ordermeta, not legacy postmeta.
             return fluentCrmDb()->table('edd_ordermeta')
                 ->where('meta_key', '_fc_cid')
                 ->where('meta_value', $campaignId)
@@ -290,11 +264,8 @@ class CampaignAnalyticsController extends Controller
     }
 
     /**
-     * Sum NET revenue per currency for one source — i.e. only orders in a successful
-     * (paid/completed) status, with refunded amounts subtracted. Returns
-     * `['orderIds' => [int...], 'totals' => ['usd' => cents, ...]]`.
-     * Orders that net to zero or below (fully refunded, cancelled, pending) are skipped
-     * so they don't pollute the order list with non-revenue rows.
+     * Net revenue per currency for one source, from paid orders minus refunds.
+     * Returns ['orderIds' => [...], 'totals' => ['usd' => cents]]; orders netting to zero or less are skipped.
      */
     protected function reSyncSourceRevenue($source, $campaignId)
     {
@@ -351,8 +322,7 @@ class CampaignAnalyticsController extends Controller
         }
 
         if ($source === 'fct') {
-            // Canonical "successful" set: paid, partially_paid, partially_refunded.
-            // Net revenue subtracts total_refund below so partial refunds still contribute.
+            // Partial refunds still count; total_refund is subtracted below.
             $successStatuses = \FluentCart\App\Helpers\Status::getOrderPaymentSuccessStatuses();
             $orders = \FluentCart\App\Models\Order::query()
                 ->whereIn('id', $orderIds)
@@ -374,8 +344,7 @@ class CampaignAnalyticsController extends Controller
     }
 
     /**
-     * Render a single order row for the merged revenue table. The `source` key
-     * is added when more than one commerce platform is contributing data.
+     * One merged revenue table row; adds `source` when several platforms contribute.
      */
     protected function formatRevenueRow($source, $orderId, $multiSource)
     {

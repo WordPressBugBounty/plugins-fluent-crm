@@ -72,12 +72,12 @@ class AdminBar
             'subscriber_base' => $urlBase . 'subscribers/',
             'edit_user_vars'  => $editingUserVars,
             'trans' => [
-                'Search Contacts' => __('Search Contacts', 'fluent-crm'),
-                'Type and press enter' => __('Type and press enter', 'fluent-crm'),
+                'Search Contacts' => __('Search contacts', 'fluent-crm'),
+                'Type and press enter' => __('Type and press Enter', 'fluent-crm'),
                 'Type to search contacts' => __('Type to search contacts', 'fluent-crm'),
                 'Quick Links' => __('Quick Links', 'fluent-crm'),
-                'Sorry no contact found' => __('Sorry no contact found', 'fluent-crm'),
-                'Load More' => __('Load More', 'fluent-crm'),
+                'Sorry no contact found' => __('Sorry, no contacts found', 'fluent-crm'),
+                'Load More' => __('Load more', 'fluent-crm'),
                 'Close' => __('Close', 'fluent-crm')
             ]
         ]);
@@ -85,7 +85,7 @@ class AdminBar
         $args = [
             'parent' => 'top-secondary',
             'id'     => 'fcrm_adminbar_search',
-            'title'  => __('Search Contacts', 'fluent-crm'),
+            'title'  => __('Search contacts', 'fluent-crm'),
             'href'   => '#',
             'meta'   => false
         ];

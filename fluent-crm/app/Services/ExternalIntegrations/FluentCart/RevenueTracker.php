@@ -7,12 +7,7 @@ use FluentCrm\App\Services\Helper as FluentCrmHelper;
 use FluentCrm\Framework\Support\Arr;
 
 /**
- * Stamps the originating campaign id (`_fc_cid` cookie set by RedirectionHandler when an
- * email link is clicked) onto each FluentCart order at creation time, then rolls the
- * paid total into the `_campaign_revenue` campaign meta when the order is paid.
- *
- * This mirrors the WooCommerce/EDD revenue attribution flow used by
- * CampaignAnalyticsController so the existing campaign analytics UI works for FluentCart.
+ * Attributes FluentCart order revenue to the campaign in the `fc_cid` cookie, via `_campaign_revenue` meta.
  */
 class RevenueTracker
 {
@@ -23,9 +18,7 @@ class RevenueTracker
     }
     
     /**
-     * Stamp the originating campaign id on the order while we still have access to
-     * the visitor's `fc_cid` cookie (the request runs in the user's browser context here;
-     * by the time `order_paid` fires from a gateway webhook the cookie is gone).
+     * Stamp the campaign id on the order at creation, while the visitor's cookie is still available.
      */
     public function attributeOrder($eventData)
     {
@@ -47,9 +40,7 @@ class RevenueTracker
     }
 
     /**
-     * On payment success, accumulate this order's total into the campaign's
-     * `_campaign_revenue` meta. Helper::recordCampaignRevenue handles dedup
-     * (same order_id won't be counted twice) and per-currency bucketing.
+     * On payment, add the order total to the campaign's `_campaign_revenue` meta (deduped per order).
      */
     public function recordRevenue($eventData)
     {
@@ -63,8 +54,7 @@ class RevenueTracker
             return;
         }
 
-        // FluentCart stores monetary amounts as integer cents — same convention the
-        // Woo re-sync uses when writing into `_campaign_revenue`.
+        // FluentCart stores amounts as integer cents.
         $amountCents = (int) $order->total_amount;
         if ($amountCents <= 0) {
             return;

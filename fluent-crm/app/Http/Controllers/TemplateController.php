@@ -36,18 +36,16 @@ class TemplateController extends Controller
             $request->get('types', ['publish', 'draft'])
         );
 
-        // Template managers retain the legacy payload; newly-authorized readers receive list metadata only.
+        // Readers without fcrm_manage_email_templates get list metadata only.
         if (!PermissionManager::currentUserCan('fcrm_manage_email_templates')) {
             $templatesQuery->select(['ID', 'post_title', 'post_modified']);
         }
 
         if ($search = $request->getSafe('search')) {
-            // Escape LIKE wildcards (%, _) so the term matches literally, not as wildcards.
             global $wpdb;
             $templatesQuery->where('post_title', 'LIKE', '%' . $wpdb->esc_like($search) . '%');
         }
 
-        // Order the query results and paginate
         $templates = $templatesQuery
             ->orderBy($orderBy, $order)
             ->paginate();
@@ -178,7 +176,7 @@ class TemplateController extends Controller
         do_action('fluent_crm/email_template_created', $templateId, $templateData);
 
         return $this->sendSuccess([
-            'message'     => __('Template successfully created', 'fluent-crm'),
+            'message'     => __('The template has been created.', 'fluent-crm'),
             'template_id' => $templateId
         ]);
     }
@@ -188,7 +186,8 @@ class TemplateController extends Controller
         $template = Template::findOrFail($templateId);
 
         $postData = [
-            'post_title'        => __('[Duplicate] ', 'fluent-crm') . $template['post_title'],
+            /* translators: %s: title of the template being duplicated */
+            'post_title'        => sprintf(__('[Duplicate] %s', 'fluent-crm'), $template['post_title']),
             'post_content'      => $template['post_content'],
             'post_excerpt'      => $template['post_excerpt'],
             'post_modified'     => current_time('mysql'),
@@ -200,7 +199,6 @@ class TemplateController extends Controller
 
         $newTemplateId = wp_insert_post($postData);
 
-        // Meta fields to copy over
         $metaKeys = [
             '_email_subject',
             '_edit_type',
@@ -209,13 +207,12 @@ class TemplateController extends Controller
             '_footer_settings'
         ];
 
-        // Update post meta in a loop
         $this->copyMetaFields($templateId, $newTemplateId, $metaKeys);
 
         do_action('fluent_crm/email_template_duplicated', $newTemplateId, $template);
 
         return $this->sendSuccess([
-            'message'     => __('Template successfully duplicated', 'fluent-crm'),
+            'message'     => __('The template has been duplicated.', 'fluent-crm'),
             'template_id' => $newTemplateId
         ]);
     }
@@ -247,7 +244,7 @@ class TemplateController extends Controller
         if($footerSettings) {
             if (($footerSettings['custom_footer'] == 'yes') && !Helper::hasComplianceText($footerSettings['footer_content'])) {
                 return $this->sendError([
-                    'message' => __('##crm.manage_subscription_url## or ##crm.unsubscribe_url## string is required for compliance. Please include unsubscription or manage subscription link', 'fluent-crm')
+                    'message' => __('##crm.manage_subscription_url## or ##crm.unsubscribe_url## is required for compliance. Please include an unsubscribe or manage subscription link.', 'fluent-crm')
                 ]);
             }
         }
@@ -283,7 +280,7 @@ class TemplateController extends Controller
         do_action('fluent_crm/email_template_updated', $templateData, $template);
 
         return $this->sendSuccess([
-            'message'     => __('Template successfully updated', 'fluent-crm'),
+            'message'     => __('The template has been updated.', 'fluent-crm'),
             'template_id' => $id
         ]);
     }
@@ -317,7 +314,7 @@ class TemplateController extends Controller
 
         $templateIds = array_filter($templateIds);
 
-        // Reapply the post-type scope so crafted explicit IDs cannot mutate other wp_posts rows.
+        // Re-scope to the template post type so crafted IDs cannot touch other wp_posts rows.
         $templates = Template::emailTemplates(['publish', 'draft'])
             ->whereIn('ID', $templateIds)
             ->get();
@@ -326,7 +323,7 @@ class TemplateController extends Controller
             $newStatus = sanitize_text_field($request->get('status', ''));
             if (!$newStatus) {
                 return $this->sendError([
-                    'message' => __('Please select status', 'fluent-crm')
+                    'message' => __('Please select a status', 'fluent-crm')
                 ]);
             }
 
@@ -342,24 +339,17 @@ class TemplateController extends Controller
                 'message' => __('Status has been changed for the selected templates', 'fluent-crm')
             ];
         } else if ($actionName == 'delete_templates') {
-            // $defaultCampaignTemplateId = Helper::getDefaultCampaignTemplateId();
-
             foreach ($templates as $template) {
                 $deletedTemplate = wp_delete_post($template->ID, true);
-
-                // if ($deletedTemplate && $defaultCampaignTemplateId && absint($template->ID) === $defaultCampaignTemplateId) {
-                //     Helper::clearDefaultCampaignTemplateId();
-                //     $defaultCampaignTemplateId = 0;
-                // }
             }
 
             return $this->sendSuccess([
-                'message' => __('Selected Templates have been deleted permanently', 'fluent-crm'),
+                'message' => __('Selected templates have been permanently deleted', 'fluent-crm'),
             ]);
         }
 
         return [
-            'message' => __('invalid bulk action', 'fluent-crm')
+            'message' => __('Invalid bulk action', 'fluent-crm')
         ];
     }
 
@@ -369,12 +359,8 @@ class TemplateController extends Controller
 
         $deletedTemplate = wp_delete_post($template->ID, true);
 
-        // if ($deletedTemplate && Helper::getDefaultCampaignTemplateId() === absint($template->ID)) {
-        //     Helper::clearDefaultCampaignTemplateId();
-        // }
-
         return $this->sendSuccess([
-            'message' => __('The template has been deleted successfully.', 'fluent-crm')
+            'message' => __('The template has been deleted.', 'fluent-crm')
         ]);
     }
 
@@ -465,25 +451,22 @@ class TemplateController extends Controller
     }
 
     /**
-     * Fetches built-in templates from cached locally
-     * cached for 24 hours, then refreshed
-     * @return 
+     * Returns the built-in remote templates, cached for 24 hours.
+     * @return
      */
     public function getBuiltInTemplates()
     {
         $templates = fluentCrmPersistentCache('email_remote_templates', function () {
                 return $this->loadRemoteTemplates();
-            }, 60 * 60 * 24); // 24 hours
+            }, 60 * 60 * 24);
 
-        // Return a success response with the formatted templates
         return $this->sendSuccess([
             'templates' => $templates
         ]);
     }
 
     /**
-     * Downloads a single built-in template file and returns it without saving
-     * it as a local email template.
+     * Downloads one built-in template and returns it without saving it locally.
      *
      * @param \FluentCrm\Framework\Http\Request\Request $request
      * @return \FluentCrm\Framework\Http\Response\Response
@@ -592,14 +575,12 @@ class TemplateController extends Controller
             'footer_padding'   => 20
         ]);
 
-        // Footer content is user-editable from a raw text mode; sanitize before persistence.
         $footerSettings['footer_content'] = Sanitize::sanitizeFooterHtml(Arr::get($footerSettings, 'footer_content', ''));
 
         $footerSettings['disable_footer'] = $disableFooter;
         $footerSettings['custom_footer'] = $customFooter;
 
-        // Legacy imported templates may carry disable_footer in template_config without
-        // explicit footer settings. Treat those as Global Footer instead of hidden footer.
+        // Legacy imports with only template_config.disable_footer get the global footer, not a hidden one.
         $isLegacyImportedDisabled = (
             !$hasExplicitDisableFooter &&
             !$hasExplicitCustomFooter &&
@@ -614,7 +595,7 @@ class TemplateController extends Controller
             $footerSettings['custom_footer'] = 'no';
         }
 
-        // Keep legacy key in sync during transition to avoid regressions in old readers.
+        // Legacy template_config.disable_footer is still read elsewhere.
         $templateConfig['disable_footer'] = $footerSettings['disable_footer'];
 
         return [
@@ -642,10 +623,8 @@ class TemplateController extends Controller
     }
 
     /**
-     * Fetches and formats email templates from a remote FluentCRM API endpoint.
-     * This method makes an HTTP request to retrieve email templates from FluentCRM's public API.
-     * It processes the response and formats the templates into a standardized structure.
-     * @throws \WP_Error Logs error message if the API request fails
+     * Fetches and formats email templates from the FluentCRM template API.
+     * @throws \WP_Error Logs on request failure
      * @return array
      * @access public
      */
@@ -655,19 +634,15 @@ class TemplateController extends Controller
         $restBase =  defined('FC_TEMPLATE_API_DOMAIN') ? FC_TEMPLATE_API_DOMAIN : 'https://fluentcrm.com';
         $restApi = $restBase.'/wp-json/wp/v2/email-templates?per_page=50';
 
-        // Make a GET request to retrieve CRM templates
         $response = wp_remote_get($restApi, [
             'sslverify' => false,
         ]);
 
-        // Check if the request resulted in an error
         if (is_wp_error($response)) {
-            // Handle error
             error_log($response->get_error_message());
             return [];
         }
 
-        // Decode the JSON response from the request
         $templateLists = json_decode(wp_remote_retrieve_body($response), true);
 
         if (!is_array($templateLists)) {
@@ -678,7 +653,6 @@ class TemplateController extends Controller
 
         foreach ($templateLists as $template) {
             if (!$template['template_json']) {
-                // Skip if no template json
                 continue;
             }
             $formattedTemplates[] = [

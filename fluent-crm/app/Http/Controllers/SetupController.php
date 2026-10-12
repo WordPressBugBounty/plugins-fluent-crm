@@ -25,9 +25,7 @@ class SetupController extends Controller
 {
     public function CompleteWizard(Request $request)
     {
-        // Read through Helper so this and SettingsPolicy::CompleteWizard() — the
-        // gate that requires install_plugins for exactly these flags — can never
-        // disagree about which requests install a plugin.
+        // Shares the flag reader with SettingsPolicy::CompleteWizard(), which requires install_plugins for these flags.
         $installFlags = Helper::getWizardPluginInstallFlags($request);
 
         if ($installFlags['fluentform'] && !defined('FLUENTFORM')) {
@@ -57,7 +55,7 @@ class SetupController extends Controller
     {
         if (!current_user_can('install_plugins')) {
             return $this->sendError([
-                'message' => __('Sorry! you do not have permission to install plugin', 'fluent-crm')
+                'message' => __('Sorry, you do not have permission to install plugins', 'fluent-crm')
             ]);
         }
         $this->installFluentForm();
@@ -75,7 +73,7 @@ class SetupController extends Controller
     {
         if (!current_user_can('install_plugins')) {
             return $this->sendError([
-                'message' => __('Sorry! you do not have permission to install plugin', 'fluent-crm')
+                'message' => __('Sorry, you do not have permission to install plugins', 'fluent-crm')
             ]);
         }
         $this->installFluentBoards();
@@ -89,7 +87,7 @@ class SetupController extends Controller
     {
         if (!current_user_can('install_plugins')) {
             return $this->sendError([
-                'message' => __('Sorry! you do not have permission to install plugin', 'fluent-crm')
+                'message' => __('Sorry, you do not have permission to install plugins', 'fluent-crm')
             ]);
         }
         $this->installFluentCommunity();
@@ -103,7 +101,7 @@ class SetupController extends Controller
     {
         if (!current_user_can('install_plugins')) {
             return $this->sendError([
-                'message' => __('Sorry! you do not have permission to install plugin', 'fluent-crm')
+                'message' => __('Sorry, you do not have permission to install plugins', 'fluent-crm')
             ]);
         }
         $this->installFluentBooking();
@@ -117,7 +115,7 @@ class SetupController extends Controller
     {
         if (!current_user_can('install_plugins')) {
             return $this->sendError([
-                'message' => __('Sorry! you do not have permission to install plugin', 'fluent-crm')
+                'message' => __('Sorry, you do not have permission to install plugins', 'fluent-crm')
             ]);
         }
         $this->installFluentCart();
@@ -131,7 +129,7 @@ class SetupController extends Controller
     {
         if (!current_user_can('install_plugins')) {
             return $this->sendError([
-                'message' => __('Sorry! you do not have permission to install plugin', 'fluent-crm')
+                'message' => __('Sorry, you do not have permission to install plugins', 'fluent-crm')
             ]);
         }
 
@@ -140,7 +138,7 @@ class SetupController extends Controller
         return [
             'is_installed' => defined('FLUENTMAIL'),
             'config_url'   => admin_url('options-general.php?page=fluent-mail#/'),
-            'message'      => __('FluentSMTP plugin has been installed and activated successfully', 'fluent-crm')
+            'message'      => __('The FluentSMTP plugin has been installed and activated.', 'fluent-crm')
         ];
 
     }
@@ -151,7 +149,7 @@ class SetupController extends Controller
     {
         if (!current_user_can('install_plugins')) {
             return $this->sendError([
-                'message' => __('Sorry! you do not have permission to install plugin', 'fluent-crm')
+                'message' => __('Sorry, you do not have permission to install plugins', 'fluent-crm')
             ]);
         }
 
@@ -165,7 +163,7 @@ class SetupController extends Controller
 
         return [
             'is_installed' => defined('FLUENT_SUPPORT_VERSION'),
-            'message'      => __('Fluent Support plugin has been installed and activated successfully', 'fluent-crm')
+            'message'      => __('The Fluent Support plugin has been installed and activated.', 'fluent-crm')
         ];
 
     }
@@ -267,13 +265,7 @@ class SetupController extends Controller
 
     private function backgroundInstaller($plugin_to_install, $plugin_id)
     {
-        /*
-         * Every route that reaches this point is already gated — SettingsPolicy
-         * requires install_plugins for the install routes and for the wizard's
-         * install flags, and the handlers above re-check it. This is the last
-         * choke point all six installers share, so it re-asserts the capability
-         * rather than trusting each caller to have done it.
-         */
+        // Shared choke point for every installer; re-asserts install_plugins.
         if (!current_user_can('install_plugins')) {
             return;
         }
@@ -294,13 +286,11 @@ class SetupController extends Controller
             $installed = false;
             $activate = false;
 
-            // See if the plugin is installed already.
             if (isset($installed_plugins[$plugin_file])) {
                 $installed = true;
                 $activate = !is_plugin_active($installed_plugins[$plugin_file]);
             }
 
-            // Install this thing!
             if (!$installed) {
                 // Suppress feedback.
                 ob_start();
@@ -373,7 +363,6 @@ class SetupController extends Controller
 
             wp_clean_plugins_cache();
 
-            // Activate this thing.
             if ($activate) {
                 try {
                     $result = activate_plugin($installed ? $installed_plugins[$plugin_file] : $plugin_slug . '/' . $plugin_file);

@@ -77,9 +77,7 @@ class RedirectionHandler
             return $urlData->url;
         }
 
-        // Require valid fch token before recording any tracking data.
-        // Missing or invalid token = redirect but don't record metrics.
-        // This prevents analytics poisoning via forged or guessed mid values.
+        // Without a valid fch token, redirect but record no metrics.
         if (empty($urlData->url_token) || substr($campaignEmail->email_hash, 0, 8) !== $urlData->url_token) {
             return $urlData->url;
         }
@@ -139,11 +137,23 @@ class RedirectionHandler
             $campaignEmail->click_counter += 1;
             $campaignEmail->is_open = 1;
             $campaignEmail->save();
+            // A click proves the address receives mail.
+            (new Cleanup())->resetSoftBounceCount($campaignEmail->subscriber);
         } else {
             do_action('fluent_crm/anonymous_email_url_clicked', $url, $campaign, $campaignEmail);
         }
 
-        do_action('fluent_crm/track_activity_by_subscriber', $campaignEmail->subscriber);
+        if ($isAnonymousClick) {
+            // Anonymous click tracking: the activity log stores the IP anonymized (wp_privacy_anonymize_ip).
+            $forceAnonymizedIp = function () {
+                return true;
+            };
+            add_filter('fluent_crm/anonymize_ip', $forceAnonymizedIp, PHP_INT_MAX);
+            do_action('fluent_crm/track_activity_by_subscriber', $campaignEmail->subscriber);
+            remove_filter('fluent_crm/anonymize_ip', $forceAnonymizedIp, PHP_INT_MAX);
+        } else {
+            do_action('fluent_crm/track_activity_by_subscriber', $campaignEmail->subscriber);
+        }
 
         if ($isSmartUrl) {
             // this is a smart URL
@@ -169,7 +179,7 @@ class RedirectionHandler
             parse_str($url_components['query'], $params);
             if (!empty($params['aid'])) {
                 $benchmarkActionId = intval($params['aid']);
-                // Note: hook name has a known typo (missing 't' in 'fluent') — kept for backward compatibility with Pro
+                // Hook name typo kept for backward compatibility with Pro.
                 do_action('fluencrm_benchmark_link_clicked', $benchmarkActionId, $campaignEmail->subscriber);
             }
             $args['bnu_timer_' . time()] = time();

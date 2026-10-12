@@ -60,7 +60,7 @@ abstract class BaseTrigger
 
         $settingsFields['fields']['__force_run_actions_info'] = [
             'type'       => 'html',
-            'info'       => '<em>' . __('The actions will run even the contact\'s status is not in subscribed status.', 'fluent-crm') . '</em>',
+            'info'       => '<em>' . __('The actions will run even if the contact\'s status is not subscribed.', 'fluent-crm') . '</em>',
             'dependency' => [
                 'depends_on' => '__force_run_actions',
                 'operator'   => '=',

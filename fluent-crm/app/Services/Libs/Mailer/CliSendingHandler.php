@@ -8,11 +8,7 @@ use FluentCrm\App\Services\Helper;
 class CliSendingHandler extends BaseHandler
 {
     /**
-     * Largest accepted --modulo. The partition predicate is a residual filter,
-     * so each claim examines ~modulo × chunk index entries under FOR UPDATE —
-     * an absurd modulo (e.g. a mistyped 100000) would turn every 30-row claim
-     * into a multi-million-entry locking scan. 100 allows up to 50 CLI workers
-     * in the even id space, far beyond any supported deployment.
+     * Largest accepted --modulo. Each claim scans about modulo x chunk index entries under FOR UPDATE.
      */
     const MAX_MODULO = 100;
 
@@ -23,8 +19,7 @@ class CliSendingHandler extends BaseHandler
     protected $maximumProcessingTime = 50;
 
     /**
-     * @deprecated Unused since modulo partitioning replaced offset claims.
-     *             Kept only so old positional constructor calls don't break.
+     * @deprecated Unused; kept for old positional constructor calls.
      */
     public $offset = 0;
 
@@ -32,9 +27,7 @@ class CliSendingHandler extends BaseHandler
 
     /**
      * Queue partition this worker claims: rows where (id % modulo) = remainder.
-     * Default 2/0 = even ids (the multi-thread web worker takes odd ids, the
-     * primary Handler claims everything). Multiple CLI workers should each get
-     * a distinct --modulo/--remainder pair instead of the old --offset spacing.
+     * Default 2/0 is the even ids; the multi-thread web worker takes the odd ids.
      */
     protected $modulo = 2;
 
@@ -96,14 +89,7 @@ class CliSendingHandler extends BaseHandler
     }
 
     /**
-     * Housekeeping for custom --option_key lock rows.
-     *
-     * The fixed sender locks reuse one wp_options row forever, but a script
-     * that generates a fresh --option_key per run leaves a dead row behind
-     * each time. Sweep released ('') or day-old custom lock rows on every CLI
-     * run. Safe because acquireDbLock() re-creates rows on demand (INSERT
-     * IGNORE): deleting an idle sibling's row costs it one re-insert on its
-     * next acquire; rows with a fresh timestamp (a live worker) are kept.
+     * Delete released or day-old custom --option_key lock rows. acquireDbLock() re-creates rows on demand.
      */
     private function cleanupStaleCliLockRows()
     {
@@ -155,10 +141,7 @@ class CliSendingHandler extends BaseHandler
 
     protected function getNextBatchEmails()
     {
-        // Capped at the threshold: this runs before EVERY batch, and a full
-        // COUNT(*) walked the whole pending slice (millions of index entries
-        // on big queues) just to answer "at least minPendingRequired left?".
-        // Below the cap the count is exact, so the exit message stays right.
+        // Count is capped at the threshold since this runs before every batch.
         $remaining = Helper::getUpcomingEmailCount($this->minPendingRequired);
         if ($remaining < $this->minPendingRequired) {
             \WP_CLI::line(sprintf('only %d emails left. Exiting....', $remaining));
@@ -178,12 +161,7 @@ class CliSendingHandler extends BaseHandler
         $table = $wpdb->prefix . 'fc_campaign_emails';
         $currentTime = current_time('mysql');
 
-        // Use transaction-based atomic claiming like Handler to prevent duplicates.
-        // Claims only this worker's modulo partition (see the property docs) —
-        // replaces the old OFFSET skip, whose FOR UPDATE scan locked every
-        // skipped row and overlapped other DESC workers' ranges. One locking
-        // SELECT per status ('pending' first) — see BaseHandler::lockClaimableIds()
-        // for why the two statuses must not share one IN() claim.
+        // Atomic claim of this worker's modulo partition, one locking SELECT per status.
         $wpdb->query('START TRANSACTION');
 
         $ids = $this->lockClaimableIds('pending', $currentTime, $this->sendingPerChunk, 'DESC', $this->modulo, $this->remainder);

@@ -85,14 +85,14 @@ abstract class BaseBenchMark
             'options'     => [
                 [
                     'id'    => 'optional',
-                    'title' => __('[Optional Point] This is an optional trigger point', 'fluent-crm')
+                    'title' => __('[Optional point] Continue without waiting for this goal', 'fluent-crm')
                 ],
                 [
                     'id'    => 'required',
-                    'title' => __('[Essential Point] Select IF this step is required for processing further actions', 'fluent-crm')
+                    'title' => __('[Required point] Wait for this goal before continuing to the next action', 'fluent-crm')
                 ]
             ],
-            'inline_help' => __('If you select [Optional Point] it will work as an Optional Trigger otherwise, it will wait for full-fill this action', 'fluent-crm')
+            'inline_help' => __('With [Optional point], contacts keep moving through the automation. With [Required point], they wait at this step until they meet the goal.', 'fluent-crm')
         ];
     }
 
@@ -100,7 +100,7 @@ abstract class BaseBenchMark
     {
         return [
             'type'        => 'yes_no_check',
-            'check_label' => __('Contacts can enter directly to this sequence point. If you enable this then any contact meet with goal will enter in this goal point.', 'fluent-crm')
+            'check_label' => __('Contacts can enter the automation directly at this point. If enabled, any contact who meets this goal will enter here.', 'fluent-crm')
         ];
     }
 

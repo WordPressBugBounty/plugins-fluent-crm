@@ -82,8 +82,11 @@ abstract class AbstractCartDriver
     /**
      * Extract product IDs and category IDs from the cart for condition matching.
      *
+     * A driver may also return 'items_count' (the number of cart lines) when its cart snapshot
+     * does not keep the lines in cart['cart_contents']; the runner counts those otherwise.
+     *
      * @param AbandonCartModel $cart
-     * @return array ['product_ids' => [...], 'category_ids' => [...]]
+     * @return array ['product_ids' => [...], 'category_ids' => [...], 'items_count' => int (optional)]
      */
     abstract public function extractCartConditionData(AbandonCartModel $cart);
 

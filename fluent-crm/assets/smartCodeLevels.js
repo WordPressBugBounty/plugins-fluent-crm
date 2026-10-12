@@ -1,0 +1,1 @@
+const e={basic:1,private:2,credential:3};function t(t){return e[t]?t:"private"}function r(r,s){const c=e[t(s)];return(r||[]).reduce((r,s)=>{if(!s||!s.shortcodes)return r;const o=s.levels||{},n={};return Object.keys(s.shortcodes).forEach(r=>{e[t(o[r])]<=c&&(n[r]=s.shortcodes[r])}),Object.keys(n).length&&r.push({...s,shortcodes:n}),r},[])}export{r as f};

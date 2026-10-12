@@ -65,13 +65,10 @@ class CampaignUrlMetric extends Model
             return [];
         }
 
-        $settings = $campaign->settings;
-
-        $clickTracker = $settings['click_tracker'] ?? true;
+        $clickTracker = $campaign->getClickTrackingStatus(false) ?? true;
 
         // is anonimous tracking enabled?
         if ($clickTracker === 'anonymous') {
-            // get from meta
             $links = fluentcrm_get_campaign_meta($campaign->id, '_ano_url_clicks', true);
             $formattedLinks = [];
             if ($links && is_array($links)) {
@@ -180,13 +177,18 @@ class CampaignUrlMetric extends Model
                 ->count();
         }
 
+        $totals = $campaign->anonymousStatFlags();
+
         if ($openCount) {
             $formattedStatus['open'] = [
                 'total'      => $openCount,
-                /* translators: %d: number of opens */
-                'label'      => sprintf(__('Open Rate (%d)', 'fluent-crm'), $openCount),
+                // Anonymous opens are raw pixel loads, not unique opens: show the count, not a rate.
+                'label'      => $totals['opens_are_totals']
+                    ? __('Total opens (not unique)', 'fluent-crm')
+                    /* translators: %d: number of opens */
+                    : sprintf(__('Open Rate (%d)', 'fluent-crm'), $openCount),
                 'type'       => 'open',
-                'is_percent' => true,
+                'is_percent' => !$totals['opens_are_totals'],
                 'icon_class' => 'dashicons dashicons-buddicons-pm'
             ];
         }
@@ -194,10 +196,12 @@ class CampaignUrlMetric extends Model
         if ($clickCount) {
             $formattedStatus['click'] = [
                 'total'      => $clickCount,
-                /* translators: %d: number of clicks */
-                'label'      => sprintf(__('Click Rate (%d)', 'fluent-crm'), $clickCount),
+                'label'      => $totals['clicks_are_totals']
+                    ? __('Total clicks (not unique)', 'fluent-crm')
+                    /* translators: %d: number of clicks */
+                    : sprintf(__('Click Rate (%d)', 'fluent-crm'), $clickCount),
                 'type'       => 'click',
-                'is_percent' => true,
+                'is_percent' => !$totals['clicks_are_totals'],
                 'icon_class' => 'el-icon el-icon-position'
             ];
         }
@@ -229,7 +233,8 @@ class CampaignUrlMetric extends Model
             foreach ($data as $currency => $cents) {
                 if ($cents && $currency !== 'orderIds') {
                     $formattedStatus['revenue'] = [
-                        'label'      => __('Revenue', 'fluent-crm') . ' (' . $currency . ')',
+                        /* translators: %s: currency code, e.g. USD */
+                        'label'      => sprintf(__('Revenue (%s)', 'fluent-crm'), $currency),
                         'type'       => 'revenue',
                         'total'      => number_format($cents / 100, 2),
                         'icon_class' => 'el-icon el-icon-money'

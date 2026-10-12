@@ -28,7 +28,7 @@ class FluentFormSubscriptionPaymentReceivedTrigger extends BaseTrigger
         return [
             'category'    => __('Fluent Forms', 'fluent-crm'),
             'label'       => __('Subscription Payment Received (Fluent Forms)', 'fluent-crm'),
-            'description' => __('This Funnel will be initiated when a subscription payment is successfully received through Fluent Forms.', 'fluent-crm'),
+            'description' => __('This automation will start when a subscription payment is received through Fluent Forms.', 'fluent-crm'),
             'icon'        => 'fc-icon-fluentforms',
         ];
     }
@@ -61,7 +61,7 @@ class FluentFormSubscriptionPaymentReceivedTrigger extends BaseTrigger
 
         return [
             'title'     => __('Subscription Payment Received', 'fluent-crm'),
-            'sub_title' => __('This Funnel will be initiated when a subscription payment is successfully received through Fluent Forms.', 'fluent-crm'),
+            'sub_title' => __('This automation will start when a subscription payment is received through Fluent Forms.', 'fluent-crm'),
             'fields'    => [
                 'form_id'                  => [
                     'type'    => 'reload_field_selection',
@@ -100,7 +100,7 @@ class FluentFormSubscriptionPaymentReceivedTrigger extends BaseTrigger
                         ]
                     ],
                     'label'       => __('Subscription Status', 'fluent-crm'),
-                    'placeholder' => __('Select Status', 'fluent-crm')
+                    'placeholder' => __('Select status', 'fluent-crm')
                 ],
                 'subscription_status_info' => [
                     'type'       => 'html',
@@ -167,8 +167,8 @@ class FluentFormSubscriptionPaymentReceivedTrigger extends BaseTrigger
             'run_only_one' => [
                 'type'        => 'yes_no_check',
                 'label'       => '',
-                'check_label' => __('Run this automation only once per contact. If unchecked then it will over-write existing flow', 'fluent-crm'),
-                'help'        => __('If you enable this then this will run only once per customer otherwise, It will delete the existing automation flow and start new', 'fluent-crm'),
+                'check_label' => __('Run this automation only once per contact. If unchecked, it will overwrite the existing flow', 'fluent-crm'),
+                'help'        => __('If enabled, it will run only once per contact. Otherwise, it will delete the existing automation flow and start a new one', 'fluent-crm'),
                 'options'     => FunnelHelper::getUpdateOptions()
             ],
         ];
@@ -188,7 +188,20 @@ class FluentFormSubscriptionPaymentReceivedTrigger extends BaseTrigger
         $processedValues = ShortCodeParser::parse($processedValues, $insertId, $formData);
 
         $subscriberData = Arr::get($processedValues, 'primary_fields', []);
-        $subscriberData['custom_values'] = $this->processOtherFields(Arr::get($processedValues, 'other_fields', []));
+        if (!is_email(Arr::get($subscriberData, 'email'))) {
+            return;
+        }
+
+        $subscriberData = array_merge($subscriberData, $this->processOtherFields(Arr::get($processedValues, 'other_fields', [])));
+
+        if (!empty($subscriberData['country'])) {
+            $country = FunnelHelper::getCountryShortName($subscriberData['country']);
+            if ($country) {
+                $subscriberData['country'] = $country;
+            } else {
+                unset($subscriberData['country']);
+            }
+        }
 
         $willProcess = $this->isProcessable($funnel, $subscriberData);
 
@@ -204,20 +217,28 @@ class FluentFormSubscriptionPaymentReceivedTrigger extends BaseTrigger
         ]);
     }
 
+    /**
+     * Mapped "other" fields as contact data: phone, address and the like on the contact itself,
+     * custom.* fields under custom_values (as FluentFormSubmissionTrigger does). Putting every field
+     * under custom_values dropped the phone and address.
+     *
+     * @param array $otherFields
+     * @return array
+     */
     private function processOtherFields(array $otherFields)
     {
-        $customValues = [];
+        $data = ['custom_values' => []];
         foreach ($otherFields as $otherField) {
             if (!empty($otherField['field_key']) && !empty($otherField['field_value'])) {
                 $key = $otherField['field_key'];
                 if (strpos($key, '.') !== false) {
-                    $customValues[str_replace('custom.', '', $key)] = $otherField['field_value'];
+                    $data['custom_values'][str_replace('custom.', '', $key)] = $otherField['field_value'];
                 } else {
-                    $customValues[$key] = $otherField['field_value'];
+                    $data[$key] = $otherField['field_value'];
                 }
             }
         }
-        return $customValues;
+        return $data;
     }
 
     private function isProcessable($funnel, $subscriberData)

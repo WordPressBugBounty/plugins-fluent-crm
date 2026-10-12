@@ -29,12 +29,7 @@ class SubscriberPolicy extends BasePolicy
 
     /**
      * Authorize sending a one-off email to a single contact from the profile page.
-     *
-     * This is intentionally gated on `fcrm_manage_contacts` (not `fcrm_manage_emails`):
-     * emailing an individual managed contact is part of the Contacts Add/Update feature,
-     * matching the profile UI which shows the "Send Email" button to `fcrm_manage_contacts`
-     * holders. Declared explicitly so this route no longer relies on the verifyRequest
-     * fallback (repo Rule 6: destructive methods must have a dedicated policy method).
+     * Gated on `fcrm_manage_contacts`, not `fcrm_manage_emails`, matching the profile UI.
      *
      * @param \FluentCrm\Framework\Http\Request\Request $request
      * @return Boolean
@@ -64,9 +59,18 @@ class SubscriberPolicy extends BasePolicy
         return $this->currentUserCan('fcrm_manage_contacts_delete');
     }
 
+    /**
+     * Pinned quick filters are a per-user preference, so read access is enough.
+     */
+    public function saveQuickPins(Request $request)
+    {
+        return $this->currentUserCan('fcrm_read_contacts');
+    }
+
     public function deleteEmails(Request $request)
     {
-        return $this->currentUserCan('fcrm_manage_email_delete');
+        // "Delete emails" has no dependencies, so the contact permission is re-asserted.
+        return $this->verifyRequest($request) && $this->currentUserCan('fcrm_manage_email_delete');
     }
 
     public function handleBulkActions(Request $request)

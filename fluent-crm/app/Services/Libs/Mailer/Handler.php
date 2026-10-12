@@ -7,7 +7,6 @@ use FluentCrm\App\Models\CampaignEmail;
 use FluentCrm\App\Services\Helper;
 use FluentCrm\Framework\Support\Arr;
 use FluentCrm\Framework\Support\Collection;
-use FluentCrm\Framework\Support\Str;
 
 class Handler extends BaseHandler
 {
@@ -72,9 +71,7 @@ class Handler extends BaseHandler
                 return true;
             }
         } catch (\Throwable $e) {
-            // \Throwable, not \Exception: a TypeError from a third-party filter
-            // in the render pipeline must still fall through to releaseLock()
-            // below, or the sender lock sits orphaned for its ~80s TTL.
+            // Catch \Throwable so a third-party TypeError still reaches releaseLock().
             Helper::debugLog('Exception at Mailer::handle', $e->getMessage(), 'error');
         }
 
@@ -84,10 +81,7 @@ class Handler extends BaseHandler
         if ($this->sentCount || random_int(0, 50) > 20) { // sometimes we want to check this
             $lastChecked = fluentCrmGetOptionCache('_fcrm_last_email_process_cleanup', 600);
             if (!$lastChecked || time() - $lastChecked > 70) {
-                // Keep stale-row recovery in the scheduler helper so all callers
-                // use the same chunking, sender-lock guard, and deferred logging.
-                // A direct UPDATE here can overlap with a chained ajax/cron sender
-                // that is claiming rows and can reproduce the same deadlock class.
+                // Stale-row recovery goes through the scheduler helper; a direct UPDATE can deadlock with a chained sender.
                 Scheduler::resetStaleProcessingEmails($this->maximumProcessingTime + 30, $this->runnerTitle);
                 fluentCrmSetOptionCache('_fcrm_last_email_process_cleanup', time(), 600);
             }
@@ -105,8 +99,6 @@ class Handler extends BaseHandler
     {
         $this->calledFrom = Arr::get($_REQUEST, 'action') == 'fluentcrm-post-campaigns-send-now' ? 'ajax' : 'cron';
 
-        // Cheap guards first — in-process re-entrancy and the hard kill-switch.
-        // No point taking the lock if processing is disabled for this request.
         if (did_action('fluent_crm/sending_emails_starting') || apply_filters('fluent_crm/disable_email_processing', false)) {
             return false;
         }
@@ -116,10 +108,7 @@ class Handler extends BaseHandler
             return false;
         }
 
-        // Extend PHP execution time to give the handler enough headroom.
-        // The handler has its own isTimeUp() check and will stop gracefully
-        // within maximumProcessingTime seconds, but PHP's max_execution_time
-        // (often 30s in web context) can kill the process before that.
+        // max_execution_time (often 30s on the web) can kill the process before isTimeUp() stops it.
         if (function_exists('set_time_limit')) {
             @set_time_limit($this->maximumProcessingTime + 30);
         }
@@ -130,26 +119,13 @@ class Handler extends BaseHandler
             $this->maximumProcessingTime = $systemMaxProcessingTime;
         }
 
-        // Acquire the lock before any expensive work. The atomic lock — not any
-        // cron-timing pre-check — is the authoritative guard against concurrent
-        // and duplicate sends, so cron, the AJAX continuation, and send-now can
-        // all call handle() directly and let the loser bail right here after a
-        // single atomic op. Acquiring early avoids paying for the
-        // willMultiThreadEmail() COUNT(*) on a potentially multi-million-row
-        // table only to discover another runner already holds the lock.
-        // (memoryExceeded above is checked before this, so there is no lock to
-        // release on that early return.)
+        // The atomic lock is the only guard against concurrent senders; take it before any expensive work.
         if (!$this->acquireLock()) {
             return false;
         }
 
-        // The lock is now held. handle() calls isSystemOk() OUTSIDE its
-        // try/catch, so anything that throws below (a DB error on the _last_called
-        // write or the willMultiThreadEmail() count) would escape uncaught and
-        // leave the lock orphaned until its ~80s TTL. Guard it here so a failure
-        // releases the lock immediately instead.
+        // handle() calls this outside its try/catch, so release the held lock on any error.
         try {
-            // Record the start of an actual (lock-winning) send cycle.
             // callBackGround() reads this to keep the loopback continuation alive.
             fluentcrm_update_option($this->optionKey . '_last_called', time());
 
@@ -177,14 +153,10 @@ class Handler extends BaseHandler
         $table = $wpdb->prefix . 'fc_campaign_emails';
         $currentTime = current_time('mysql');
 
-        // Atomic claim: SELECT ids then UPDATE status in a transaction.
-        // The status check in the UPDATE WHERE clause prevents double-claiming
-        // if another handler somehow selects the same rows.
+        // Atomic claim: lock ids, then flip them to 'processing' in one transaction.
         $wpdb->query('START TRANSACTION');
 
-        // One locking SELECT per status — 'pending' first, then top up from
-        // 'scheduled'. See BaseHandler::lockClaimableIds() for why the two
-        // statuses must not share one IN() claim.
+        // One locking SELECT per status, 'pending' first. See lockClaimableIds().
         $ids = $this->lockClaimableIds('pending', $currentTime, $this->sendingPerChunk, 'ASC');
         if (count($ids) < $this->sendingPerChunk) {
             $ids = array_merge($ids, $this->lockClaimableIds('scheduled', $currentTime, $this->sendingPerChunk - count($ids), 'ASC'));
@@ -287,55 +259,15 @@ class Handler extends BaseHandler
             return false; // is not valid
         }
 
-        $emailBody = apply_filters('fluent_crm/parse_campaign_email_text', $config['email_body'], $subscriber);
-        $emailSubject = apply_filters('fluent_crm/parse_campaign_email_text', $config['email_subject'], $subscriber);
-
-        $emailPreHeader = '';
-        if (Arr::get($config, 'email_pre_header')) {
-            $emailPreHeader = apply_filters('fluent_crm/parse_campaign_email_text', $config['email_pre_header'], $subscriber);
-        }
-
-        $url = add_query_arg([
-            FLUENTCRM_EXTERNAL_URL_PARAM => 1,
-            'route'                      => 'confirmation',
-            'hash'                       => $subscriber->hash,
-            'secure_hash'                => $subscriber->getSecureHash()
-        ], site_url('/'));
-
-        $emailBody = apply_filters('fluent_crm/double_optin_email_body', $emailBody, $subscriber);
-        $emailSubject = apply_filters('fluent_crm/double_optin_email_subject', $emailSubject, $subscriber);
-        $emailPreHeader = apply_filters('fluent_crm/double_optin_email_pre_header', $emailPreHeader, $subscriber);
-
-        $emailBody = str_replace('#activate_link#', $url, $emailBody);
-
-        $templateData = [
-            'is_double_optin' => true,
-            'preHeader'   => $emailPreHeader,
-            'email_body'  => $emailBody,
-            'footer_text' => '',
-            'config'      => Helper::getTemplateConfig($config['design_template'], false)
-        ];
-
-        $emailBody = apply_filters(
-            'fluent_crm/email-design-template-' . $config['design_template'],
-            $emailBody,
-            $templateData,
-            false,
-            $subscriber
-        );
-
-        if (Str::contains($emailBody, ['##crm.', '{{crm.'])) {
-            // we have CRM specific smartcodes
-            $emailBody = apply_filters('fluent_crm/parse_extended_crm_text', $emailBody, $subscriber);
-        }
+        $renderedEmail = DoubleOptinRenderer::render($config, $subscriber);
 
         $data = [
             'to'      => [
                 'email' => $subscriber->email,
                 'name'  => $subscriber->full_name
             ],
-            'subject' => $emailSubject,
-            'body'    => $emailBody,
+            'subject' => $renderedEmail['subject'],
+            'body'    => $renderedEmail['body'],
             'headers' => Helper::getMailHeader(),
             'scope'   => 'double_optin'
         ];
@@ -387,10 +319,7 @@ class Handler extends BaseHandler
 
     /**
      * Fire a non-blocking POST request to continue the sender chain.
-     *
-     * cURL stays the first transport because it bypasses WP_Http SSL filters
-     * that can break local/self-signed loopbacks. If cURL times out or fails,
-     * fall back silently to WordPress HTTP and log only in FluentCRM debug logs.
+     * cURL goes first because it bypasses WP_Http SSL filters that break self-signed loopbacks.
      *
      * @param string $url
      * @param array  $body POST body data
@@ -436,7 +365,6 @@ class Handler extends BaseHandler
             ],
         ]);
 
-        // Fire and forget — we don't need the response
         $response = curl_exec($ch);
         $errorNo = curl_errno($ch);
         $error = curl_error($ch);

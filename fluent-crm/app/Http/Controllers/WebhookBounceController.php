@@ -81,7 +81,7 @@ class WebhookBounceController extends Controller
     {
         return [
             'status'  => false,
-            'message' => __('Invalid Data or Security Code', 'fluent-crm')
+            'message' => __('Invalid data or security code', 'fluent-crm')
         ];
     }
 }

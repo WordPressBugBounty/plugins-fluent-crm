@@ -58,9 +58,7 @@ class EventTrackingHandler
     public function applyEventTrackingFilter($query, $filters)
     {
         if (!Helper::isExperimentalEnabled('event_tracking')) {
-            // Fail closed: with event tracking switched off a saved "did event X" segment
-            // must match nobody. Returning the query unchanged would silently turn it
-            // into "all subscribers" for list views and campaign sends.
+            // Fail closed: with event tracking off, an event segment matches nobody.
             $query->whereRaw('1 = 0');
             return $query;
         }
@@ -122,35 +120,20 @@ class EventTrackingHandler
                 }
 
                 $operator = $filter['operator'];
+                $value = $filter['value'];
 
                 if ($operator == '=') {
-                    $query->whereHas($relation, function ($q) use ($filter, $eventKey) {
-                        $q->where('value', $filter['value'])
-                            ->where('event_key', $eventKey);
-                    });
+                    $query->whereIn('id', $this->latestValueSubscribers($eventKey, '=', $value));
                 } else if ($operator == '!=') {
-                    $query->whereDoesntHave($relation, function ($q) use ($filter, $eventKey) {
-                        $q->where('value', $filter['value'])
-                            ->where('event_key', $eventKey);
-                    });
+                    $query->whereNotIn('id', $this->latestValueSubscribers($eventKey, '=', $value));
                 } else if (in_array($operator, ['<', '>'])) {
-
-                    $query->whereHas($relation, function ($q) use ($filter, $eventKey, $operator) {
-                        $q->where('value', $operator, (int)$filter['value'])
-                            ->where('event_key', $eventKey);
-                    });
+                    $query->whereIn('id', $this->latestValueSubscribers($eventKey, $operator, (int)$value));
                 } else if ($operator == 'contains') {
-                    $query->whereHas($relation, function ($q) use ($filter, $eventKey) {
-                        global $wpdb;
-                        $q->where('value', 'LIKE', '%' . $wpdb->esc_like($filter['value']) . '%')
-                            ->where('event_key', $eventKey);
-                    });
+                    global $wpdb;
+                    $query->whereIn('id', $this->latestValueSubscribers($eventKey, 'LIKE', '%' . $wpdb->esc_like($value) . '%'));
                 } else if ($operator == 'not_contains') {
-                    $query->whereDoesntHave($relation, function ($q) use ($filter, $eventKey) {
-                        global $wpdb;
-                        $q->where('value', 'LIKE', '%' . $wpdb->esc_like($filter['value']) . '%')
-                            ->where('event_key', $eventKey);
-                    });
+                    global $wpdb;
+                    $query->whereNotIn('id', $this->latestValueSubscribers($eventKey, 'LIKE', '%' . $wpdb->esc_like($value) . '%'));
                 }
                 continue;
             }
@@ -163,23 +146,12 @@ class EventTrackingHandler
                 }
 
                 $operator = $filter['operator'];
+                $count = (int)$filter['value'];
 
-                if ($operator == '=') {
-                    $query->whereHas($relation, function ($q) use ($filter, $eventKey) {
-                        $q->where('counter', $filter['value'])
-                            ->where('event_key', $eventKey);
-                    });
+                if (in_array($operator, ['=', '<', '>'])) {
+                    $query->whereIn('id', $this->eventCountSubscribers($eventKey, $operator, $count));
                 } else if ($operator == '!=') {
-                    $query->whereDoesntHave($relation, function ($q) use ($filter, $eventKey) {
-                        $q->where('counter', $filter['value'])
-                            ->where('event_key', $eventKey);
-                    });
-                } else if (in_array($operator, ['<', '>'])) {
-
-                    $query->whereHas($relation, function ($q) use ($filter, $eventKey, $operator) {
-                        $q->where('counter', $operator, (int)$filter['value'])
-                            ->where('event_key', $eventKey);
-                    });
+                    $query->whereNotIn('id', $this->eventCountSubscribers($eventKey, '=', $count));
                 }
 
                 continue;
@@ -187,6 +159,54 @@ class EventTrackingHandler
         }
 
         return $query;
+    }
+
+    /**
+     * Subquery of the contacts whose total occurrences of an event match the comparison.
+     *
+     * Tracker::track() keeps one row per (contact, event key, title), and a new row per occurrence
+     * when the event is not repeatable, so the occurrence count is the sum of counter over every
+     * row of the key. Contacts without the event are not in the result.
+     *
+     * @param string $eventKey
+     * @param string $operator one of =, <, >
+     * @param int $count
+     * @return \Closure for whereIn('id', ...)
+     */
+    private function eventCountSubscribers($eventKey, $operator, $count)
+    {
+        return function ($q) use ($eventKey, $operator, $count) {
+            $q->from('fc_event_tracking')
+                ->select('subscriber_id')
+                ->where('event_key', $eventKey)
+                ->groupBy('subscriber_id')
+                ->havingRaw('SUM(counter) ' . $operator . ' ?', [$count]);
+        };
+    }
+
+    /**
+     * Subquery of the contacts whose last recorded value of an event matches the comparison.
+     *
+     * Only the most recently updated row of the key counts (ties go to the higher id), so an older
+     * occurrence with a matching value does not match.
+     *
+     * @param string $eventKey
+     * @param string $operator one of =, <, >, LIKE
+     * @param mixed $value
+     * @return \Closure for whereIn('id', ...)
+     */
+    private function latestValueSubscribers($eventKey, $operator, $value)
+    {
+        global $wpdb;
+        $table = $wpdb->prefix . 'fc_event_tracking';
+
+        return function ($q) use ($eventKey, $operator, $value, $table) {
+            $q->from('fc_event_tracking')
+                ->select('subscriber_id')
+                ->where('event_key', $eventKey)
+                ->where('value', $operator, $value)
+                ->whereRaw("NOT EXISTS (SELECT 1 FROM `{$table}` AS newer WHERE newer.subscriber_id = `{$table}`.subscriber_id AND newer.event_key = `{$table}`.event_key AND (newer.updated_at > `{$table}`.updated_at OR (newer.updated_at = `{$table}`.updated_at AND newer.id > `{$table}`.id)))");
+        };
     }
 
     public function trackEventActivity($data, $repeatable = true)
@@ -318,7 +338,7 @@ class EventTrackingHandler
                 'label'            => __('Event Occurrence Count', 'fluent-crm'),
                 'value'            => 'event_tracking_key_count',
                 'type'             => 'composite_optioned_compare',
-                'help'             => __('The provided value for your selected event will be matched with the event occurrence count', 'fluent-crm'),
+                'help'             => __('The value you enter is compared with the number of times the selected event has occurred', 'fluent-crm'),
                 'ajax_selector'    => [
                     'label'              => __('For Event Key', 'fluent-crm'),
                     'option_key'         => 'event_tracking_keys',
@@ -343,7 +363,7 @@ class EventTrackingHandler
                 'label'            => __('Event Value', 'fluent-crm'),
                 'value'            => 'event_tracking_value',
                 'type'             => 'composite_optioned_compare',
-                'help'             => __('The compare value will be matched with selected event & last recorded value of the selected event key', 'fluent-crm'),
+                'help'             => __('The compare value is matched against the last recorded value of the selected event key', 'fluent-crm'),
                 'ajax_selector'    => [
                     'label'              => __('For Event Key', 'fluent-crm'),
                     'option_key'         => 'event_tracking_keys',

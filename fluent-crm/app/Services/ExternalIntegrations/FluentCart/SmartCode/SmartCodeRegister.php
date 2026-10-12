@@ -9,7 +9,7 @@ class SmartCodeRegister
         $smartCodesConfig = [
             'cart_order' => [
                 'title' => __('Cart Order', 'fluent-crm'),
-                'description' => __('Order-related smart codes', 'fluent-crm'),
+                'description' => __('Order-related smartcodes', 'fluent-crm'),
                 'shortcodes' => [
                     '{{cart_order.order_id}}' => __('Order ID', 'fluent-crm'),
                     '{{cart_order.status}}' => __('Order Status', 'fluent-crm'),
@@ -28,12 +28,11 @@ class SmartCodeRegister
                     '{{cart_order.created_at}}' => __('Order Creation Date', 'fluent-crm'),
                     '{{cart_order.total_paid}}' => __('Total Paid Amount', 'fluent-crm'),
                     '{{cart_order.shipping_status}}' => __('Shipping Status', 'fluent-crm'),
-//                    '##cart_order.order_url##' => 'Order URL',
                 ]
             ],
             'cart_customer' => [
                 'title' => __('Cart Customer', 'fluent-crm'),
-                'description' => __('Customer-related smart codes', 'fluent-crm'),
+                'description' => __('Customer-related smartcodes', 'fluent-crm'),
                 'shortcodes' => [
                     '{{cart_customer.user_id}}' => __('User ID', 'fluent-crm'),
                     '{{cart_customer.contact_id}}' => __('Customer Contact ID', 'fluent-crm'),
@@ -54,8 +53,8 @@ class SmartCodeRegister
                 ]
             ],
 //            'cart_transaction' => [
-//                'title' => __('Cart Transaction'),
-//                'description' => __('Transaction-related smart codes'),
+//                'title' => __('Cart Transaction', 'fluent-crm'),
+//                'description' => __('Transaction-related smartcodes', 'fluent-crm'),
 //                'shortcodes' => [
 //                    '{{cart_transaction.transaction_id}}' => 'Transaction ID',
 //                    '{{cart_transaction.amount}}' => 'Transaction Amount',
@@ -72,8 +71,8 @@ class SmartCodeRegister
 //                ]
 //            ],
 //            'cart_receipt' => [
-//                'title' => __('Cart Receipts'),
-//                'description' => __('Transaction-related smart codes'),
+//                'title' => __('Cart Receipts', 'fluent-crm'),
+//                'description' => __('Transaction-related smartcodes', 'fluent-crm'),
 //                'shortcodes' => [
 //                    '{{cart_receipt.payment_summary}}' => 'Payment Summary',
 //                ]
@@ -83,8 +82,14 @@ class SmartCodeRegister
 
         // Dynamically register filters for each smart code group
 
+        // Order data exists only for runs started by a FluentCart order trigger.
+        $orderGroups = ['cart_order', 'cart_receipt', 'cart_transaction'];
+
         foreach ($smartCodesConfig as $key => $config) {
-            add_filter('fluent_crm_funnel_context_smart_codes', function ($codes) use ($key, $config) {
+            add_filter('fluent_crm_funnel_context_smart_codes', function ($codes, $triggerName = '') use ($key, $config, $orderGroups) {
+                if (in_array($key, $orderGroups, true) && strpos((string)$triggerName, 'fluent_cart/') !== 0) {
+                    return $codes;
+                }
                 $codes[] = [
                     'key' => $key,
                     'title' => $config['title'],
@@ -92,7 +97,7 @@ class SmartCodeRegister
                     'shortcodes' => $config['shortcodes']
                 ];
                 return $codes;
-            });
+            }, 10, 2);
         }
     }
 }

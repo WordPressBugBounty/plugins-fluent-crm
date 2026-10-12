@@ -19,8 +19,7 @@
 
 (new \FluentCrm\App\Hooks\Handlers\AutoSubscribeHandler())->register();
 
-// WhatsApp Module is a Pro feature — initialized by fluentcampaign-pro plugin
-// The free plugin only provides: Vue frontend, database migrations, and helper functions
+// The WhatsApp module is initialized by FluentCampaign Pro.
 
 add_action('fluentcrm_contacts_filter_subscriber', function ($query, $filters) {
     return (new \FluentCrm\App\Models\Subscriber)->buildGeneralPropertiesFilterQuery($query, $filters);
@@ -79,9 +78,7 @@ $app->addAction('wp_ajax_fluentcrm_save_campaign_email_body', 'FunnelHandler@sav
 
 (new \FluentCrm\App\Hooks\Handlers\FunnelHandler())->register();
 
-// FluentCart's modal checkout fires fluent_cart/before_payment_methods and calls die()
-// during init at priority 10, before a priority-10 callback can register. Only
-// CheckoutSubscription needs to be early — everything else in FluentCart::init() is fine at 10.
+// FluentCart's modal checkout calls die() during init@10, so CheckoutSubscription registers at init@1.
 add_action('init', function () {
     if (defined('FLUENTCART_VERSION')) {
         (new \FluentCrm\App\Services\ExternalIntegrations\FluentCart\CheckoutSubscription())->init();
@@ -113,6 +110,7 @@ $app->addAction('fluentcrm_subscriber_status_to_spammed', 'Cleanup@handleUnsubsc
 
 $app->addAction('fluent_crm/contact_email_changed', 'Cleanup@handleContactEmailChanged');
 $app->addAction('fluent_crm/subscriber_confirmed_via_double_optin', 'Cleanup@resetSoftBounceCount');
+$app->addAction('fluentcrm_subscriber_status_to_subscribed', 'Cleanup@resetSoftBounceCount', 10, 1);
 $app->addAction('delete_user', 'Cleanup@handleUserDelete', 10, 3);
 $app->addAction('fluent_crm/company_deleted', 'Cleanup@handleCompanyDelete', 10, 1);
 $app->addAction('after_password_reset', 'Cleanup@handleUserPasswordChanged', 10, 1);
@@ -196,7 +194,13 @@ if (defined('WP_CLI') && WP_CLI) {
 
 add_action('admin_notices', function () {
     if (defined('FLUENTCAMPAIGN_FRAMEWORK_VERSION') && FLUENTCAMPAIGN_FRAMEWORK_VERSION < 3) {
-        echo '<div class="fc_notice notice notice-error fc_notice_error"><h3>Update FluentCRM Pro Plugin</h3><p>You are using an out-of-date version of FluentCRM Pro. <a href="' . esc_url(admin_url('plugins.php?s=fluentcampaign=pro&plugin_status=all&fluentcrm_pro_check_update=' . time())) . '">' . esc_html__('Please update FluentCRM Pro to latest version', 'fluent-crm') . '</a>.</p></div>';
+        $updateUrl = admin_url('plugins.php?s=fluentcampaign=pro&plugin_status=all&fluentcrm_pro_check_update=' . time());
+        echo '<div class="fc_notice notice notice-error fc_notice_error"><h3>' . esc_html__('Update FluentCRM Pro Plugin', 'fluent-crm') . '</h3><p>' . sprintf(
+                /* translators: %1$s: opening link tag to the plugin update screen, %2$s: closing link tag */
+                esc_html__('You are using an out-of-date version of FluentCRM Pro. %1$sPlease update FluentCRM Pro to the latest version%2$s.', 'fluent-crm'),
+                '<a href="' . esc_url($updateUrl) . '">',
+                '</a>'
+            ) . '</p></div>';
     }
 });
 
@@ -232,16 +236,8 @@ add_action('admin_head', function () {
 });
 
 /*
- * MCP — Register abilities for the WordPress Abilities API.
- *
- * Lazy-register guard:
- *  - On WP < 6.9 (no Abilities API in core) OR sites without the WP MCP Adapter
- *    plugin active, `wp_register_ability` is undefined — we skip silently.
- *  - The opt-out option `fluent_crm_mcp_enabled` (default 'yes') lets admins
- *    disable the entire MCP surface from Settings → MCP without uninstalling
- *    the adapter.
- *
- * See `app/Modules/MCP/MCPInit.php` for the registration logic.
+ * MCP: register abilities for the WordPress Abilities API.
+ * Skipped when wp_register_ability is undefined or the mcp_enabled option is off.
  */
 add_action('init', function () {
     if (!function_exists('wp_register_ability')) {

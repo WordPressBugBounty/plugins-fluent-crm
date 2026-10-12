@@ -109,12 +109,12 @@ class CustomContactField
             ],
             'single-select' => [
                 'type'       => 'select-one',
-                'label'      => __('Select choice', 'fluent-crm'),
+                'label'      => __('Select Choice', 'fluent-crm'),
                 'value_type' => 'string'
             ],
             'multi-select'  => [
                 'type'       => 'select-multi',
-                'label'      => __('Multiple Select choice', 'fluent-crm'),
+                'label'      => __('Multiple Select Choice', 'fluent-crm'),
                 'value_type' => 'array'
             ],
             'radio'         => [

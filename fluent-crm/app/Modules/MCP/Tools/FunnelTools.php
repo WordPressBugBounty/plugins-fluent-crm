@@ -3,15 +3,13 @@
 namespace FluentCrm\App\Modules\MCP\Tools;
 
 use FluentCrm\App\Models\Funnel;
+use FluentCrm\App\Models\FunnelSequence;
 use FluentCrm\App\Models\FunnelSubscriber;
 use FluentCrm\App\Modules\MCP\Helpers\MCPHelper;
 use FluentCrm\App\Services\Funnel\FunnelHelper;
 
 /**
  * Automation (funnel) MCP tools.
- *
- * Read tools (Phase 2): listAutomations, getAutomation.
- * Write tools (Phase 3): updateContactAutomationStatus.
  */
 class FunnelTools
 {
@@ -31,12 +29,7 @@ class FunnelTools
             array_map('sanitize_key', $statuses),
             ['draft', 'published']
         ));
-        // All fc_funnels columns. The framework rewrite made orderBy() throw
-        // LogicException on column names that don't match ^[a-zA-Z0-9_\.]+$
-        // — empty strings, "id ASC", "DROP TABLE", etc. — so an unguarded
-        // sort_by would 500 the tool. Schema is stable (migration only adds
-        // indexes), so hardcoding the column list avoids a per-request
-        // SHOW COLUMNS without restricting agents to the input_schema enum.
+        // All fc_funnels columns. orderBy() throws on an invalid column name.
         $allowedSortBy = [
             'id', 'type', 'title', 'trigger_name', 'status', 'conditions',
             'settings', 'created_by', 'created_at', 'updated_at',
@@ -48,19 +41,44 @@ class FunnelTools
         $sortType = strtoupper(sanitize_text_field((string) ($params['sort_type'] ?? 'DESC')));
         $sortType = in_array($sortType, ['ASC', 'DESC'], true) ? $sortType : 'DESC';
 
-        $query = Funnel::query()->orderBy($sortBy, $sortType);
+        // Search and status, shared by the list and the uses_tags / uses_lists scan.
+        $scope = function ($q) use ($search, $statuses) {
+            if ($search !== '') {
+                global $wpdb;
+                $like = '%' . $wpdb->esc_like($search) . '%';
+                $q->where(function ($q) use ($like) {
+                    $q->where('title', 'LIKE', $like)
+                      ->orWhere('trigger_name', 'LIKE', $like);
+                });
+            }
+            if (!empty($statuses)) {
+                $q->whereIn('status', $statuses);
+            }
+        };
 
-        if ($search !== '') {
-            global $wpdb;
-            $like = '%' . $wpdb->esc_like($search) . '%';
-            $query->where(function ($q) use ($like) {
-                $q->where('title', 'LIKE', $like)
-                  ->orWhere('trigger_name', 'LIKE', $like);
-            });
+        $query = Funnel::query()->where($scope)->orderBy($sortBy, $sortType);
+
+        // uses_tags / uses_lists: only automations whose trigger, goals, actions or conditions
+        // name one of these tags or lists (what a merge or delete would leave dangling).
+        $usage = null;
+        $idsByKind = [];
+        foreach (['tag' => 'uses_tags', 'list' => 'uses_lists'] as $kind => $param) {
+            if (empty($params[$param])) {
+                continue;
+            }
+            $resolved = MCPHelper::resolveSegmentRefs((array) $params[$param], $kind, false);
+            if ($resolved['unknown']) {
+                return MCPHelper::error('invalid_param', $param . ' contains references that match no ' . $kind . '.', [
+                    'unknown'   => $resolved['unknown'],
+                    'next_step' => 'Check the names with list-' . $kind . 's.',
+                ]);
+            }
+            $idsByKind[$kind] = $resolved['ids'];
         }
+        if ($idsByKind) {
+            $usage = self::automationsUsingSegments($idsByKind, ($search !== '' || $statuses) ? $scope : null);
 
-        if (!empty($statuses)) {
-            $query->whereIn('status', $statuses);
+            $query->whereIn('id', $usage ? array_keys($usage) : [0]);
         }
 
         $paginated = $query->paginate();
@@ -72,10 +90,7 @@ class FunnelTools
             return (int) $funnel->id;
         }, $funnels);
 
-        // One grouped query for every funnel on the current page replaces the
-        // previous per-row inProgressCount() call. Keep the exact historical
-        // in-progress definition (active + waiting), and make the completed
-        // field match get-automation instead of counting every status.
+        // One grouped count for the page. In progress means active + waiting.
         $subscriberCounts = [];
         if ($funnelIds) {
             $countRows = FunnelSubscriber::whereIn('funnel_id', $funnelIds)
@@ -103,18 +118,7 @@ class FunnelTools
             }
         }
 
-        // Last time this funnel's trigger actually fired, for spotting
-        // automations that are still published but nothing enters any more.
-        //
-        // Deliberately MAX(created_at) — enrollment — and NOT
-        // MAX(last_executed_time): a funnel keeps executing steps for contacts
-        // who entered months ago, so last_executed_time stays fresh long after
-        // the trigger went dead and would report retired funnels as active.
-        //
-        // Also deliberately unfiltered by status, unlike the counts above: a
-        // contact who entered and was later cancelled still proves the trigger
-        // fired. Opt-in because fc_funnel_subscribers is indexed on funnel_id
-        // alone, so the MAX walks each funnel's rows.
+        // Last enrollment, any status: last_executed_time stays fresh after the trigger stops firing.
         $lastEnrolled = [];
         if (!empty($params['include_last_enrolled']) && $funnelIds) {
             $enrollRows = FunnelSubscriber::whereIn('funnel_id', $funnelIds)
@@ -149,6 +153,10 @@ class FunnelTools
                 $item['last_enrolled_at'] = MCPHelper::toIso8601($lastEnrolled[(int) $funnel->id] ?? null);
             }
 
+            if ($usage !== null) {
+                $item['uses'] = $usage[(int) $funnel->id] ?? [];
+            }
+
             $items[] = $item;
         }
 
@@ -171,21 +179,27 @@ class FunnelTools
         $funnelId = (int) ($params['funnel_id'] ?? 0);
 
         if (!$funnelId) {
-            return MCPHelper::error('invalid_param', __('funnel_id is required', 'fluent-crm'));
+            return MCPHelper::error('invalid_param', 'funnel_id is required');
         }
 
         $funnel = Funnel::find($funnelId);
         if (!$funnel) {
-            return MCPHelper::error('not_found', __('Automation not found', 'fluent-crm'), ['funnel_id' => $funnelId]);
+            return MCPHelper::error('not_found', 'Automation not found', ['funnel_id' => $funnelId]);
         }
 
-        $defaultIncludes = ['sequences', 'report'];
-        // array_key_exists (not truthiness): omitted => defaults, [] =>
-        // metadata only, explicit list => exactly those (TRC-005). The schema
-        // documents "[] for metadata only"; the old truthy check restored the
-        // defaults on [], contradicting it.
+        $defaultIncludes = ['steps', 'report'];
+        // Omitted => defaults, [] => metadata only, explicit list => exactly those.
         if (array_key_exists('include', $params) && is_array($params['include'])) {
-            $include = array_values(array_intersect($params['include'], ['sequences', 'report']));
+            // Unknown names are refused, not dropped: "sequences" (the pre-2.0 name for steps)
+            // would otherwise return an automation with no steps and no hint why.
+            $unknown = array_values(array_diff($params['include'], $defaultIncludes));
+            if ($unknown) {
+                return MCPHelper::error('invalid_param', 'include contains unknown sections.', [
+                    'unknown' => $unknown,
+                    'allowed' => $defaultIncludes,
+                ]);
+            }
+            $include = array_values(array_intersect($params['include'], $defaultIncludes));
         } else {
             $include = $defaultIncludes;
         }
@@ -208,10 +222,10 @@ class FunnelTools
             'updated_at'                    => MCPHelper::toIso8601($funnel->updated_at),
         ];
 
-        if (in_array('sequences', $include, true)) {
+        if (in_array('steps', $include, true)) {
             $sequences = FunnelHelper::getFunnelSequences($funnel, true);
             $includeBodies = !empty($params['include_bodies']);
-            $data['sequences'] = self::formatSequences($sequences, $includeBodies);
+            $data['steps'] = self::formatSteps($sequences, $includeBodies);
         }
 
         if (in_array('report', $include, true)) {
@@ -222,12 +236,124 @@ class FunnelTools
     }
 
     /**
-     * Format funnel sequences for MCP. By default we strip large body
-     * fields out of `settings` (action_name=send_custom_email embeds an
-     * entire campaign payload including email_body). Pass include_bodies
-     * = true to get the full settings tree — review #7 (token bloat).
+     * Automations that name any of the given tag or list ids, with where each one does.
+     *
+     * Tag and list ids sit in trigger and goal settings ({"tags": ["8"]}), action settings
+     * and condition rows ({"source": ["segment", "tags"], "value": ["14"]}). A LIKE prefilter
+     * keeps the scan to rows that mention a requested kind at all, and rows are read in id
+     * batches so memory stays flat however many automations the site has. Only matches are kept.
+     *
+     * @param array<string, int[]> $idsByKind 'tag' and/or 'list' => ids; both kinds share one scan
+     * @param callable|null        $scope     extra fc_funnels constraints (search, status); steps
+     *                                        are only read for automations inside it
+     * @return array<int, array<int, array>> funnel id => [{kind, ids, where, step_id, name}]
      */
-    private static function formatSequences($sequences, $includeBodies = false)
+    public static function automationsUsingSegments(array $idsByKind, $scope = null)
+    {
+        $wanted = [];
+        foreach ($idsByKind as $kind => $ids) {
+            $ids = array_values(array_unique(array_map('intval', (array) $ids)));
+            if ($ids) {
+                $wanted[$kind === 'list' ? 'lists' : 'tags'] = [$kind, $ids];
+            }
+        }
+        if (!$wanted) {
+            return [];
+        }
+
+        $mentions = function ($q, array $columns) use ($wanted) {
+            $q->where(function ($q) use ($columns, $wanted) {
+                foreach ($columns as $column) {
+                    foreach (array_keys($wanted) as $plural) {
+                        $q->orWhere($column, 'LIKE', '%' . $plural . '%');
+                    }
+                }
+            });
+        };
+
+        $out = [];
+        $add = function ($funnelId, $where, $stepId, $name, $settings) use ($wanted, &$out) {
+            foreach ($wanted as $plural => list($kind, $ids)) {
+                $found = [];
+                self::collectSegmentIds($settings, $plural, $found);
+                $hits = array_values(array_intersect($ids, array_unique($found)));
+                if ($hits) {
+                    $out[(int) $funnelId][] = [
+                        'kind'    => $kind,
+                        'ids'     => $hits,
+                        'where'   => $where,
+                        'step_id' => $stepId,
+                        'name'    => $name,
+                    ];
+                }
+            }
+        };
+
+        $funnelQuery = Funnel::select(['id', 'trigger_name', 'settings', 'conditions']);
+        if ($scope) {
+            $funnelQuery->where($scope);
+        }
+        $mentions($funnelQuery, ['settings', 'conditions']);
+        $funnelQuery->chunkById(200, function ($funnels) use ($add) {
+            foreach ($funnels as $funnel) {
+                $add($funnel->id, 'trigger', null, $funnel->trigger_name, [$funnel->settings, $funnel->conditions]);
+            }
+        });
+
+        $stepQuery = FunnelSequence::select(['id', 'funnel_id', 'type', 'action_name', 'settings']);
+        if ($scope) {
+            $scopedIds = Funnel::where($scope)->pluck('id')->toArray();
+            if (!$scopedIds) {
+                return $out;
+            }
+            $stepQuery->whereIn('funnel_id', $scopedIds);
+        }
+        $mentions($stepQuery, ['settings']);
+        $stepQuery->chunkById(500, function ($steps) use ($add) {
+            foreach ($steps as $step) {
+                $add($step->funnel_id, $step->type === 'benchmark' ? 'goal' : 'step', (int) $step->id, $step->action_name, $step->settings);
+            }
+        });
+
+        return $out;
+    }
+
+    /**
+     * Collect the ids a settings tree holds for "tags" or "lists": arrays under that key, and
+     * the value of condition rows whose source names it.
+     */
+    private static function collectSegmentIds($node, $plural, array &$found)
+    {
+        if (!is_array($node)) {
+            return;
+        }
+
+        if (isset($node['source'], $node['value']) && is_array($node['source']) && in_array($plural, $node['source'], true)) {
+            foreach ((array) $node['value'] as $value) {
+                if (is_scalar($value) && is_numeric($value)) {
+                    $found[] = (int) $value;
+                }
+            }
+        }
+
+        foreach ($node as $key => $child) {
+            if ($key === $plural && is_array($child)) {
+                foreach ($child as $value) {
+                    if (is_scalar($value) && is_numeric($value)) {
+                        $found[] = (int) $value;
+                    }
+                }
+                continue;
+            }
+            self::collectSegmentIds($child, $plural, $found);
+        }
+    }
+
+    /**
+     * Format automation steps (fc_funnel_sequences rows) for MCP. Body fields are stripped from
+     * settings unless $includeBodies.
+     */
+    private static function formatSteps($sequences, $includeBodies = false)
     {
         $out = [];
         foreach ((array) $sequences as $seq) {
@@ -238,6 +364,8 @@ class FunnelTools
             }
             $out[] = [
                 'id'           => isset($row['id']) ? (int) $row['id'] : null,
+                // Run order: getFunnelSequences() sorts by this column.
+                'position'     => isset($row['sequence']) ? (int) $row['sequence'] : null,
                 'type'         => $row['type'] ?? null,
                 'action_name'  => $row['action_name'] ?? null,
                 'settings'     => $settings,
@@ -250,14 +378,7 @@ class FunnelTools
     }
 
     /**
-     * Recursively redact body / html fields. Replaces them with a marker so
-     * the agent knows the field exists and can re-fetch with include_bodies.
-     *
-     * Round-3 review B5: dropped the previous "only if >200 chars" gate —
-     * any stored body field gets stripped now, regardless of size, so the
-     * include_bodies=false contract is honored consistently. Rare to have a
-     * truly tiny body field anyway, and the marker is shorter than most
-     * email bodies.
+     * Recursively replace body fields with a marker pointing at include_bodies.
      */
     private static function stripBodyFields($value)
     {
@@ -323,23 +444,19 @@ class FunnelTools
     // -----------------------------------------------------------------
 
     /**
-     * List the contacts currently in a funnel filtered by subscription
-     * status. Closes a real workflow gap: "this customer just upgraded —
-     * pull them out of trial-onboarding" requires knowing who's in the
-     * funnel first, and there was no way to find that without already
-     * knowing the contact id.
+     * List the contacts in a funnel, filtered by funnel-subscriber status.
      */
     public static function listFunnelSubscribers($params)
     {
         $params = (array) $params;
         $funnelId = (int) ($params['funnel_id'] ?? 0);
         if (!$funnelId) {
-            return MCPHelper::error('invalid_param', __('funnel_id is required', 'fluent-crm'));
+            return MCPHelper::error('invalid_param', 'funnel_id is required');
         }
 
         $funnel = Funnel::find($funnelId);
         if (!$funnel) {
-            return MCPHelper::error('not_found', __('Automation not found', 'fluent-crm'), ['funnel_id' => $funnelId]);
+            return MCPHelper::error('not_found', 'Automation not found', ['funnel_id' => $funnelId]);
         }
 
         $allowedStatuses = ['active', 'waiting', 'completed', 'cancelled', 'skipped'];
@@ -368,7 +485,7 @@ class FunnelTools
             $items[] = [
                 'funnel_subscriber_id' => (int) $row->id,
                 'funnel_status'        => $row->status,
-                'next_sequence_id'     => $row->next_sequence_id ? (int) $row->next_sequence_id : null,
+                'next_step_id'         => $row->next_sequence_id ? (int) $row->next_sequence_id : null,
                 'last_executed_at'     => MCPHelper::toIso8601($row->last_executed_time),
                 'next_execution_at'    => MCPHelper::toIso8601($row->next_execution_time),
                 'enrolled_at'          => MCPHelper::toIso8601($row->created_at),
@@ -407,18 +524,16 @@ class FunnelTools
         $action   = sanitize_key((string) ($params['action'] ?? ''));
 
         if (!$funnelId) {
-            return MCPHelper::error('invalid_param', __('funnel_id is required', 'fluent-crm'));
+            return MCPHelper::error('invalid_param', 'funnel_id is required');
         }
         if (!in_array($action, ['resume', 'cancel', 'advance_now'], true)) {
-            // 'pause' was intentionally dropped — FluentCRM has no native
-            // paused funnel-subscriber state, and the previous mapping
-            // silently cancelled. Tell the agent what the alternative is.
+            // FluentCRM has no paused funnel-subscriber state.
             if ($action === 'pause') {
-                return MCPHelper::error('not_supported', __('pause is not supported — FluentCRM has no paused state for funnel subscribers. Use cancel to stop processing (reversible from the UI), or wait for a real benchmark.', 'fluent-crm'), [
+                return MCPHelper::error('not_supported', 'pause is not supported: FluentCRM has no paused state for funnel subscribers. Use cancel to stop processing (reversible from the UI), or wait for a real benchmark.', [
                     'allowed_actions' => ['resume', 'cancel', 'advance_now'],
                 ]);
             }
-            return MCPHelper::error('invalid_param', __('Invalid action', 'fluent-crm'), [
+            return MCPHelper::error('invalid_param', 'Invalid action', [
                 'allowed_actions' => ['resume', 'cancel', 'advance_now'],
             ]);
         }
@@ -430,20 +545,20 @@ class FunnelTools
 
         $funnel = Funnel::find($funnelId);
         if (!$funnel) {
-            return MCPHelper::error('not_found', __('Automation not found', 'fluent-crm'), ['funnel_id' => $funnelId]);
+            return MCPHelper::error('not_found', 'Automation not found', ['funnel_id' => $funnelId]);
         }
 
         $row = FunnelSubscriber::where('funnel_id', $funnelId)
             ->where('subscriber_id', $contact->id)
             ->first();
         if (!$row) {
-            return MCPHelper::error('not_found', __('Contact is not enrolled in this automation', 'fluent-crm'));
+            return MCPHelper::error('not_found', 'Contact is not enrolled in this automation');
         }
 
         $previousStatus = $row->status;
 
         if ($row->status === 'completed') {
-            return MCPHelper::error('not_supported', __('Automation is already completed for this contact', 'fluent-crm'), [
+            return MCPHelper::error('not_supported', 'Automation is already completed for this contact', [
                 'status' => $row->status,
             ]);
         }
@@ -458,50 +573,29 @@ class FunnelTools
             }
             $row->save();
         } elseif ($action === 'advance_now') {
-            $sequenceId = (int) ($params['advance_to_sequence_id'] ?? 0);
+            $sequenceId = (int) ($params['advance_to_step_id'] ?? 0);
             if (!$sequenceId) {
-                return MCPHelper::error('invalid_param', __('advance_to_sequence_id is required for advance_now', 'fluent-crm'));
+                return MCPHelper::error('invalid_param', 'advance_to_step_id is required for advance_now', [
+                    'next_step' => 'Read the step ids from get-automation include=["steps"].',
+                ]);
             }
             $sequence = \FluentCrm\App\Models\FunnelSequence::where('id', $sequenceId)
                 ->where('funnel_id', $funnelId)
                 ->first();
             if (!$sequence) {
-                return MCPHelper::error('not_found', __('Target sequence not found in this automation', 'fluent-crm'));
+                return MCPHelper::error('not_found', 'advance_to_step_id is not a step of this automation.', [
+                    'advance_to_step_id' => $sequenceId,
+                    'next_step'          => 'Read the step ids from get-automation include=["steps"].',
+                ]);
             }
 
-            // If the contact is waiting on a benchmark, mark the benchmark as
-            // skipped so reports stay accurate (matches the controller's path).
-            if ($row->status === 'waiting') {
-                $benchmarkSeq = \FluentCrm\App\Models\FunnelSequence::find($row->next_sequence_id);
-                if ($benchmarkSeq) {
-                    \FluentCrm\App\Models\FunnelMetric::updateOrCreate(
-                        [
-                            'funnel_id'     => $funnelId,
-                            'sequence_id'   => $benchmarkSeq->id,
-                            'subscriber_id' => $contact->id,
-                        ],
-                        [
-                            'benchmark_value'    => 0,
-                            'benchmark_currency' => 'USD',
-                            'status'             => 'skipped',
-                            'notes'              => __('Skipped via MCP advance_now', 'fluent-crm'),
-                        ]
-                    );
-                    \FluentCrm\App\Services\Funnel\FunnelHelper::changeFunnelSubSequenceStatus($row->id, $benchmarkSeq->id, 'skipped');
-                }
+            // Same service as the Web UI's "Advance to Step".
+            $advanced = \FluentCrm\App\Services\Funnel\FunnelHelper::advanceSubscriberToSequence($row, $sequence, 'Skipped via MCP advance_now');
+            if (is_wp_error($advanced)) {
+                return MCPHelper::error('not_supported', $advanced->get_error_message(), [
+                    'status' => $row->status,
+                ]);
             }
-
-            $prev = \FluentCrm\App\Models\FunnelSequence::where('funnel_id', $funnelId)
-                ->where('sequence', '<', $sequence->sequence)
-                ->orderBy('sequence', 'DESC')
-                ->first();
-
-            $row->last_sequence_id = $prev ? $prev->id : 0;
-            $row->next_sequence_id = $sequence->id;
-            $row->next_sequence    = $sequence->sequence;
-            $row->status           = 'active';
-            $row->next_execution_time = current_time('mysql');
-            $row->save();
         }
 
         $row = FunnelSubscriber::find($row->id);
@@ -516,7 +610,7 @@ class FunnelTools
                 'funnel_id'         => (int) $row->funnel_id,
                 'subscriber_id'     => (int) $row->subscriber_id,
                 'status'            => $row->status,
-                'next_sequence_id'  => $row->next_sequence_id ? (int) $row->next_sequence_id : null,
+                'next_step_id'      => $row->next_sequence_id ? (int) $row->next_sequence_id : null,
                 'next_execution_time' => MCPHelper::toIso8601($row->next_execution_time),
             ],
         ];

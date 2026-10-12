@@ -5,10 +5,7 @@ namespace FluentCrm\App\Services\Libs\Mailer;
 use FluentCrm\App\Models\CampaignEmail;
 
 /**
- * @deprecated This iterator has no in-tree callers and predates the transactional
- * claim pipeline in Handler/BaseHandler (atomic claims with claim tokens). Do not
- * build on it — use the Handler pipeline instead. Kept only for back-compat with
- * unknown external callers; scheduled for removal.
+ * @deprecated No in-tree callers; use the Handler claim pipeline. Kept for external back-compat.
  */
 class CampaignEmailIterator implements \Iterator
 {
@@ -68,9 +65,7 @@ class CampaignEmailIterator implements \Iterator
         $ids = $emails->pluck('id')->toArray();
 
         if ($ids) {
-            // Claim guarded by current status so a row a concurrent sender already
-            // claimed is not re-claimed, and WITHOUT touching scheduled_at (the old
-            // UPDATE overwrote each row's schedule with "now").
+            // Status guard prevents re-claiming; scheduled_at is left untouched.
             global $wpdb;
             $placeholders = implode(',', array_fill(0, count($ids), '%d'));
             $query = "UPDATE {$wpdb->prefix}fc_campaign_emails SET status = %s, updated_at = %s WHERE status IN ('pending', 'scheduled') AND id IN ($placeholders)";

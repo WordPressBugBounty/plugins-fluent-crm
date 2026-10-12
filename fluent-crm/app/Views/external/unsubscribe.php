@@ -41,7 +41,7 @@
             $wrapperClass = 'hide_wrap';
             ?>
             <div class="fluentcrm_success">
-                <?php echo esc_html__("You’ve successfully unsubscribed from our email list.", 'fluent-crm'); ?>
+                <?php echo esc_html__('You have been unsubscribed from our email list.', 'fluent-crm'); ?>
             </div>
             <?php
         }

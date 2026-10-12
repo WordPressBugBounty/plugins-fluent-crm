@@ -28,13 +28,10 @@ class ActivityLog extends Model
         'updated_at'
     ];
 
-    // Ensure the key is added to every serialized row
     protected $appends = ['activity_by_email'];
 
-    // Cast the description column to an array (or object)
     protected $casts = [
         'description' => 'array', // Automatically decodes JSON to array
-        // Use 'object' instead of 'array' if you prefer stdClass objects
     ];
 
     public static function boot()

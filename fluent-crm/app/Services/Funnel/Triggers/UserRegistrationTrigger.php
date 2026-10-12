@@ -21,7 +21,7 @@ class UserRegistrationTrigger extends BaseTrigger
         return [
             'category'    => __('WordPress Triggers', 'fluent-crm'),
             'label'       => __('New User Sign Up', 'fluent-crm'),
-            'description' => __('This Funnel will be initiated when a new user has been registered in your site', 'fluent-crm'),
+            'description' => __('This automation will start when a new user registers on your site', 'fluent-crm'),
             'icon'        => 'fc-icon-wp_new_user_signup',
         ];
     }
@@ -36,19 +36,19 @@ class UserRegistrationTrigger extends BaseTrigger
     public function getSettingsFields($funnel)
     {
         return [
-            'title'     => __('New User Sign Up Funnel', 'fluent-crm'),
-            'sub_title' => __('This Funnel will be initiated when a new user has been registered in your site', 'fluent-crm'),
+            'title'     => __('New User Sign Up Automation', 'fluent-crm'),
+            'sub_title' => __('This automation will start when a new user registers on your site', 'fluent-crm'),
             'fields'    => [
                 'subscription_status' => [
                     'type'        => 'option_selectors',
                     'option_key'  => 'editable_statuses',
                     'is_multiple' => false,
                     'label'       => __('Subscription Status', 'fluent-crm'),
-                    'placeholder' => __('Select Status', 'fluent-crm')
+                    'placeholder' => __('Select status', 'fluent-crm')
                 ],
                 'subscription_status_info' => [
                     'type' => 'html',
-                    'info' => '<b>'.__('An Automated double-optin email will be sent for new subscribers', 'fluent-crm').'</b>',
+                    'info' => '<b>'.__('An automated double opt-in email will be sent to new contacts', 'fluent-crm').'</b>',
                     'dependency'  => [
                         'depends_on'    => 'subscription_status',
                         'operator' => '=',
@@ -72,15 +72,15 @@ class UserRegistrationTrigger extends BaseTrigger
         return [
             'update_type'  => [
                 'type'    => 'radio',
-                'label'   => __('If Contact Already Exist?', 'fluent-crm'),
-                'help'    => __('Please specify what will happen if the subscriber already exist in the database', 'fluent-crm'),
+                'label'   => __('If the contact already exists', 'fluent-crm'),
+                'help'    => __('Choose what happens if the contact already exists.', 'fluent-crm'),
                 'options' => FunnelHelper::getUpdateOptions()
             ],
             'user_roles'   => [
                 'type'        => 'multi-select',
                 'is_multiple' => true,
                 'label'       => __('Targeted User Roles', 'fluent-crm'),
-                'help'        => __('Select which roles registration will run this automation Funnel', 'fluent-crm'),
+                'help'        => __('Select which user roles will trigger this automation when they register', 'fluent-crm'),
                 'placeholder' => __('Select Roles', 'fluent-crm'),
                 'options'     => FunnelHelper::getUserRoles(),
                 'inline_help' => __('Leave blank to run for all user roles', 'fluent-crm')

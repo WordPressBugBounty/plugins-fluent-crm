@@ -37,7 +37,7 @@ class Bootstrap extends IntegrationManagerController
 
         $this->logo = FLUENTCRM_PLUGIN_URL . 'assets/images/fluentcrm-logo.svg';
 
-        $this->description = __('Connect FluentCRM with WP Fluent Forms and subscribe a contact when a form is submitted.', 'fluent-crm');
+        $this->description = __('Connect FluentCRM with Fluent Forms and subscribe a contact when a form is submitted.', 'fluent-crm');
 
         $this->registerAdminHooks();
 
@@ -53,9 +53,9 @@ class Bootstrap extends IntegrationManagerController
             'title'                 => $this->title . ' Integration',
             'logo'                  => $this->logo,
             'is_active'             => $this->isConfigured(),
-            'configure_title'       => __('Configuration required!', 'fluent-crm'),
+            'configure_title'       => __('Configuration required', 'fluent-crm'),
             'global_configure_url'  => '#',
-            'configure_message'     => __('FluentCRM is not configured yet! Please configure your FluentCRM API first', 'fluent-crm'),
+            'configure_message'     => __('FluentCRM is not configured yet. Please configure your FluentCRM API first.', 'fluent-crm'),
             'configure_button_text' => __('Set FluentCRM', 'fluent-crm')
         ];
         return $integrations;
@@ -142,29 +142,29 @@ class Bootstrap extends IntegrationManagerController
                 'key'                => 'CustomFields',
                 'require_list'       => false,
                 'label'              => __('Primary Fields', 'fluent-crm'),
-                'tips'               => __('Associate your FluentCRM merge tags to the appropriate Fluent Form fields by selecting the appropriate form field from the list.', 'fluent-crm'),
+                'tips'               => __('Associate your FluentCRM merge tags with the appropriate Fluent Forms fields by selecting a form field from the list.', 'fluent-crm'),
                 'component'          => 'map_fields',
                 'field_label_remote' => __('FluentCRM Field', 'fluent-crm'),
                 'field_label_local'  => __('Form Field', 'fluent-crm'),
                 'primary_fileds'     => [
                     [
                         'key'           => 'email',
-                        'label'         => __('Email Address', 'fluent-crm'),
+                        'label'         => __('Email address', 'fluent-crm'),
                         'required'      => true,
                         'input_options' => 'emails'
                     ],
                     [
                         'key'   => 'first_name',
-                        'label' => __('First Name', 'fluent-crm')
+                        'label' => __('First name', 'fluent-crm')
                     ],
                     [
                         'key'   => 'last_name',
-                        'label' => __('Last Name', 'fluent-crm')
+                        'label' => __('Last name', 'fluent-crm')
                     ],
                     [
                         'key'       => 'full_name',
                         'label'     => __('Full Name', 'fluent-crm'),
-                        'help_text' => __('If First Name & Last Name is not available full name will be used to get first name and last name', 'fluent-crm')
+                        'help_text' => __('If First Name and Last Name are not available, the full name will be split into first and last name', 'fluent-crm')
                     ]
                 ]
             ],
@@ -172,7 +172,7 @@ class Bootstrap extends IntegrationManagerController
                 'key'                => 'other_fields',
                 'require_list'       => false,
                 'label'              => __('Other Fields', 'fluent-crm'),
-                'tips'               => __('Select which Fluent Form fields pair with their<br /> respective FluentCRM fields.', 'fluent-crm'),
+                'tips'               => __('Select which Fluent Forms fields pair with their<br /> respective FluentCRM fields.', 'fluent-crm'),
                 'component'          => 'dropdown_many_fields',
                 'field_label_remote' => __('FluentCRM Field', 'fluent-crm'),
                 'field_label_local'  => __('Form Field', 'fluent-crm'),
@@ -182,7 +182,7 @@ class Bootstrap extends IntegrationManagerController
                 'key'                => 'tag_ids',
                 'require_list'       => false,
                 'label'              => __('Contact Tags', 'fluent-crm'),
-                'placeholder'        => __('Select Tags', 'fluent-crm'),
+                'placeholder'        => __('Select tags', 'fluent-crm'),
                 'component'          => 'selection_routing',
                 'simple_component'   => 'select',
                 'routing_input_type' => 'select',
@@ -205,26 +205,27 @@ class Bootstrap extends IntegrationManagerController
             [
                 'key'            => 'skip_primary_data',
                 'require_list'   => false,
-                'checkbox_label' => __('Skip name update if an existing contact has old data (per primary field)', 'fluent-crm'),
-                'component'      => 'checkbox-single'
+                'checkbox_label' => __('Keep existing first and last names', 'fluent-crm'),
+                'component'      => 'checkbox-single',
+                'inline_tip'     => __('If the existing contact already has a first name, the form will not update the first or last name.', 'fluent-crm')
             ],
             [
                 'key'            => 'double_opt_in',
                 'require_list'   => false,
-                'checkbox_label' => __('Enable Double opt-in for new contacts', 'fluent-crm'),
+                'checkbox_label' => __('Enable double opt-in for new contacts', 'fluent-crm'),
                 'component'      => 'checkbox-single'
             ],
             [
                 'key'            => 'force_subscribe',
                 'require_list'   => false,
-                'checkbox_label' => __('Enable Force Subscribe if contact is not in subscribed status (Existing contact only)', 'fluent-crm'),
+                'checkbox_label' => __('Enable force subscribe if the contact is not subscribed (existing contacts only)', 'fluent-crm'),
                 'component'      => 'checkbox-single',
                 'inline_tip'     => __('If you enable this, the contact will be forcefully subscribed regardless of the contact\'s current status', 'fluent-crm')
             ],
             [
                 'require_list' => false,
                 'key'          => 'conditionals',
-                'label'        => __('Conditional Logics', 'fluent-crm'),
+                'label'        => __('Conditional Logic', 'fluent-crm'),
                 'tips'         => __('Allow FluentCRM integration conditionally based on your submission values', 'fluent-crm'),
                 'component'    => 'conditional_block'
             ]
@@ -288,7 +289,7 @@ class Bootstrap extends IntegrationManagerController
             'key'            => 'enabled',
             'label'          => __('Status', 'fluent-crm'),
             'component'      => 'checkbox-single',
-            'checkbox_label' => __('Enable This feed', 'fluent-crm')
+            'checkbox_label' => __('Enable this feed', 'fluent-crm')
         ];
 
         return [
@@ -392,14 +393,39 @@ class Bootstrap extends IntegrationManagerController
             }
         }
 
-        foreach (Arr::get($data, 'other_fields') as $field) {
-            if ($field['item_value']) {
-                $contact[$field['label']] = str_replace('<br />', ' ', $field['item_value']);
+        $customFieldModel = new CustomContactField();
+        $customFieldSlugs = array_column($customFieldModel->getGlobalFields()['fields'], 'slug');
+        $customValues = [];
+
+        foreach (Arr::get($data, 'other_fields') as $fieldIndex => $field) {
+            $fieldName = Arr::get($field, 'label');
+            $fieldValue = str_replace('<br />', ' ', Arr::get($field, 'item_value'));
+
+            if (in_array($fieldName, $customFieldSlugs, true)) {
+                // Parsed smartcodes lose the distinction between omitted and submitted-empty inputs.
+                $mapping = Arr::get($feed, 'settings.other_fields.' . $fieldIndex . '.item_value', '');
+                if (is_string($fieldValue) && trim($fieldValue) === '' && is_string($mapping) &&
+                    preg_match_all('/{+inputs\.([^{}]+)}/', $mapping, $matches)) {
+                    foreach ($matches[1] as $input) {
+                        // Fluent Forms supports nested input paths and .value/.label modifiers.
+                        $input = preg_replace('/\.(value|label)$/', '', $input);
+                        if (!Arr::has($formData, $input)) {
+                            continue 2;
+                        }
+                    }
+                }
+                // Preserve an explicit empty value so an existing custom field can be cleared.
+                $customValues[$fieldName] = $fieldValue;
+            } else if (!in_array($fieldValue, ['', null, []], true)) {
+                $contact[$fieldName] = $fieldValue;
             }
         }
 
-        // A dynamically resolved company owns the primary-company decision; a
-        // mapped contact company_id is only meaningful for the legacy ID flow.
+        if ($customValues) {
+            $contact['custom_values'] = $customFieldModel->formatCustomFieldValues($customValues);
+        }
+
+        // A mapped contact company_id applies only to the legacy ID flow.
         if (!empty($companyData['name'])) {
             unset($contact['company_id']);
         }
@@ -412,7 +438,7 @@ class Bootstrap extends IntegrationManagerController
             $this->addLog(
                 $feed['settings']['name'],
                 'failed',
-                __('FluentCRM API called skipped because no valid email available', 'fluent-crm'),
+                __('FluentCRM API call skipped because no valid email address is available', 'fluent-crm'),
                 $form->id,
                 $entry->id
             );
@@ -498,7 +524,7 @@ class Bootstrap extends IntegrationManagerController
                 $contact['lists'] = [$listId];
             }
 
-            $subscriber = FluentCrmApi('contacts')->createOrUpdate($contact, false, false);
+            $subscriber = FluentCrmApi('contacts')->createOrUpdate($contact, false, !empty($customValues));
 
             if (!$subscriber) {
                 return false;
@@ -518,7 +544,8 @@ class Bootstrap extends IntegrationManagerController
                 $this->addLog(
                     $feed['settings']['name'],
                     'success',
-                    __('Contact has been created in FluentCRM. Contact ID: ', 'fluent-crm') . $subscriber->id,
+                    /* translators: %d: FluentCRM contact ID */
+                    sprintf(__('Contact has been created in FluentCRM. Contact ID: %d', 'fluent-crm'), $subscriber->id),
                     $form->id,
                     $entry->id
                 );
@@ -538,12 +565,8 @@ class Bootstrap extends IntegrationManagerController
 
             $hasDouBleOptIn = Arr::isTrue($data, 'double_opt_in');
 
-            // Only the feed's explicit "force subscribe" setting may FORCE-overwrite a
-            // suppressed status (that's operator intent). A plain non-double-opt-in
-            // submission still requests 'subscribed' but non-forced: it promotes pending
-            // contacts, while updateOrCreate's guards keep unsubscribed/bounced contacts
-            // suppressed — anyone can type any email into a public form, so a bare
-            // submission is not proof of re-consent.
+            // Only the feed's "force subscribe" setting may overwrite a suppressed status.
+            // A public form submission is not proof of re-consent.
             $forceSubscribed = Arr::isTrue($data, 'force_subscribe');
 
             if ($forceSubscribed || !$hasDouBleOptIn) {
@@ -554,7 +577,7 @@ class Bootstrap extends IntegrationManagerController
 
             $currentCustomValues = $subscriber->custom_fields();
 
-            $subscriber = FluentCrmApi('contacts')->createOrUpdate($contact, $forceSubscribed, false);
+            $subscriber = FluentCrmApi('contacts')->createOrUpdate($contact, $forceSubscribed, !empty($customValues));
 
             if (!$subscriber) {
                 return false;
@@ -564,9 +587,7 @@ class Bootstrap extends IntegrationManagerController
                 $subscriber = $subscriber->updateStatus('subscribed');
             }
 
-            // The submission itself is the re-consent trigger, so a double opt-in feed
-            // re-invites any non-subscribed contact (unsubscribed, bounced, …) without
-            // writing status — only the confirmation link makes them 'subscribed'.
+            // A double opt-in feed re-invites any non-subscribed contact without writing status.
             if ($hasDouBleOptIn && $subscriber->status != 'subscribed') {
                 $subscriber->sendDoubleOptinEmail();
             }
@@ -593,7 +614,8 @@ class Bootstrap extends IntegrationManagerController
             $this->addLog(
                 $feed['settings']['name'],
                 'success',
-                __('Contact has been updated in FluentCRM. Contact ID: ', 'fluent-crm') . $subscriber->id,
+                /* translators: %d: FluentCRM contact ID */
+                sprintf(__('Contact has been updated in FluentCRM. Contact ID: %d', 'fluent-crm'), $subscriber->id),
                 $form->id,
                 $entry->id
             );
@@ -728,7 +750,8 @@ class Bootstrap extends IntegrationManagerController
             $this->addLog(
                 Arr::get($feed, 'settings.name', 'FluentCRM'),
                 'success',
-                __('Company has been synced and attached in FluentCRM. Company ID: ', 'fluent-crm') . $company->id,
+                /* translators: %d: FluentCRM company ID */
+                sprintf(__('Company has been synced and attached in FluentCRM. Company ID: %d', 'fluent-crm'), $company->id),
                 $form->id,
                 $entry->id
             );

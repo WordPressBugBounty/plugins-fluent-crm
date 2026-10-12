@@ -8,19 +8,8 @@ use FluentCrm\Framework\Http\Request\Request;
 /**
  * SettingsPolicy - REST API Permission Policy
  *
- * Settings routes are gated on `fcrm_manage_settings`, the highest FluentCRM
- * permission level, which is sufficient for the module on its own.
- *
- * A handful of routes reach beyond FluentCRM — installing a plugin, resetting the
- * database, minting REST credentials — and are additionally gated on a core
- * WordPress capability. Those checks already exist inside the controllers (for
- * the setup wizard, at the installer choke point `backgroundInstaller()` rather
- * than in the handler); the methods below declare the same requirement at the
- * policy layer so the gate is visible to `tests/lint/policy-coverage.php` and is
- * enforced before the request reaches the controller. The in-handler checks are
- * deliberately left in place: they still guard any non-REST caller, so this is
- * defence in depth rather than a relocation. Nobody who can call these routes
- * today loses access.
+ * Settings routes require `fcrm_manage_settings`. Routes that install plugins, reset data
+ * or mint REST credentials also require a core WordPress capability, re-checked in the controllers.
  */
 class SettingsPolicy extends BasePolicy
 {
@@ -30,8 +19,7 @@ class SettingsPolicy extends BasePolicy
     }
 
     /**
-     * Installing a companion plugin needs the WordPress capability for it, not just
-     * CRM settings access. Mirrors SetupController's own `install_plugins` guard.
+     * Installing a companion plugin also requires `install_plugins`.
      *
      * @param Request $request
      * @return bool
@@ -42,8 +30,7 @@ class SettingsPolicy extends BasePolicy
     }
 
     /**
-     * Routes that reset or destroy plugin data, or mint REST credentials, stay
-     * administrator-only. Mirrors SettingsController's own `manage_options` guard.
+     * Routes that reset plugin data or mint REST credentials require `manage_options`.
      *
      * @param Request $request
      * @return bool
@@ -89,12 +76,8 @@ class SettingsPolicy extends BasePolicy
     }
 
     /**
-     * Finishing onboarding is a settings action, but installing companion plugins
-     * from the same request also needs WordPress's plugin-install capability.
-     *
-     * The flags are read through the same Helper the controller uses. Reading them
-     * any other way here would let the two disagree, and a payload the controller
-     * honours but this gate does not is a straight bypass of `install_plugins`.
+     * Finishing onboarding requires `install_plugins` when the request installs companion plugins.
+     * Flags must be read through the same Helper as SetupController::CompleteWizard().
      *
      * @param Request $request
      * @return bool
@@ -107,6 +90,14 @@ class SettingsPolicy extends BasePolicy
             return $this->canInstallPlugins($request);
         }
 
+        return $this->verifyRequest($request);
+    }
+
+    /**
+     * Double opt-in previews are read-only and gated by the settings capability, not the campaign one.
+     */
+    public function previewDoubleOptin(Request $request)
+    {
         return $this->verifyRequest($request);
     }
 

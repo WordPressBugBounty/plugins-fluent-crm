@@ -31,8 +31,8 @@ class ApplyCompanyAction extends BaseAction
     public function getBlockFields()
     {
         return [
-            'title'     => __('Apply Company to the contact', 'fluent-crm'),
-            'sub_title' => __('Select which list will be added to the contact', 'fluent-crm'),
+            'title'     => __('Add the contact to a company', 'fluent-crm'),
+            'sub_title' => __('Select the company to add the contact to', 'fluent-crm'),
             'fields'    => [
                 'company' => [
                     'type'        => 'option_selectors',

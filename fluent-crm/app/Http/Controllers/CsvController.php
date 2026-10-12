@@ -67,7 +67,7 @@ class CsvController extends Controller
 
         if (count($headers) != count(array_unique($headers))) {
             return $this->sendError([
-                'message' => __('Looks like your csv has same name header multiple times. Please fix your csv first and remove any duplicate header column', 'fluent-crm')
+                'message' => __('Your CSV file has duplicate column headers. Please remove the duplicate columns and try again.', 'fluent-crm')
             ]);
         }
 
@@ -159,7 +159,7 @@ class CsvController extends Controller
         $existingOnly = Arr::get($inputs, 'existing_only') == 'yes';
         $keepExistingData = Arr::get($inputs, 'keep_existing_data') == 'yes';
 
-        // "Update existing only" has nothing to do unless existing rows are updated.
+        // "Update existing only" implies update.
         if ($existingOnly) {
             $inputs['update'] = 'true';
         }
@@ -221,9 +221,7 @@ class CsvController extends Controller
                 }
                 if (isset($map['csv'], $map['table'])) {
                     if (in_array($map['table'], ['tags', 'lists'])) {
-                        // str_getcsv respects inner quoting, so a cell like
-                        // "Sales, EMEA","Newsletter" keeps quoted names intact
-                        // where a raw explode(',') would split them.
+                        // str_getcsv keeps quoted names like "Sales, EMEA" intact.
                         if ($map['table'] == 'tags') {
                             $subscriber['tags'] = !empty($record[$map['csv']]) ? array_map('trim', str_getcsv($record[$map['csv']])) : [];
                         } else {
@@ -238,8 +236,7 @@ class CsvController extends Controller
                 }
             }
 
-            // Never trust a CSV-mapped user_id: a column mapped to user_id would link every
-            // imported contact to an arbitrary WP user (e.g. an admin) — privilege escalation.
+            // Security: a CSV must never set user_id, or it could link contacts to any WP user.
             unset($subscriber['user_id']);
 
             if (!array_key_exists('email', $subscriber)) {
@@ -269,6 +266,15 @@ class CsvController extends Controller
                         if (!$company) {
                             unset($subscriber['company_id']);
                         }
+                    }
+                }
+
+                if (array_key_exists('date_of_birth', $subscriber)) {
+                    $dateOfBirth = $this->importDateOfBirth($subscriber['date_of_birth']);
+                    if ($dateOfBirth) {
+                        $subscriber['date_of_birth'] = $dateOfBirth;
+                    } else {
+                        unset($subscriber['date_of_birth']);
                     }
                 }
 
@@ -328,24 +334,15 @@ class CsvController extends Controller
     }
 
     /**
-     * Apply the CSV importer's per-contact rules for rows whose email is already in the CRM.
-     *
-     * - $existingOnly: rows for emails not in the CRM are dropped (and returned so the
-     *   UI can list them), so the import can tag/update known contacts without adding
-     *   anyone new — e.g. marking another product's customers to exclude from a campaign.
-     * - $keepExistingData: for known contacts, a mapped field is only written when the
-     *   contact's current value is empty, so an untrusted file cannot overwrite better
-     *   data already in the CRM. Covers contact columns, a mapped full_name (which
-     *   Subscriber::import() would split into first/last name) and custom fields.
-     *   Status is deliberately left to the new_status / force_update_status rules.
-     *
-     * One query loads the chunk's existing contacts and one loads their custom values.
+     * Apply the existing-only and keep-existing-data import rules to a chunk of rows.
+     * existing-only drops rows not in the CRM; keep-existing-data only fills empty fields.
+     * Status is left to the new_status / force_update_status rules.
      *
      * @param array $subscribers sanitized rows, each with an 'email'
      * @param bool $existingOnly
      * @param bool $keepExistingData
      * @param array $customFieldKeys custom field slugs
-     * @return array [rows to import, emails skipped because they are not in the CRM]
+     * @return array [rows to import, emails not in the CRM]
      */
     private function applyExistingContactRules($subscribers, $existingOnly, $keepExistingData, $customFieldKeys)
     {
@@ -485,7 +482,6 @@ class CsvController extends Controller
             }
 
             if (!$willUpdate) {
-                // check if exists
                 if (Company::where('name', $company['name'])->first()) {
                     $skipped[] = $company;
                     continue;
@@ -536,9 +532,7 @@ class CsvController extends Controller
             $companies[] = $createdCompany;
         }
 
-        // Progress must advance by the rows CONSUMED (skipped ones included), and
-        // report the cumulative position — otherwise skipped rows understate the
-        // totals and produce a ghost extra request at the end.
+        // Progress counts rows consumed, skipped ones included.
         $completed = $offset + count($records);
         $hasMore = $completed < $totalCount;
         if (!$hasMore) {
@@ -568,11 +562,7 @@ class CsvController extends Controller
     }
 
     /**
-     * Build a CSV reader over raw file contents.
-     *
-     * The single point every import path obtains a reader from — header
-     * detection for the column-mapping screen and both chunked import loops —
-     * so byte-level normalization belongs here rather than at the call sites.
+     * Build a CSV reader over raw file contents, stripping a UTF-8 BOM and normalizing encoding.
      *
      * @param string $file Raw file contents, not a path.
      * @return \League\Csv\Reader
@@ -583,19 +573,8 @@ class CsvController extends Controller
             include_once FLUENTCRM_PLUGIN_PATH . 'app/Services/Libs/csv/autoload.php';
         }
 
-        /*
-         * Strip a leading UTF-8 byte order mark. Excel writes UTF-8 *with* a BOM
-         * by default, and the bundled League CSV 7.2.0 has no skipInputBOM() —
-         * that arrived in a later major version. Left in place, the mark stays
-         * glued to the first header, so "email" arrives as "\xEF\xBB\xBFemail",
-         * never matches the email column, and the import silently drops the
-         * field or fails outright.
-         *
-         * Only the UTF-8 mark is handled here. A UTF-16 BOM signals a file that
-         * will not parse as UTF-8 at all, and removing those two bytes would
-         * leave the rest of the content just as unreadable; charset conversion
-         * is a separate concern.
-         */
+        // Excel adds a UTF-8 BOM that would stick to the first header; the bundled
+        // League CSV has no skipInputBOM().
         if (is_string($file) && strncmp($file, "\xEF\xBB\xBF", 3) === 0) {
             $file = substr($file, 3);
         }
@@ -604,31 +583,8 @@ class CsvController extends Controller
     }
 
     /**
-     * Convert legacy single-byte CSV content to UTF-8.
-     *
-     * Contact lists exported from older systems are commonly Windows-1252 or
-     * ISO-8859-1, so "José" arrives as the single byte 0xE9 where UTF-8 expects
-     * two. Those bytes reach the import records unchanged, wp_json_encode()
-     * rejects the row, and the contact is stored corrupted.
-     *
-     * The rule is deliberately narrow: **content that is already valid UTF-8 is
-     * never touched.** That is decidable rather than guessed, and it matters —
-     * running the conversion unconditionally double-encodes good data, turning
-     * "José 😀 東" into "JosÃ© ðŸ˜€ æ±". Every legitimate UTF-8 document,
-     * including emoji and CJK, passes the validity check, so the conversion only
-     * ever sees bytes that could not have been UTF-8 in the first place.
-     *
-     * Content that fails the check is decoded as Windows-1252. That is the one
-     * assumption here, and it is the pragmatic choice: it is what Excel and
-     * legacy European systems emit, it is a superset of ISO-8859-1 across the
-     * printable range (so it also recovers Excel's smart quotes at 0x92), and it
-     * has no failing byte sequences. Genuinely different encodings — Shift-JIS,
-     * KOI8-R, UTF-16 — are decoded to the wrong characters rather than left as
-     * raw bytes; both outcomes are broken, and neither is a regression, but it
-     * is a known limit rather than an oversight.
-     *
-     * mbstring is not guaranteed on every host, so iconv is used as a fallback
-     * and untouched content is returned when neither is available.
+     * Convert non-UTF-8 CSV content to UTF-8, decoding it as Windows-1252.
+     * Valid UTF-8 is never touched. Falls back to iconv when mbstring is missing.
      *
      * @param string $file Raw file contents, BOM already removed.
      * @return string UTF-8 content, or the input unchanged when it cannot be converted.
@@ -639,8 +595,6 @@ class CsvController extends Controller
             return $file;
         }
 
-        // mb_check_encoding() is exact; the //u pattern is the mbstring-free
-        // equivalent, failing to match only when the subject is not valid UTF-8.
         $isUtf8 = function_exists('mb_check_encoding')
             ? mb_check_encoding($file, 'UTF-8')
             : (bool)preg_match('//u', $file);
@@ -657,16 +611,11 @@ class CsvController extends Controller
             return $file;
         }
 
-        // Never hand back an empty or failed conversion: the original bytes at
-        // least preserve the row structure the importer maps columns from.
         return (is_string($converted) && $converted !== '') ? $converted : $file;
     }
 
     /**
-     * Total number of data rows (header excluded) for an import file.
-     *
-     * Counted by streaming the reader once — no array materialization — and cached
-     * in the options table so the ~N/100 follow-up chunk requests skip the recount.
+     * Total data rows (header excluded) for an import file, cached after the first page.
      */
     private function getCsvTotalRowCount($reader, $file, $isFirstPage)
     {
@@ -691,20 +640,16 @@ class CsvController extends Controller
     }
 
     /**
-     * Fetch one chunk of CSV data rows mapped to $headers WITHOUT parsing the whole
-     * file into an in-memory array (the old iterator_to_array + array_slice pattern
-     * was O(N) memory and O(N²) aggregate parse work across an import's requests).
-     *
+     * Fetch one chunk of CSV data rows mapped to $headers without loading the whole file.
      * $dataOffset is 0-based over data rows; the header line is skipped internally.
      */
     private function getCsvRecordsChunk($reader, $headers, $dataOffset, $limit)
     {
-        // +1 skips the header line, which both fetch paths would otherwise
-        // return as the first mapped record.
+        // +1 skips the header line.
         $chunkOffset = $dataOffset + 1;
 
         if (method_exists($reader, 'setOffset')) {
-            // Bundled league/csv 8.x — offset/limit stream via LimitIterator.
+            // Bundled league/csv.
             $reader->setOffset($chunkOffset);
             $reader->setLimit($limit);
             $records = $reader->fetchAssoc($headers);
@@ -720,5 +665,19 @@ class CsvController extends Controller
         $statement = $statement->offset($chunkOffset)->limit($limit);
 
         return array_values(iterator_to_array($statement->process($reader, $headers), false));
+    }
+
+    /**
+     * A CSV Date of Birth as Y-m-d, or false when it cannot be read (see Helper::parseImportDate()).
+     *
+     * The column is a DATE: under MySQL strict mode one "12/31/1990" aborted the whole import chunk,
+     * and lax hosts stored 0000-00-00. A value that is not a full date is dropped from the row.
+     *
+     * @param mixed $value
+     * @return string|false
+     */
+    private function importDateOfBirth($value)
+    {
+        return Helper::parseImportDate($value);
     }
 }

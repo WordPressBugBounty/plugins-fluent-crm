@@ -7,6 +7,12 @@ $template = \FluentCrm\Framework\Support\Arr::get($config, 'design_template', 's
 
 $align = $template === 'classic' ? 'left' : 'center';
 
+/*
+ * Classic side gutters live inline, without !important, so the phone media
+ * query in block-styles.php can remove them. The CSS inliner copies
+ * !important declarations into style attributes, where nothing can override them.
+ */
+
 ?>
 <!doctype html>
 <html <?php language_attributes(); ?>>
@@ -36,7 +42,7 @@ $align = $template === 'classic' ? 'left' : 'center';
          style="border-collapse: collapse;mso-table-lspace: 0pt;mso-table-rspace: 0pt;-ms-text-size-adjust: 100%;-webkit-text-size-adjust: 100%;height: 100%;margin: 0;padding: 0;width: 100%;background-image: none;background-repeat: no-repeat;background-position: center;background-size: cover;color:inherit;">
         <tr>
             <td align="<?php echo $align; ?>" valign="top" id="bodyCell"
-                style="mso-line-height-rule: exactly;-ms-text-size-adjust: 100%;-webkit-text-size-adjust: 100%;height: 100%;margin: 0;padding: 0px;width: 100%;border-top: 0;">
+                style="mso-line-height-rule: exactly;-ms-text-size-adjust: 100%;-webkit-text-size-adjust: 100%;height: 100%;margin: 0;padding: <?php echo $template === 'classic' ? '0 20px' : '0px'; ?>;width: 100%;border-top: 0;">
                 <!-- BEGIN TEMPLATE // -->
                 <!--[if (gte mso 9)|(IE)]>
                 <table align="center" border="0" cellspacing="0" cellpadding="0" width="600" style="width:600px;color:inherit;">
@@ -68,7 +74,7 @@ $align = $template === 'classic' ? 'left' : 'center';
                                                     <table align="left" border="0" cellpadding="0" cellspacing="0" style="max-width: 100%;min-width: 100%;border-collapse: collapse;mso-table-lspace: 0pt;mso-table-rspace: 0pt;-ms-text-size-adjust: 100%;-webkit-text-size-adjust: 100%;color:inherit;" width="100%" class="fcTextContentContainer">
                                                         <tbody class="mcnTextBlockOuter">
                                                         <tr>
-                                                            <td class="fc_email_body" align="left" valign="top" style="mso-line-height-rule: exactly;-ms-text-size-adjust: 100%;-webkit-text-size-adjust: 100%;word-break: break-word;font-size: 16px;line-height: 160%;text-align: left;color:inherit;">
+                                                            <td class="fc_email_body" align="left" valign="top" style="<?php echo $template === 'classic' ? 'padding-left: 10px;padding-right: 10px;' : ''; ?>mso-line-height-rule: exactly;-ms-text-size-adjust: 100%;-webkit-text-size-adjust: 100%;word-break: break-word;font-size: 16px;line-height: 160%;text-align: left;color:inherit;">
                                                                 <?php echo $email_body; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
                                                             </td>
                                                         </tr>
@@ -113,7 +119,7 @@ $align = $template === 'classic' ? 'left' : 'center';
                                                         <?php echo $footer_text; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
                                                         <?php if (!defined('FLUENTCAMPAIGN')): ?>
                                                             <p>
-                                                                <?php esc_html_e('Powered By', 'fluent-crm'); ?> <a href="http://fluentcrm.com/?utm_source=wp&utm_medium=wp_mail&utm_campaign=footer"><?php esc_html_e('FluentCRM', 'fluent-crm'); ?></a>
+                                                                <?php esc_html_e('Powered by', 'fluent-crm'); ?> <a href="http://fluentcrm.com/?utm_source=wp&utm_medium=wp_mail&utm_campaign=footer"><?php esc_html_e('FluentCRM', 'fluent-crm'); ?></a>
                                                             </p>
                                                         <?php endif; ?>
                                                     </td>

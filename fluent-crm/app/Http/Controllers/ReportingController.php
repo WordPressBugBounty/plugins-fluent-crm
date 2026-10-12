@@ -35,8 +35,7 @@ class ReportingController extends Controller
 
         $currentStats = $reporting->getSubscribersGrowth($from, $to, $tagId, $listId);
 
-        // Derive defaults from the SITE-LOCAL clock — created_at is written in site
-        // time, so UTC-based day boundaries shift the window near the date line.
+        // created_at is stored in site time, so defaults use the site-local clock.
         $currentFrom = $from ?: gmdate('Y-m-d', current_time('timestamp') - 30 * DAY_IN_SECONDS);
         $currentTo = $to ?: gmdate('Y-m-d', current_time('timestamp') + DAY_IN_SECONDS);
 
@@ -184,10 +183,7 @@ class ReportingController extends Controller
         $selectedTypes = array_values(array_filter(array_map('sanitize_text_field', (array)$request->get('types', []))));
         $types = CampaignEmail::expandEmailTypes($selectedTypes);
 
-        // With no WHERE clause an ORDER BY scheduled_at cannot use the
-        // (status, scheduled_at) composite index and filesorts the whole table.
-        // id DESC gives the same recency ordering served by the primary key;
-        // with a status filter the composite index serves scheduled_at directly.
+        // Without a status filter, ORDER BY scheduled_at cannot use the (status, scheduled_at) index.
         $emailsQuery = CampaignEmail::with('subscriber', 'campaign');
 
         if ($status) {
@@ -263,11 +259,7 @@ class ReportingController extends Controller
     }
 
     /**
-     * Apply the search filter to email activity queries.
-     *
-     * Search is scoped to fields the table actually exposes so users can find
-     * rows by subject, source campaign title, recipient email, or related
-     * contact email without triggering extra broad scans on large datasets.
+     * Search email activity by subject, campaign title, recipient or contact email.
      *
      * @param \FluentCrm\Framework\Database\Orm\Builder $query
      * @param string $search
@@ -281,12 +273,7 @@ class ReportingController extends Controller
         $containsLike = '%' . $escapedSearch . '%';
         $emailLike = strpos($search, '@') !== false ? $escapedSearch . '%' : $containsLike;
 
-        // Match source campaign titles and recipient emails via non-correlated
-        // IN subqueries: MySQL materializes each once per statement — keeping
-        // the perf win over the old per-row correlated whereHas at 1M+ rows —
-        // without loading an unbounded ID list into PHP. fc_campaigns is
-        // queried directly (not through the Campaign model) so funnel/sequence
-        // email types match too; the model's global 'type' scope would drop them.
+        // fc_campaigns is queried directly because the Campaign model's type scope drops funnel/sequence emails.
         return $query->where(function ($subQuery) use ($containsLike, $emailLike) {
             $subQuery->where('email_subject', 'LIKE', $containsLike)
                 ->orWhere('email_address', 'LIKE', $emailLike)
@@ -446,7 +433,7 @@ class ReportingController extends Controller
         $emailStats = fluentCrmDb()->table('fc_campaign_emails')
             ->select('campaign_id')
             ->selectRaw('COUNT(*) as total')
-            ->selectRaw("SUM(CASE WHEN status = 'sent' THEN 1 ELSE 0 END) as sent")
+            ->selectRaw("SUM(CASE WHEN status IN ('sent', 'bounced') THEN 1 ELSE 0 END) as sent")
             ->selectRaw("SUM(CASE WHEN is_open = 1 THEN 1 ELSE 0 END) as views")
             ->selectRaw("SUM(CASE WHEN click_counter IS NOT NULL THEN 1 ELSE 0 END) as clicks")
             ->whereIn('campaign_id', $campaignIds)
@@ -493,20 +480,21 @@ class ReportingController extends Controller
                 }
             }
 
-            $stats = [
+            $stats = array_merge([
                 'total'         => $emailStat ? (int) $emailStat->total : 0,
                 'sent'          => $emailStat ? (int) $emailStat->sent : 0,
                 'clicks'        => $clicks,
                 'views'         => $views,
                 'unsubscribers' => $unsubscribeCount ? (int) $unsubscribeCount->total : 0,
-            ];
+            ], $campaign->anonymousStatFlags());
 
             $revenue = maybe_unserialize($campaignMeta['_campaign_revenue'] ?? null);
             if ($revenue) {
                 foreach ((array) $revenue as $currency => $cents) {
                     if ($cents && $currency !== 'orderIds') {
                         $stats['revenue'] = [
-                            'label'    => __('Revenue', 'fluent-crm') . ' (' . $currency . ')',
+                            /* translators: %s: currency code, e.g. USD */
+                            'label'    => sprintf(__('Revenue (%s)', 'fluent-crm'), $currency),
                             'total'    => number_format($cents / 100, 2),
                             'currency' => $currency,
                         ];
@@ -526,7 +514,6 @@ class ReportingController extends Controller
             ->orderBy('created_at', 'DESC')
             ->paginate($limit);
 
-        // One grouped aggregate for the whole page instead of 4 queries per funnel.
         $funnelIds = [];
         foreach ($funnels as $funnel) {
             $funnelIds[] = $funnel->id;
@@ -556,7 +543,6 @@ class ReportingController extends Controller
             $funnel->in_progress_count = $aggregate ? (int)$aggregate->in_progress_count : 0;
             $funnel->last_run_at = $aggregate ? $aggregate->last_run_at : null;
 
-            // Recent 3 subscribers who entered
             $recentEntries = FunnelSubscriber::where('funnel_id', $funnel->id)
                 ->with(['subscriber' => function ($q) {
                     $q->select(['id', 'first_name', 'last_name', 'email', 'avatar']);
@@ -579,19 +565,11 @@ class ReportingController extends Controller
             })->filter()->values();
         }
 
-        // The Top-5 ranking and the global overview totals each aggregate over
-        // every funnel-subscriber row of published funnels, so they scale with
-        // lifetime automation history rather than page size. Cache them for 5
-        // minutes (transient — survives across requests without an object cache)
-        // instead of rescanning on every interactive report load. TTL-only
-        // invalidation by design: hooking invalidation into enrollment writes
-        // would touch the hottest write path for a dashboard stat. The per-page
-        // funnel stats above stay live.
+        // Top-5 and global totals scan all enrollment history; cached in a transient with TTL-only invalidation.
         $overviewStats = get_transient('fluent_crm_automation_overview_stats');
 
         if (!is_array($overviewStats) || !isset($overviewStats['top_automations'], $overviewStats['totals'])) {
-            // Top 5 automations by total subscribers (most triggered) — one grouped
-            // query instead of a COUNT per published funnel.
+            // Top 5 automations by total enrollments.
             $topAutomations = FunnelSubscriber::join('fc_funnels', function ($join) {
                     $join->on('fc_funnel_subscribers.funnel_id', '=', 'fc_funnels.id')
                         ->where('fc_funnels.status', '=', 'published')
@@ -614,12 +592,7 @@ class ReportingController extends Controller
                 ->values()
                 ->toArray();
 
-            // Overview totals are GLOBAL (they're presented as such), not sums of the
-            // current page. COUNT(DISTINCT funnel_id, subscriber_id) preserves the
-            // per-funnel-unique enrollment semantics of the old per-funnel counts.
-            // These aggregates have to name the pivot table explicitly (`status`
-            // is ambiguous across the join), and raw fragments bypass the query
-            // grammar — so the prefix is resolved by hand.
+            // Totals are global, not page sums. Raw fragments bypass the prefix grammar, so the table is prefixed by hand.
             global $wpdb;
             $funnelSubscribersTable = $wpdb->prefix . 'fc_funnel_subscribers';
 
@@ -735,11 +708,7 @@ class ReportingController extends Controller
 
     public function ping()
     {
-        // Browser-driven cron fallback: while an admin has any CRM page open,
-        // the app pings this endpoint ~every 50s. If Action Scheduler (and the
-        // WP-Cron fallback) have stalled, take over the every-minute email task
-        // here. No-ops in a single option read when scheduling is healthy, and
-        // is fully locked/throttled internally — safe across tabs and users.
+        // Browser-driven cron fallback when Action Scheduler and WP-Cron have stalled.
         Scheduler::maybeProcessFromBrowserPing();
 
         return [

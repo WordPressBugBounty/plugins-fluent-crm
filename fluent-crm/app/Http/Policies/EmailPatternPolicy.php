@@ -26,9 +26,7 @@ class EmailPatternPolicy extends BasePolicy
     }
 
     /**
-     * Deleting a pattern category permanently removes data, so it requires the delete
-     * permission — consistent with delete()/handleBulkAction() — rather than falling back
-     * to the manage permission via verifyRequest(). See repo Rule 6.
+     * Deleting a pattern category requires the delete permission, as delete() does.
      *
      * @param \FluentCrm\Framework\Http\Request\Request $request
      * @return Boolean

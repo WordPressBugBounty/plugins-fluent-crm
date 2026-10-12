@@ -21,7 +21,7 @@ class TagAppliedBenchmark extends BaseBenchMark
     {
         return [
             'title'       => __('Tag Applied', 'fluent-crm'),
-            'description' => __('This will run when selected Tags have been applied to a contact', 'fluent-crm'),
+            'description' => __('This will run when selected tags have been applied to a contact', 'fluent-crm'),
             'icon'        => 'fc-icon-tag_applied',//fluentCrmMix('images/funnel_icons/tag-applied.svg'),
             'settings'    => [
                 'tags'        => [],
@@ -46,15 +46,15 @@ class TagAppliedBenchmark extends BaseBenchMark
     {
         return [
             'title'     => __('Tag Applied', 'fluent-crm'),
-            'sub_title' => __('This will run when selected Tags have been applied to a contact', 'fluent-crm'),
+            'sub_title' => __('This will run when selected tags have been applied to a contact', 'fluent-crm'),
             'fields'    => [
                 'tags'        => [
                     'type'        => 'option_selectors',
                     'option_key'  => 'tags',
                     'creatable'   => true,
                     'is_multiple' => true,
-                    'label'       => __('Select Tags', 'fluent-crm'),
-                    'placeholder' => __('Select Tags', 'fluent-crm'),
+                    'label'       => __('Select tags', 'fluent-crm'),
+                    'placeholder' => __('Select tags', 'fluent-crm'),
                 ],
                 'select_type' => [
                     'label'      => __('Run When', 'fluent-crm'),
@@ -62,11 +62,11 @@ class TagAppliedBenchmark extends BaseBenchMark
                     'options'    => [
                         [
                             'id'    => 'any',
-                            'title' => __('contact added in any of the selected Tags', 'fluent-crm')
+                            'title' => __('contact added to any of the selected tags', 'fluent-crm')
                         ],
                         [
                             'id'    => 'all',
-                            'title' => __('contact added in all of the selected Tags', 'fluent-crm')
+                            'title' => __('contact added to all of the selected tags', 'fluent-crm')
                         ]
                     ],
                     'dependency' => [
@@ -89,9 +89,7 @@ class TagAppliedBenchmark extends BaseBenchMark
 
         $benchmarkTags = Arr::get($settings, 'tags', []);
 
-        // Gate on the tags actually applied in this event. Without this a contact
-        // who already holds the benchmark tag would advance past the benchmark
-        // on any unrelated tag-add event.
+        // Gate on the tags applied in this event, not ones the contact already had.
         if (!$benchmarkTags || !array_intersect((array) $tagIds, $benchmarkTags)) {
             return;
         }

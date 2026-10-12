@@ -58,7 +58,7 @@ class BricksBuilderIntegration
                 'type'        => 'select',
                 'multiple'    => true,
                 'options'     => $formattedTags,
-                'placeholder' => esc_html__('Select Tags', 'fluent-crm'),
+                'placeholder' => esc_html__('Select tags', 'fluent-crm'),
             ],
         ];
 

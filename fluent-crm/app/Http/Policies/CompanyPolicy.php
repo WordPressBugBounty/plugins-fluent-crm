@@ -30,10 +30,7 @@ class CompanyPolicy extends BasePolicy
 
     /**
      * Check user permission for bulk company actions.
-     *
-     * The delete bulk action permanently removes companies, so it must require
-     * the stronger delete permission while other bulk updates keep the manage
-     * permission used by the company module.
+     * The delete action requires the delete permission; other actions need manage.
      *
      * @param  \FluentCrm\Framework\Http\Request\Request $request
      * @return Boolean
@@ -55,9 +52,7 @@ class CompanyPolicy extends BasePolicy
     }
 
     /**
-     * Deleting a company note permanently removes data, so it requires the stronger delete
-     * permission — matching how deleting a company itself is gated via delete() — instead of
-     * the manage permission used for creating/updating notes. See repo Rule 6.
+     * Deleting a company note requires the delete permission, as delete() does.
      *
      * @param  \FluentCrm\Framework\Http\Request\Request $request
      * @return Boolean

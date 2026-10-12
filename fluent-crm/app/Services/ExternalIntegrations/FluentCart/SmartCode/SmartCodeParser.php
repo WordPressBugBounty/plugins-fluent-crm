@@ -13,19 +13,49 @@ use FluentCrm\App\Services\ExternalIntegrations\FluentCart\Actions\DynamicCoupon
 
 class SmartCodeParser {
 
-    public static function parseCartOrder($code, $valueKey, $defaultValue, $subscriber)
+    /**
+     * The FluentCart order this automation run is about, or null.
+     *
+     * FunnelSubscriber.source_ref_id is an order id only when a fluent_cart/* trigger started
+     * the run (a form entry, course or cart id otherwise), and the order must belong to the
+     * recipient, so a smartcode can never print another customer's order.
+     *
+     * @param object $subscriber recipient, with funnel_subscriber_id
+     * @return array|null OrderResource::view() result
+     */
+    private static function loadOwnOrder($subscriber)
     {
-        $funnelSub = FunnelSubscriber::where('id', $subscriber->funnel_subscriber_id)->first();
+        $funnelSub = FunnelSubscriber::where('id', $subscriber->funnel_subscriber_id ?? 0)->first();
+        if (!$funnelSub || strpos((string)$funnelSub->source_trigger_name, 'fluent_cart/') !== 0) {
+            return null;
+        }
+
         try {
-            if (!$funnelSub) {
-                return $defaultValue;
-            }
-            $order = OrderResource::view($funnelSub['source_ref_id']);
+            $order = OrderResource::view($funnelSub->source_ref_id);
         } catch (\Exception $exception) {
-            return $defaultValue;
+            return null;
         }
 
         if (empty($order) || !isset($order['order'])) {
+            return null;
+        }
+
+        $customer = $order['order']['customer'] ?? null;
+        if (is_object($customer) && method_exists($customer, 'toArray')) {
+            $customer = $customer->toArray();
+        }
+        $orderEmail = is_array($customer) ? strtolower((string)($customer['email'] ?? '')) : '';
+        if (!$orderEmail || $orderEmail !== strtolower((string)$subscriber->email)) {
+            return null;
+        }
+
+        return $order;
+    }
+
+    public static function parseCartOrder($code, $valueKey, $defaultValue, $subscriber)
+    {
+        $order = self::loadOwnOrder($subscriber);
+        if (!$order) {
             return $defaultValue;
         }
 
@@ -36,31 +66,18 @@ class SmartCodeParser {
     public static function parseCartCustomer($code, $valueKey, $defaultValue, $subscriber)
     {
         
-        // Try to load customer directly from Customer model
         $customer = \FluentCart\App\Models\Customer::where('email', $subscriber->email)->first();
         if ($customer) {
             return self::parseCustomerProps($customer->toArray(), $valueKey, $defaultValue);
         }
         
 
-        // Fallback: Load from order payload if direct model not found
-        try {
-            $funnelSub = FunnelSubscriber::where('id', $subscriber->funnel_subscriber_id)->first();
-
-            if (!$funnelSub) {
-                return $defaultValue;
-            }
-
-            $order = OrderResource::view($funnelSub['source_ref_id']);
-        } catch (\Exception $exception) {
+        // Fall back to the order payload.
+        $order = self::loadOwnOrder($subscriber);
+        if (!$order || !isset($order['order']['customer'])) {
             return $defaultValue;
         }
 
-        if (empty($order) || !isset($order['order']['customer'])) {
-            return $defaultValue;
-        }
-
-        // Ensure array structure
         $orderCustomer = is_array($order['order']['customer'])
             ? $order['order']['customer']
             : (method_exists($order['order']['customer'], 'toArray')
@@ -76,20 +93,14 @@ class SmartCodeParser {
 
     /**
      * Resolve the dynamic coupon smartcode {{cart_coupon.{funnel_id}_{sequence_id}}}.
-     *
-     * Returns the generated code stored on the contact's matching funnel metric, but only once the
-     * real FluentCart coupon exists (created on first parse, since FluentCart has no checkout-time
-     * coupon resolution hook). Creation is idempotent via DynamicCouponService::ensureCouponExists();
-     * if it cannot be materialised the smartcode falls back to $defaultValue rather than emitting a
-     * code that would fail at checkout.
+     * Returns the stored code only once the FluentCart coupon exists, otherwise $defaultValue.
      */
     public static function parseCartCoupon($code, $valueKey, $defaultValue, $subscriber)
     {
         $codeParts = explode('_', $valueKey);
         $codeParts = array_map('trim', $codeParts);
         $codeParts = array_map('intval', $codeParts);
-        // array_filter preserves keys, so reindex: without this a hand-written code such as
-        // {{cart_coupon.0_12_34}} passes the count guard below but leaves index 0 undefined.
+        // Reindex after array_filter so index 0 is always defined.
         $codeParts = array_values(array_filter($codeParts));
 
         if (count($codeParts) < 2) {
@@ -109,8 +120,6 @@ class SmartCodeParser {
             return $defaultValue;
         }
 
-        // Only emit the code once the fct_coupons row actually exists. Materialisation and delivery
-        // are the same call here, so emitting on failure would email a coupon FluentCart rejects.
         if (!(new DynamicCouponService())->ensureCouponExists((string) $funnelMetric->notes, $funnelMetric, $subscriber)) {
             return $defaultValue;
         }
@@ -120,13 +129,8 @@ class SmartCodeParser {
 
     public static function parseCartTransaction($code, $valueKey, $defaultValue, $subscriber)
     {
-        $funnelSub = FunnelSubscriber::where('id', $subscriber->funnel_subscriber_id)->first();
-        try {
-            if (!$funnelSub) {
-                return $defaultValue;
-            }
-            $order = OrderResource::view($funnelSub['source_ref_id']);
-        } catch (\Exception $exception) {
+        $order = self::loadOwnOrder($subscriber);
+        if (!$order) {
             return $defaultValue;
         }
 
@@ -135,15 +139,8 @@ class SmartCodeParser {
 
     public static function parseCartReceipt($code, $valueKey, $defaultValue, $subscriber)
     {
-        $funnelSub = FunnelSubscriber::where('id', $subscriber->funnel_subscriber_id)->first();
-
-        if (!$funnelSub) {
-            return $defaultValue;
-        }
-
-        try {
-            $order = OrderResource::view($funnelSub['source_ref_id']);
-        } catch (\Exception $exception) {
+        $order = self::loadOwnOrder($subscriber);
+        if (!$order) {
             return $defaultValue;
         }
 
@@ -197,8 +194,6 @@ class SmartCodeParser {
                 return Helper::toDecimal($order['total_paid']);
             case 'shipping_status':
                 return $order['shipping_status'];
-//            case 'order_url':
-//                return URL::getCustomerOrderUrl ($order['uuid']);
             default:
                 return null;
         }
@@ -207,8 +202,7 @@ class SmartCodeParser {
 
     public static function parseTransactionProps($transaction, $valueKey, $defaultValue)
     {
-        // this method is not called for now check FluentCart->addHooks Method
-        //Considering the latest transaction
+        // Currently unused; see the disabled cart_transaction hook in FluentCart::addHooks().
         usort($transaction, function ($a, $b) {
             return strtotime($b['created_at']) - strtotime($a['created_at']);
         });

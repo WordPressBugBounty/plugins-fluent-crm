@@ -26,20 +26,23 @@
                     <td align="left" valign="top" class="content" style="word-wrap: break-word; -webkit-hyphens: auto; -moz-hyphens: auto; hyphens: auto; border-collapse: collapse !important; vertical-align: top; mso-table-lspace: 0pt; mso-table-rspace: 0pt; -ms-text-size-adjust: 100%; -webkit-text-size-adjust: 100%; color: #444; font-family: 'Helvetica Neue',Helvetica,Arial,sans-serif; font-weight: normal; margin: 0; Margin: 0; text-align: left; font-size: 14px; mso-line-height-rule: exactly; line-height: 140%; background-color: #ffffff; padding: 60px 75px 45px 75px; border-right: 1px solid #ddd; border-bottom: 1px solid #ddd; border-left: 1px solid #ddd; border-top: 4px solid #c716c1;">
                         <div class="success" style="text-align: left;">
                             <p style="-ms-text-size-adjust: 100%; -webkit-text-size-adjust: 100%; color: #444; font-family: 'Helvetica Neue',Helvetica,Arial,sans-serif; font-weight: normal; padding: 0; text-align: left; mso-line-height-rule: exactly; line-height: 140%; margin: 0 0 15px 0; Margin: 0 0 15px 0; font-size: 16px;">
-                                Hello <?php echo esc_html($subscriber->first_name); ?>,<br />
-                                We received a request for your email subscription preferences.
+                                <?php
+                                /* translators: %s: the contact's first name */
+                                echo esc_html(sprintf(__('Hello %s,', 'fluent-crm'), $subscriber->first_name));
+                                ?><br />
+                                <?php esc_html_e('We received a request for your email subscription preferences.', 'fluent-crm'); ?>
                             </p>
 
                             <p style="-ms-text-size-adjust: 100%; -webkit-text-size-adjust: 100%; color: #444; font-family: 'Helvetica Neue',Helvetica,Arial,sans-serif; font-weight: normal; padding: 0; text-align: left; mso-line-height-rule: exactly; line-height: 140%; margin: 0 0 15px 0; Margin: 0 0 15px 0; font-size: 16px;">
-                            To ensure that we fulfill your request, we're sending this confirmation email with an email management link. Please click the link below to manage your email subscription preferences:
+                            <?php esc_html_e("To ensure that we fulfill your request, we're sending this confirmation email with an email management link. Please click the link below to manage your email subscription preferences:", 'fluent-crm'); ?>
                             </p>
 
                             <p style="-ms-text-size-adjust: 100%; -webkit-text-size-adjust: 100%; color: #444; font-family: 'Helvetica Neue',Helvetica,Arial,sans-serif; font-weight: normal; padding: 0; text-align: left; mso-line-height-rule: exactly; line-height: 140%; margin: 0 0 15px 0; Margin: 0 0 15px 0; font-size: 16px;">
-                                <a style="font-weight: bold;" href="<?php echo esc_url($manage_subscription_url); ?>">View Your Email Preferences</a>
+                                <a style="font-weight: bold;" href="<?php echo esc_url($manage_subscription_url); ?>"><?php esc_html_e('View Your Email Preferences', 'fluent-crm'); ?></a>
                             </p>
 
                             <p style="-ms-text-size-adjust: 100%; -webkit-text-size-adjust: 100%; color: #444; font-family: 'Helvetica Neue',Helvetica,Arial,sans-serif; font-weight: normal; padding: 0; text-align: left; mso-line-height-rule: exactly; line-height: 140%; margin: 0 0 15px 0; Margin: 0 0 15px 0; font-size: 16px;">
-                                If you did not make this request, it was probably submitted by someone else by mistake. You can ignore this email, and no changes will be made to your subscription preferences.
+                                <?php esc_html_e('If you did not make this request, it was probably submitted by someone else by mistake. You can ignore this email, and no changes will be made to your subscription preferences.', 'fluent-crm'); ?>
                             </p>
                         </div>
                     </td>

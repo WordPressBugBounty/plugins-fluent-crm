@@ -29,9 +29,7 @@ class UsersController extends Controller
         $roles = $request->getSafe('roles', 'sanitize_text_field', []);
         $limit = $request->limit ?: 5;
 
-        // Never trust client-supplied `fields`: WP_User_Query would otherwise expose
-        // sensitive columns (e.g. user_pass, user_activation_key). Intersect the request
-        // against a non-sensitive allowlist and fall back to the safe default set.
+        // Restrict `fields` to an allowlist so WP_User_Query never returns user_pass or similar columns.
         $allowedFields = ['ID', 'display_name', 'user_email', 'user_login', 'user_nicename'];
         $fields = array_values(array_intersect((array) ($request->fields ?: []), $allowedFields));
 

@@ -12,23 +12,35 @@ class CampaignProcessor
     protected $initialStatus = 'scheduling';
 
     /**
-     * Random per-acquire owner token stored inside the lock value so refresh
-     * and release only ever touch a lock this run still owns (a stalled run
-     * whose lock aged out must not stomp or delete its successor's claim).
+     * Per-acquire owner token so refresh and release only touch a lock this run still owns.
      */
     private $lockToken = '';
+
+    /**
+     * Whether this run already cleared the queue-insert failure counter.
+     */
+    private $insertFailuresCleared = false;
+
+    /**
+     * Failed queue inserts in a row before the campaign goes back to draft.
+     */
+    const MAX_INSERT_FAILURES = 3;
+
+    /**
+     * Failures closer together than this count once, so the campaign screen's 3-second
+     * polling cannot use up all attempts during one brief database problem.
+     */
+    const INSERT_FAILURE_SPACING = 300;
 
     public function __construct($campaignId)
     {
         $this->campaignId = $campaignId;
 
-        // Always create rows as 'scheduling' — they become 'scheduled' (sendable)
-        // only after ALL rows are created. This ensures clean phase separation:
-        // processing completes fully, then sending begins with accurate totals.
+        // Rows are created as 'scheduling' and become 'scheduled' only after all rows exist.
     }
 
     /*
-     * By Default, this function will process emails in chunks of 30 (customizable) and run for max 30 seconds per processing cycle
+     * Process emails in chunks (default 30) for up to 30 seconds per cycle.
      * @param int $perChunk
      * @param int $runTime
      * @return Campaign|false
@@ -51,8 +63,11 @@ class CampaignProcessor
         }
 
         if (fluentCrmIsMemoryExceeded()) {
+            $this->recordMemoryAbort();
             return false;
         }
+
+        fluentcrm_delete_campaign_meta($this->campaignId, '_memory_abort');
 
         if (!$perChunk || $perChunk <= 0) {
             /**
@@ -69,18 +84,11 @@ class CampaignProcessor
         }
 
         if (!$this->acquireProcessingLock()) {
-            // Return false (not $campaign) so the caller doesn't fire
-            // another AJAX chain while the lock is held by another process.
+            // False (not $campaign) so the caller does not fire another AJAX chain.
             return false;
         }
 
-        // The lock must cover everything up to and including the finalize:
-        // the moment it frees, a cancel + re-schedule can start a NEW
-        // materialization run for this campaign, and this run's flip/finalize
-        // must never interleave with that one's inserts. The finally also
-        // guarantees a thrown QueryException releases the lock immediately
-        // instead of leaving the campaign stuck in 'processing' for the
-        // lock's full TTL.
+        // The lock must cover everything through the finalize.
         try {
             return $this->materializeUnderLock($campaign, $perChunk, $runTime, $startTime);
         } finally {
@@ -89,10 +97,32 @@ class CampaignProcessor
     }
 
     /**
-     * The materialization work that runs while the processing lock is held:
-     * chunked row inserts, the guarded scheduling->scheduled flip, and the
-     * campaign finalize/sweep. Extracted so processEmails() owns the lock
-     * lifecycle via try/finally.
+     * Leave a trace when queue creation stops on the memory guard.
+     *
+     * Without it the campaign sat in processing with no queued emails and nothing in any log, and
+     * every tick hit the same limit. The _memory_abort campaign meta holds the usage and limit seen;
+     * the next run that gets past the guard deletes it.
+     */
+    private function recordMemoryAbort()
+    {
+        $usage = memory_get_usage(true);
+        $limit = fluentCrmGetMemoryLimit();
+
+        fluentcrm_update_campaign_meta($this->campaignId, '_memory_abort', [
+            'memory_usage' => $usage,
+            'memory_limit' => $limit,
+            'recorded_at'  => current_time('mysql')
+        ]);
+
+        Helper::debugLog(
+            'Campaign queue creation stopped on the memory guard',
+            sprintf('Campaign #%d: %s of %s in use.', $this->campaignId, size_format($usage), size_format($limit)),
+            'error'
+        );
+    }
+
+    /**
+     * Insert rows in chunks, flip them to scheduled and finalize the campaign, under the processing lock.
      *
      * @return Campaign|false
      */
@@ -105,6 +135,10 @@ class CampaignProcessor
         }
 
         $result = $this->subscribe($campaign, $subscribersModel);
+        if ($result === null) {
+            $this->handleInsertFailure($campaign);
+            return false;
+        }
 
         $willRun = !!$result;
 
@@ -112,11 +146,7 @@ class CampaignProcessor
             usleep(10000); // 10 milliseconds sleep
             $campaign = Campaign::withoutGlobalScope('type')->find($this->campaignId);
 
-            // The campaign can be un-scheduled (status -> 'draft', rows deleted) or
-            // even deleted while this run is mid-materialization. Stop inserting as
-            // soon as we observe that, and sweep the 'scheduling' rows this run
-            // created after the cancel's own delete — they must never be released
-            // for sending. (Also prevents a fatal on a null re-fetch below.)
+            // Un-scheduled or deleted mid-run: stop and sweep this run's 'scheduling' rows.
             if (!$campaign || $campaign->status != 'processing') {
                 $this->sweepSchedulingRows();
                 return $campaign;
@@ -126,12 +156,7 @@ class CampaignProcessor
 
             if ($willRun) {
                 if (!$this->refreshProcessingLock()) {
-                    // We stalled past the lock TTL and a successor claimed the
-                    // campaign — it owns materialization now. Stop inserting
-                    // immediately: rows already created are consistent (the
-                    // shared cursor advanced with them), the successor
-                    // continues from that cursor, and the finally's guarded
-                    // release will no-op against the successor's lock.
+                    // A successor claimed the lock after this run stalled past the TTL.
                     return false;
                 }
                 $subscribersModel = $this->getSubscribersChunk($campaign, $perChunk);
@@ -141,15 +166,14 @@ class CampaignProcessor
                 }
 
                 $result = $this->subscribe($campaign, $subscribersModel);
+                if ($result === null) {
+                    $this->handleInsertFailure($campaign);
+                    return false;
+                }
             }
         }
 
-        // One final status read decides how this run ends. unSchedule() writes
-        // status='draft' BEFORE deleting the campaign's rows, so once we observe a
-        // non-'processing' status here, anything still in 'scheduling' is residue
-        // inserted after that delete — sweep it instead of releasing it. This also
-        // covers the exit where the loop timed out in the same iteration it
-        // inserted its last chunk (the mid-loop check never ran again).
+        // unSchedule() writes 'draft' before deleting rows, so leftover 'scheduling' rows are residue.
         $campaign = Campaign::withoutGlobalScope('type')->find($this->campaignId);
 
         if (!$campaign || $campaign->status != 'processing') {
@@ -160,25 +184,11 @@ class CampaignProcessor
         if (!$result) { // All rows materialized — release them for sending.
             global $wpdb;
 
-            // Dedup BEFORE the flip, while every row is still 'scheduling' and
-            // invisible to the senders: a TTL-steal overlap (a successor
-            // re-inserting a stalled worker's in-flight chunk) can leave
-            // duplicate rows, and removing them here means duplicates never
-            // become claimable at all. maybeDeleteDuplicates() after the
-            // finalize below re-checks as a second net for rows that commit in
-            // the gap between this call and the flip; both short-circuit on
-            // one indexed probe when the campaign is clean.
+            // Dedup while rows are still 'scheduling' and invisible to the senders.
             $campaign->deleteDuplicateEmails();
 
-            // Atomic guarded flip: the 'scheduling' -> 'scheduled' flip is the single
-            // gate that makes rows sendable, so the campaign-status check is folded
-            // into the UPDATE itself — a concurrent un-schedule cannot slip between
-            // a separate check and the flip. Whichever side wins, nothing leaks: if
-            // the flip commits first, the cancel's subsequent deletes remove the
-            // flipped rows; if the cancel's status write commits first, the subquery
-            // sees 'draft' and zero rows flip. Subquery instead of UPDATE...JOIN so
-            // it also works on the WP SQLite plugin. Must run BEFORE the campaign is
-            // finalized to 'scheduled' below, while the condition still holds.
+            // Status check lives inside the UPDATE so a concurrent un-schedule cannot slip in.
+            // Subquery instead of UPDATE...JOIN for the WP SQLite plugin. Must run before the finalize.
             $wpdb->query($wpdb->prepare(
                 "UPDATE {$wpdb->prefix}fc_campaign_emails
                 SET status = 'scheduled'
@@ -188,8 +198,7 @@ class CampaignProcessor
                 $this->campaignId
             ));
 
-            // Guarded finalize: matches 0 rows if a cancel landed after the re-fetch
-            // above, so a 'draft' can never be overwritten back to 'scheduled'.
+            // Matches 0 rows if a cancel landed after the re-fetch.
             $finalized = Campaign::withoutGlobalScope('type')
                 ->where('id', $this->campaignId)
                 ->where('status', 'processing')
@@ -197,16 +206,12 @@ class CampaignProcessor
 
             if ($finalized) {
                 fluentcrm_update_campaign_meta($this->campaignId, '_last_recipient_id', 0);
-                $campaign->status = 'scheduled'; // keep the returned model accurate
-                // Mark it clean: the guarded finalize above already wrote this
-                // status. Left dirty, any later save() on this model would
-                // replay 'scheduled' over a concurrent un-schedule's 'draft'.
+                $campaign->status = 'scheduled';
+                // Keep clean so a later save() cannot overwrite a concurrent 'draft'.
                 $campaign->syncOriginalAttribute('status');
                 $campaign->maybeDeleteDuplicates();
             } else {
-                // Cancelled in the gap between the re-fetch and the finalize. The
-                // cancel's own deletes clean up anything the flip touched; sweep any
-                // remaining residue and re-fetch so the caller sees the real status.
+                // Cancelled between the re-fetch and the finalize.
                 $this->sweepSchedulingRows();
                 $campaign = Campaign::withoutGlobalScope('type')->find($this->campaignId);
             }
@@ -216,44 +221,135 @@ class CampaignProcessor
     }
 
     /**
-     * The campaign's recipient model could not be resolved — e.g. a dynamic segment
-     * whose provider is no longer registered (Pro deactivated, segment deleted).
-     * Leaving the campaign in `processing` would permanently occupy one of the two
-     * scheduler discovery slots and eventually halt ALL sending, and the UI refuses
-     * to unschedule past-due `processing` campaigns. Park it back in `draft` so the
-     * admin can see, fix, and reschedule it.
+     * Move a campaign whose recipients cannot be resolved back to draft.
+     * A stuck `processing` campaign occupies a scheduler discovery slot.
      */
     private function revertUnresolvableCampaign($campaign)
+    {
+        $this->revertToDraft(
+            $campaign,
+            'Recipient selection could not be resolved (segment provider missing or deleted). The campaign was moved back to draft.',
+            'recipients_unresolvable'
+        );
+    }
+
+    /**
+     * Move a processing campaign back to draft, drop its half-built queue and record why.
+     *
+     * Rows are still 'scheduling' at this point, so nothing was sent. The recipient cursor is
+     * reset here, not left to the next schedule: a recurring edition is re-approved through a
+     * path that does not reset it, and would then skip every contact already processed. The
+     * recipient count is recounted because the queue build zeroed it, and Schedule refuses a
+     * campaign with no recipients. The recount runs first and may fail on the same database
+     * problem that caused the revert; the count is then left alone rather than leaving a draft
+     * with no recorded reason. Status and count change together, only while still processing.
+     */
+    private function revertToDraft($campaign, $message, $reason)
     {
         if ($campaign->status != 'processing') {
             return;
         }
 
-        $campaign->status = 'draft';
-        $campaign->save();
+        $recipientsCount = null;
+        try {
+            $recipientsCount = (int)$campaign->getSubscriberIdsCountBySegmentSettings($campaign->settings);
+        } catch (\Exception $exception) {
+            Helper::debugLog('Campaign recipient recount failed', sprintf('Campaign #%d: %s', $campaign->id, $exception->getMessage()), 'error');
+        }
 
-        // Rows materialized before the revert would otherwise linger as
-        // 'scheduling' on a draft campaign forever (never claimable, never
-        // cleaned unless the campaign is re-scheduled).
+        $update = ['status' => 'draft'];
+        if ($recipientsCount !== null) {
+            $update['recipients_count'] = $recipientsCount;
+        }
+
+        $reverted = Campaign::withoutGlobalScope('type')
+            ->where('id', $campaign->id)
+            ->where('status', 'processing')
+            ->update($update);
+
+        if (!$reverted) {
+            return;
+        }
+
+        foreach ($update as $attribute => $value) {
+            $campaign->{$attribute} = $value;
+            $campaign->syncOriginalAttribute($attribute);
+        }
+
+        fluentcrm_update_campaign_meta($campaign->id, '_processing_error', $message);
+
         $this->sweepSchedulingRows();
 
-        fluentcrm_update_campaign_meta(
-            $campaign->id,
-            '_processing_error',
-            'Recipient selection could not be resolved (segment provider missing or deleted). The campaign was moved back to draft.'
-        );
+        fluentcrm_update_campaign_meta($campaign->id, '_last_recipient_id', 0);
+        fluentcrm_update_campaign_meta($campaign->id, '_recipient_processed', 0);
 
-        do_action('fluent_crm/campaign_processing_failed', $campaign, 'recipients_unresolvable');
+        do_action('fluent_crm/campaign_processing_failed', $campaign, $reason);
     }
 
     /**
-     * Delete this campaign's leftover 'scheduling' rows after a mid-run cancel
-     * or an unresolvable-recipients revert.
+     * Forget earlier queue-build failures, for a campaign that is scheduled again.
      *
-     * 'scheduling' rows are invisible to the senders (they claim only
-     * 'pending'/'scheduled' rows), so this never races the send loop — it only
-     * removes residue that unSchedule()'s own deletes could not see because
-     * the rows were inserted after they ran.
+     * @param int $campaignId
+     */
+    public static function clearQueueFailures($campaignId)
+    {
+        foreach (['_queue_insert_failures', '_queue_insert_failed_at', '_processing_error', '_memory_abort'] as $key) {
+            fluentcrm_delete_campaign_meta($campaignId, $key);
+        }
+    }
+
+    /**
+     * A chunk had sendable contacts but no queue rows were created, or the insert threw.
+     *
+     * A database error used to escape as an exception, leaving the campaign in processing to be
+     * retried, and failing, on every tick; an empty insert result finished the campaign after a
+     * partial send. Either way the campaign now stays in processing with its cursor unmoved and
+     * the next tick retries the chunk. After MAX_INSERT_FAILURES failed runs in a row it goes back
+     * to draft, because a campaign stuck at the front of the queue blocks every scheduled
+     * campaign behind it.
+     */
+    private function handleInsertFailure($campaign)
+    {
+        global $wpdb;
+
+        // Read before any other query resets it.
+        $dbError = $wpdb->last_error ?: 'no database error reported';
+        $failures = absint(fluentcrm_get_campaign_meta($this->campaignId, '_queue_insert_failures', true));
+        $lastFailureAt = absint(fluentcrm_get_campaign_meta($this->campaignId, '_queue_insert_failed_at', true));
+
+        if (!$failures || !$lastFailureAt || (time() - $lastFailureAt) >= self::INSERT_FAILURE_SPACING) {
+            $failures++;
+            fluentcrm_update_campaign_meta($this->campaignId, '_queue_insert_failed_at', time());
+
+            Helper::debugLog(
+                'Campaign queue insert failed',
+                sprintf('Campaign #%d, attempt %d of %d: %s', $this->campaignId, $failures, self::MAX_INSERT_FAILURES, $dbError),
+                'error'
+            );
+        }
+
+        if ($failures >= self::MAX_INSERT_FAILURES) {
+            fluentcrm_delete_campaign_meta($this->campaignId, '_queue_insert_failures');
+            fluentcrm_delete_campaign_meta($this->campaignId, '_queue_insert_failed_at');
+            $this->revertToDraft(
+                $campaign,
+                sprintf('The email queue could not be created after %d attempts (%s). The campaign was moved back to draft.', $failures, $dbError),
+                'queue_insert_failed'
+            );
+            return;
+        }
+
+        fluentcrm_update_campaign_meta($this->campaignId, '_queue_insert_failures', $failures);
+        fluentcrm_update_campaign_meta(
+            $this->campaignId,
+            '_processing_error',
+            sprintf('The email queue could not be created (%s). Attempt %d of %d; it will be retried.', $dbError, $failures, self::MAX_INSERT_FAILURES)
+        );
+    }
+
+    /**
+     * Delete this campaign's leftover 'scheduling' rows after a cancel or revert.
+     * Senders never claim 'scheduling' rows.
      */
     private function sweepSchedulingRows()
     {
@@ -282,6 +378,9 @@ class CampaignProcessor
 
     /**
      * Materialize a subscriber chunk and advance the cursor after rows are created.
+     *
+     * @return array|true|null Created email ids; true when nobody in the chunk was sendable;
+     *                         [] when there are no more recipients; null when the insert failed.
      */
     private function subscribe($campaign, $subscribersModel)
     {
@@ -290,26 +389,40 @@ class CampaignProcessor
             return [];
         }
 
-        $result = $campaign->subscribe($subscribers, [
-            'status'       => $this->initialStatus,
-            'scheduled_at' => $campaign->getEmailScheduleAt(),
-        ], true);
+        try {
+            $result = $campaign->subscribe($subscribers, [
+                'status'       => $this->initialStatus,
+                'scheduled_at' => $campaign->getEmailScheduleAt(),
+            ], true);
+        } catch (\Exception $exception) {
+            // The query builder throws on a database error. Uncaught, it left the campaign in
+            // processing and every tick retried it, blocking the campaigns behind it.
+            return null;
+        }
+
+        if (!$result) {
+            $sendable = $subscribers->filter(function ($subscriber) {
+                return in_array($subscriber->status, Campaign::sendableStatuses(), true);
+            });
+            if (!$sendable->isEmpty()) {
+                return null; // The insert failed; keep the cursor so the chunk is retried.
+            }
+        } else if (!$this->insertFailuresCleared) {
+            $this->insertFailuresCleared = true;
+            fluentcrm_delete_campaign_meta($this->campaignId, '_queue_insert_failures');
+            fluentcrm_delete_campaign_meta($this->campaignId, '_queue_insert_failed_at');
+            fluentcrm_delete_campaign_meta($this->campaignId, '_processing_error');
+        }
 
         $this->advanceRecipientCursor($campaign->id, (int)$subscribers->max('id'));
 
-        return $result;
+        // A chunk where nobody was sendable still continues to the next chunk.
+        return $result ?: true;
     }
 
     /**
-     * Advance the shared `_last_recipient_id` cursor — monotonically.
-     *
-     * A worker that stalled past the lock TTL mid-chunk can wake after a
-     * successor has already materialized further; an unconditional write here
-     * would roll the cursor BACKWARDS and make the successor re-materialize
-     * everything after the rollback point. The conditional UPDATE only ever
-     * moves the cursor forward (numeric coercion via `+ 0` works on MySQL and
-     * the WP SQLite plugin alike). The finalize-time reset to 0 intentionally
-     * bypasses this via the plain meta helper.
+     * Advance the shared `_last_recipient_id` cursor, forward only.
+     * A stalled worker must not roll the cursor back behind its successor.
      */
     private function advanceRecipientCursor($campaignId, $lastId)
     {
@@ -322,15 +435,13 @@ class CampaignProcessor
         ));
 
         if (!$affected && !fluentcrm_get_campaign_meta($campaignId, '_last_recipient_id')) {
-            // First chunk of a fresh materialization — the row doesn't exist yet.
-            // (The processing lock serializes normal runs, so create is safe here.)
+            // First chunk: the meta row does not exist yet.
             fluentcrm_update_campaign_meta($campaignId, '_last_recipient_id', $lastId);
         }
     }
 
     /**
-     * Per-campaign materialization lock key in wp_options. In-family with the
-     * scheduler's `_fluentcrm_lock_campaign_chain_<id>` chain lock.
+     * Per-campaign materialization lock key in wp_options.
      */
     private function processingLockKey()
     {
@@ -339,24 +450,13 @@ class CampaignProcessor
 
     /**
      * Atomically acquire the processing lock for this campaign.
-     *
-     * Lives in wp_options (Helper::acquireDbLock), NOT fc_meta: wp_options has
-     * a UNIQUE key on option_name, so the INSERT IGNORE + conditional-UPDATE
-     * claim is race-free even when the row does not exist yet. fc_meta has no
-     * unique constraint on (object_type, object_id, key), so a first-acquire
-     * there needs a check-then-create step in which two concurrent workers can
-     * duplicate the row — or overwrite each other's fresh claim — and both
-     * start materializing the same campaign (duplicate fc_campaign_emails
-     * rows). Old `_processing_emails` fc_meta rows from earlier versions are
-     * inert and get removed with the rest of the campaign's meta on delete.
+     * Lives in wp_options, not fc_meta, because only option_name has a UNIQUE key.
      *
      * @return bool True if lock acquired, false if another process holds it.
      */
     private function acquireProcessingLock()
     {
-        // 90s TTL: refreshed once per chunk inside the materialization loop,
-        // so only a crashed or hung run ever ages out. The per-acquire token
-        // makes refresh and release ownership-guarded (see the property doc).
+        // 90s TTL, refreshed once per chunk.
         $this->lockToken = md5(uniqid((string)wp_rand(), true));
 
         return Helper::acquireDbLock($this->processingLockKey(), 90, $this->lockToken);
@@ -365,8 +465,7 @@ class CampaignProcessor
     /**
      * Refresh the lock timestamp to prevent stale-lock detection.
      *
-     * @return bool False when this run no longer owns the lock — a successor
-     *              claimed it after we stalled past the TTL.
+     * @return bool False when this run no longer owns the lock.
      */
     private function refreshProcessingLock()
     {
@@ -374,10 +473,7 @@ class CampaignProcessor
     }
 
     /**
-     * Release the processing lock. Deletes the row (rather than blanking it)
-     * so per-campaign keys never accumulate in wp_options; the next acquire
-     * re-creates it on demand. Token-guarded: deletes nothing if a successor
-     * owns the lock now.
+     * Release the processing lock by deleting its row, only if this run still owns it.
      */
     private function releaseProcessingLock()
     {

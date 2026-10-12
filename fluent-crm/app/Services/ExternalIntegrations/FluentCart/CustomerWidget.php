@@ -11,18 +11,8 @@ use FluentCrm\App\Services\PermissionManager;
 use FluentCrm\Framework\Support\Arr;
 
 /**
- * Renders the FluentCRM contact widget on FluentCart's single customer and
- * single order pages through FluentCart's dynamic widget system.
- *
- * FluentCart requests sidebar widgets via GET /fluent-cart/v2/widgets and
- * fires a per-page filter: 'fluent_cart/widgets/customer' on the customer
- * page (payload carries 'customer_id') and 'fluent_cart/widgets/single_order_page'
- * on the order page (WidgetsController pre-loads the 'order' into the payload).
- * Both resolve to a FluentCart customer, which we match to a CRM contact by
- * email. We push a 'vue-template' widget: the raw ContactWidgets.vue source
- * compiled at runtime by FluentCart's VueTemplateLoader. All data, URLs,
- * permission flags and translated strings travel in the payload; tag/list
- * changes are sent by the browser straight to FluentCRM's existing REST API.
+ * Renders the FluentCRM contact widget on FluentCart's customer and order pages.
+ * Pushes ContactWidgets.vue as a 'vue-template' widget; tag/list changes go to FluentCRM's REST API.
  */
 class CustomerWidget
 {
@@ -54,10 +44,7 @@ class CustomerWidget
     }
 
     /**
-     * Order page: the contact is the customer who placed the order. For the
-     * 'single_order_page' filter FluentCart's WidgetsController already loaded
-     * the order into $data['order']; we fall back to a lookup by id to stay
-     * robust if that ever changes.
+     * Order page: the contact is the customer who placed the order.
      *
      * @param array $widgets Widgets registered so far.
      * @param array $data    Request data, contains the pre-loaded 'order' and 'order_id'.
@@ -84,11 +71,8 @@ class CustomerWidget
     }
 
     /**
-     * Shared render path: match the FluentCart customer to a CRM contact by
-     * email and, when found, push the vue-template widget.
-     *
-     * FluentCart's own endpoint permission only covers FluentCart data; CRM
-     * read access is already verified by the callers above before we reach here.
+     * Match the FluentCart customer to a CRM contact by email and push the widget.
+     * Callers verify CRM read access.
      *
      * @param array                                $widgets
      * @param \FluentCart\App\Models\Customer|null  $customer
@@ -104,7 +88,6 @@ class CustomerWidget
             ->where('email', $customer->email)
             ->first();
 
-        // The customer is not a CRM contact — nothing to show
         if (!$subscriber) {
             return $widgets;
         }
@@ -154,8 +137,7 @@ class CustomerWidget
 
         $subscriberName = trim($subscriber->full_name);
 
-        // The FluentCart customer name is already visible on the page —
-        // only surface the CRM name when it differs
+        // Show the CRM name only when it differs from the FluentCart name.
         if ($subscriberName === trim((string)$customer->full_name)) {
             $subscriberName = '';
         }
@@ -171,7 +153,7 @@ class CustomerWidget
                 'lists' => $this->formatSegments($subscriber->lists),
                 'tags'  => $this->formatSegments($subscriber->tags)
             ],
-            // Pickers are only rendered for managers — skip the queries otherwise
+            // Pickers render only for managers.
             'options'     => [
                 'lists' => $canManage ? $this->formatSegments(Lists::orderBy('title', 'ASC')->get()) : [],
                 'tags'  => $canManage ? $this->formatSegments(Tag::orderBy('title', 'ASC')->get()) : []
@@ -189,14 +171,14 @@ class CustomerWidget
                 'view_in_crm'     => __('View', 'fluent-crm'),
                 'name'            => __('Name:', 'fluent-crm'),
                 'status'          => __('Status:', 'fluent-crm'),
-                'emails_sent'     => __('Total Emails Sent', 'fluent-crm'),
+                'emails_sent'     => __('Total emails sent', 'fluent-crm'),
                 'open_rate'       => __('Open Rate', 'fluent-crm'),
                 'click_rate'      => __('Click Rate', 'fluent-crm'),
                 'lists'           => __('Lists', 'fluent-crm'),
                 'tags'            => __('Tags', 'fluent-crm'),
                 'add'             => __('Add', 'fluent-crm'),
-                'search_lists'    => __('Search lists...', 'fluent-crm'),
-                'search_tags'     => __('Search tags...', 'fluent-crm'),
+                'search_lists'    => __('Search lists', 'fluent-crm'),
+                'search_tags'     => __('Search tags', 'fluent-crm'),
                 'no_lists'        => __('No lists found.', 'fluent-crm'),
                 'no_tags'         => __('No tags found.', 'fluent-crm'),
                 'apply'           => __('Apply', 'fluent-crm'),
@@ -207,7 +189,7 @@ class CustomerWidget
                 'remove_question' => __('Remove "%s" from this contact?', 'fluent-crm'),
                 /* translators: %s: tag or list title. Accessible label for the remove button */
                 'remove_item'     => __('Remove %s', 'fluent-crm'),
-                'updated'         => __('Contact updated successfully.', 'fluent-crm'),
+                'updated'         => __('The contact has been updated.', 'fluent-crm'),
                 'failed'          => __('Something went wrong. Please try again.', 'fluent-crm')
             ]
         ];

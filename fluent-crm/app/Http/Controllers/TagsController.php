@@ -35,8 +35,7 @@ class TagsController extends Controller
             ->paginate();
 
         if (!$request->get('exclude_counts')) {
-            // One grouped pivot-join count for the whole page instead of a
-            // JOIN + COUNT query per tag.
+            // One grouped pivot-join count for the whole page.
             $tagIds = [];
             foreach ($tags as $tag) {
                 $tagIds[] = $tag->id;
@@ -130,7 +129,7 @@ class TagsController extends Controller
         return $this->sendSuccess([
             'lists'   => $tag,
             'item'    => $tag,
-            'message' => __('Successfully saved the tag.', 'fluent-crm')
+            'message' => __('The tag has been saved.', 'fluent-crm')
         ]);
     }
 
@@ -173,7 +172,7 @@ class TagsController extends Controller
 
         if (Tag::where('slug', $allData['slug'])->where('id', '!=', $id)->first()) {
             return $this->sendError([
-                'message' => __('Provided slug already exists in another tag', 'fluent-crm')
+                'message' => __('This slug is already used by another tag', 'fluent-crm')
             ]);
         }
 
@@ -189,7 +188,7 @@ class TagsController extends Controller
 
         return $this->sendSuccess([
             'lists'   => $tag,
-            'message' => __('Successfully saved the tag.', 'fluent-crm')
+            'message' => __('The tag has been saved.', 'fluent-crm')
         ]);
     }
 
@@ -233,7 +232,7 @@ class TagsController extends Controller
         }
 
         return $this->sendSuccess([
-            'message' => __('Successfully saved the tags.', 'fluent-crm'),
+            'message' => __('The tags have been saved.', 'fluent-crm'),
             'ids'     => $createdIds
         ]);
     }
@@ -261,7 +260,7 @@ class TagsController extends Controller
         do_action('fluent_crm/tag_deleted', $tagId);
 
         return $this->sendSuccess([
-            'message' => __('Successfully removed the tag.', 'fluent-crm')
+            'message' => __('The tag has been deleted.', 'fluent-crm')
         ]);
     }
 
@@ -282,7 +281,7 @@ class TagsController extends Controller
         }
 
         return $this->sendSuccess([
-            'message' => __('Selected Tags have been removed permanently', 'fluent-crm'),
+            'message' => __('Selected tags have been permanently removed', 'fluent-crm'),
         ]);
 
     }

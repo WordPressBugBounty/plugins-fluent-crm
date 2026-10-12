@@ -35,8 +35,7 @@ class AbandonCartController extends Controller
 
         foreach ($enabledDrivers as $driver) {
             if (!in_array($driver->getTriggerName(), $activeTriggers, true)) {
-                // Include the provider slug so the UI can scope the "no automation" notice
-                // (doc link + starter template differ per provider).
+                // The UI scopes the "no automation" notice per provider.
                 $missingAutomations[] = [
                     'provider' => $driver->getProviderSlug(),
                     'label'    => $driver->getProviderLabel(),
@@ -120,7 +119,7 @@ class AbandonCartController extends Controller
         }
 
         return [
-            'message' => __('Selected carts have been deleted successfully', 'fluent-crm')
+            'message' => __('The selected carts have been deleted.', 'fluent-crm')
         ];
     }
 
@@ -166,7 +165,7 @@ class AbandonCartController extends Controller
                     'count' => number_format($draftCount)
                 ],
                 'optout_revenue'     => [
-                    'title' => esc_html__('Optout Revenue', 'fluent-crm'),
+                    'title' => esc_html__('Opt-out Revenue', 'fluent-crm'),
                     'value' => DriverManager::formatPrice($optoutRevenue),
                     'count' => number_format($optoutCount)
                 ],

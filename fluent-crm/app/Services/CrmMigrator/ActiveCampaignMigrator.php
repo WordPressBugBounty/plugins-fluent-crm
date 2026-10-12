@@ -36,7 +36,7 @@ class ActiveCampaignMigrator extends BaseMigrator
                     'placeholder' => __('API Access URL', 'fluent-crm'),
                     'data_type'   => 'url',
                     'type'        => 'input-text',
-                    'inline_help' => $infoSvg . ' ' . __('You can find Account ID Settings -> Developer -> API Access', 'fluent-crm')
+                    'inline_help' => $infoSvg . ' ' . __('You can find your API URL at ActiveCampaign Settings -> Developer -> API Access', 'fluent-crm')
                 ],
                 'api_key' => [
                     'label'       => __('API Access Key', 'fluent-crm'),
@@ -155,7 +155,8 @@ class ActiveCampaignMigrator extends BaseMigrator
 
         $listCounts = count($mappedLists);
 
-        $message = __('Based on your selections ', 'fluent-crm') . $listCounts . __(' lists and associate contacts  will be imported', 'fluent-crm');
+        /* translators: %d: number of ActiveCampaign lists selected for import */
+        $message = sprintf(_n('Based on your selections, %d list and its contacts will be imported.', 'Based on your selections, %d lists and their contacts will be imported.', $listCounts, 'fluent-crm'), $listCounts);
 
         return [
             'subscribed_count'   => 1,
@@ -219,13 +220,11 @@ class ActiveCampaignMigrator extends BaseMigrator
             }
             $stepCompletedCount++;
 
-            if ($subscribedOnly && $subscriber['status'] != 1) {
-                continue;
-            }
+            // The status comes from the contact's ActiveCampaign list statuses (see contactStatusFromLists()).
+            $status = in_array($subscriber['status'], ['subscribed', 'unsubscribed', 'bounced', 'pending'], true) ? $subscriber['status'] : 'pending';
 
-            $status = 'subscribed';
-            if ($subscriber['status'] != 1) {
-                $status = 'pending';
+            if ($subscribedOnly && $status !== 'subscribed') {
+                continue;
             }
 
             $data = [
@@ -301,9 +300,7 @@ class ActiveCampaignMigrator extends BaseMigrator
 
             $contact = FluentCrmApi('contacts')->createOrUpdate($data);
 
-            // Never resurrect a locally suppressed contact (unsubscribed/bounced/complained/
-            // spammed) just because the remote system lists the address as active — a re-run
-            // of the migration must not undo an opt-out or bounce recorded here.
+            // Never resurrect a locally suppressed contact because the remote lists it as active.
             if ($subscribedOnly && $contact && $contact->status != 'subscribed' && !in_array($contact->status, fluentcrm_strict_statues())) {
                 $contact->updateStatus('subscribed');
             }
@@ -314,7 +311,8 @@ class ActiveCampaignMigrator extends BaseMigrator
             'total'         => $offset + 100,
             'has_more'      => !empty($subscribers),
             'hide_progress' => true,
-            'message'       => ($offset + 100) . __(' contacts have been imported so far.', 'fluent-crm')
+            /* translators: %d: number of contacts imported so far */
+            'message'       => sprintf(__('%d contacts have been imported so far.', 'fluent-crm'), $offset + 100)
         ];
     }
 

@@ -16,6 +16,7 @@ use FluentCrm\App\Models\Subscriber;
 use FluentCrm\App\Models\Tag;
 use FluentCrm\App\Services\Helper;
 use FluentCrm\App\Services\Libs\Mailer\CliSendingHandler;
+use FluentCrm\Framework\Support\Arr;
 
 class Commands
 {
@@ -27,7 +28,7 @@ class Commands
                 'count' => Subscriber::count(),
             ],
             [
-                'title' => __('Subscribers', 'fluent-crm'),
+                'title' => __('Subscribed Contacts', 'fluent-crm'),
                 'count' => Subscriber::where('status', 'subscribed')->count(),
             ],
             [
@@ -43,16 +44,17 @@ class Commands
                 'count' => CampaignEmail::count(),
             ],
             [
-                'title' => __('Send Emails', 'fluent-crm'),
-                'count' => CampaignEmail::where('status', 'sent')->count(),
+                'title' => __('Sent Emails', 'fluent-crm'),
+                'count' => CampaignEmail::whereIn('status', CampaignEmail::SENT_STATUSES)->count(),
             ],
             [
                 'title' => __('Scheduled Emails', 'fluent-crm'),
                 'count' => CampaignEmail::where('status', 'scheduled')->count(),
             ],
             [
-                'title' => __('Max Rune Time', 'fluent-crm'),
-                'count' => fluentCrmMaxRunTime() . ' Seconds'
+                'title' => __('Max Run Time', 'fluent-crm'),
+                /* translators: %s: maximum run time in seconds */
+                'count' => sprintf(__('%s seconds', 'fluent-crm'), fluentCrmMaxRunTime())
             ]
         ];
 
@@ -77,9 +79,7 @@ class Commands
         $contactStatus = \WP_CLI\Utils\get_flag_value($assoc_args, 'contact_status', 'subscribed');
         $fire_event = \WP_CLI\Utils\get_flag_value($assoc_args, 'event', 'no');
 
-        // Allow the same statuses the admin import UI offers (subscribed, pending,
-        // unsubscribed, transactional) so CLI imports match admin behavior. Sourced
-        // from the shared helper so it stays in sync if editable statuses change.
+        // Same statuses the admin import UI offers.
         $editableStatuses = fluentcrm_subscriber_editable_statuses();
 
         if (!in_array($contactStatus, $editableStatuses)) {
@@ -302,9 +302,7 @@ class Commands
         $contactStatus = \WP_CLI\Utils\get_flag_value($assoc_args, 'contact_status', 'subscribed');
         $fire_event = \WP_CLI\Utils\get_flag_value($assoc_args, 'event', 'no');
 
-        // Allow the same statuses the admin import UI offers (subscribed, pending,
-        // unsubscribed, transactional) so CLI imports match admin behavior. Sourced
-        // from the shared helper so it stays in sync if editable statuses change.
+        // Same statuses the admin import UI offers.
         $editableStatuses = fluentcrm_subscriber_editable_statuses();
 
         if (!in_array($contactStatus, $editableStatuses)) {
@@ -537,9 +535,7 @@ class Commands
         $contactStatus = \WP_CLI\Utils\get_flag_value($assoc_args, 'contact_status', 'subscribed');
         $fire_event = \WP_CLI\Utils\get_flag_value($assoc_args, 'event', 'no');
 
-        // Allow the same statuses the admin import UI offers (subscribed, pending,
-        // unsubscribed, transactional) so CLI imports match admin behavior. Sourced
-        // from the shared helper so it stays in sync if editable statuses change.
+        // Same statuses the admin import UI offers.
         $editableStatuses = fluentcrm_subscriber_editable_statuses();
 
         if (!in_array($contactStatus, $editableStatuses)) {
@@ -1031,77 +1027,77 @@ class Commands
     public function activate_license($args, $assoc_args)
     {
         if (empty($assoc_args['key'])) {
-            \WP_CLI::line('use --key=LICENSE_KEY to activate the license');
-            return;
+            \WP_CLI::error('use --key=LICENSE_KEY to activate the license');
         }
 
         $licenseKey = trim(sanitize_text_field($assoc_args['key']));
 
-        if (!class_exists('\FluentCampaign\App\Services\PluginManager\LicenseManager')) {
-            \WP_CLI::line('FluentCRM Pro is required');
-            return;
-        }
+        $licenseManager = $this->getProLicenseManager();
 
         \WP_CLI::line('Validating License, Please wait');
 
-        $licenseManager = new \FluentCampaign\App\Services\PluginManager\LicenseManager();
-        $response = $licenseManager->activateLicense($licenseKey);
+        $response = $licenseManager->activate($licenseKey);
 
         if (is_wp_error($response)) {
             \WP_CLI::error($response->get_error_message());
-            return;
         }
 
-        \WP_CLI::line('Your license key has been successfully updated');
-        \WP_CLI::line('Your License Status: ' . $response['status']);
-        \WP_CLI::line('Expire Date: ' . $response['expires']);
-        return;
+        \WP_CLI::line('Your license key has been updated.');
+        \WP_CLI::line('Your License Status: ' . Arr::get($response, 'status'));
+        \WP_CLI::line('Expire Date: ' . Arr::get($response, 'expires'));
     }
 
     public function license_status()
     {
-
-        if (!class_exists('\FluentCampaign\App\Services\PluginManager\LicenseManager')) {
-            \WP_CLI::line('FluentCRM Pro is required');
-            return;
-        }
+        $licenseManager = $this->getProLicenseManager();
 
         \WP_CLI::line('Fetching License details, Please wait');
 
-        $licenseManager = new \FluentCampaign\App\Services\PluginManager\LicenseManager();
-        $licenseManager->verifyRemoteLicense(true);
-        $response = $licenseManager->getLicenseDetails();
+        $response = $licenseManager->getStatus(true);
 
-        \WP_CLI::line('Your License Status: ' . $response['status']);
-        \WP_CLI::line('Expires: ' . $response['expires']);
-        return;
+        if (is_wp_error($response)) {
+            \WP_CLI::error($response->get_error_message());
+        }
+
+        \WP_CLI::line('Your License Status: ' . Arr::get($response, 'status'));
+        \WP_CLI::line('Expires: ' . Arr::get($response, 'expires'));
+    }
+
+    /**
+     * The FluentCRM Pro licence manager, or a CLI error (non-zero exit) when Pro is not active.
+     *
+     * Pro 2.9.86 replaced PluginManager\LicenseManager with PluginManager\FluentLicensing, which is
+     * what the Pro licence screen uses.
+     *
+     * @return \FluentCampaign\App\Services\PluginManager\FluentLicensing
+     */
+    private function getProLicenseManager()
+    {
+        $class = '\FluentCampaign\App\Services\PluginManager\FluentLicensing';
+
+        if (!class_exists($class)) {
+            \WP_CLI::error('FluentCRM Pro is required');
+        }
+
+        try {
+            return $class::getInstance();
+        } catch (\Exception $e) {
+            \WP_CLI::error($e->getMessage());
+        }
     }
 
     /*
-     * Send Pending Emails parallelly via CLI
-     * use it with caution
-     * Requires the "Multi-threaded email sending" experimental feature to be
-     * enabled — it is a parallel sender and shares the cross-process rate budget
-     * that only exists in multi-thread mode. No-ops when the flag is off.
+     * Send Pending Emails parallelly via CLI. Use with caution.
+     * Requires the "Multi-threaded email sending" experimental feature; no-ops when it is off.
      * basic usage: wp fluent_crm cli_send
      * advanced usage: wp fluent_crm cli_send --force=yes --option_key=fluentcrm_is_sending_cli_emails --run_time=50 --min_pending=300 --modulo=2 --remainder=0 --silent=yes
      *
-     * Partitioning: each worker claims rows where (id % modulo) = remainder.
-     * Default 2/0 = even ids; the multi-thread web worker always claims odd
-     * ids (id % 2 = 1). CLI workers must therefore partition WITHIN the even
-     * space: for N parallel CLI workers use --modulo=2N with a distinct EVEN
-     * --remainder each (N=2 -> 4/0 and 4/2; N=3 -> 6/0, 6/2, 6/4), plus a
-     * distinct --option_key per worker. An odd modulo overlaps the web
-     * worker's odd-id partition and re-creates the claim contention this
-     * scheme exists to avoid. A lone CLI worker on an install where the web
-     * multi-thread sender is not actually running can pass --modulo=1 to
-     * claim the whole queue. --modulo is capped at 100 (claims scan ~modulo ×
-     * chunk index entries, so an absurd value would make every claim a huge
-     * locking scan). The old --offset flag is deprecated and ignored.
+     * Each worker claims rows where (id % modulo) = remainder. The multi-thread web worker
+     * claims odd ids, so N CLI workers use --modulo=2N with distinct even remainders
+     * (N=2: 4/0 and 4/2) and a distinct --option_key each. A lone worker with no web
+     * multi-thread sender may pass --modulo=1. --modulo is capped at 100. --offset is ignored.
      *
-     * Custom --option_key values are auto-prefixed with fluentcrm_is_sending_
-     * so the stale-reset defer can discover the worker's lock; dead custom
-     * lock rows are swept automatically at the start of each CLI run.
+     * Custom --option_key values are prefixed with fluentcrm_is_sending_.
      */
     public function cli_send($args, $assoc_args)
     {
@@ -1113,29 +1109,16 @@ class Commands
             $interactive = false;
         }
 
-        // The CLI sender is a PARALLEL sender — it works from an offset so it can
-        // run alongside the cron Handler, and shares the install's per-second rate
-        // budget with it. That budget is only coordinated across processes (via
-        // GlobalRateLimiter's DB path) when multi-threading is enabled; with the
-        // flag off the cron Handler paces in memory and would have no idea this
-        // process is also sending, so the combined rate could exceed the cap and
-        // trip the provider's throttle. Gate the command on the same flag so the
-        // flag stays the single source of truth for "is parallel sending active".
+        // The rate budget is shared across processes only when multi-threading is enabled.
         if (!Helper::isExperimentalEnabled('multi_threading_emails')) {
-            // Exit NON-ZERO in both modes. A scripted `--silent` cron wrapper that
-            // checks $? must see failure, not a silent success that sends nothing
-            // and leaves the queue stranded without tripping monitoring.
+            // Exit non-zero in both modes so scripted --silent wrappers see the failure.
             if ($showLogs) {
                 \WP_CLI::error('Multi-threaded email sending is disabled, so the CLI sender is a no-op. It runs in parallel with the cron sender and needs the "Multi-threaded email sending" experimental feature enabled (Settings → Experimental Features) so the per-second rate stays coordinated across both.');
             }
             \WP_CLI::halt(1);
         }
 
-        // Start/continue hysteresis: the command only STARTS when a real
-        // backlog exists (500+, or --min_pending when set higher), then the
-        // handler keeps sending until fewer than --min_pending (default 300)
-        // remain — so a run drains below its own start gate instead of
-        // thrashing on the boundary.
+        // Start only at 500+ pending (or --min_pending if higher); keep sending down to --min_pending.
         $minPending = (int)\WP_CLI\Utils\get_flag_value($assoc_args, 'min_pending', 300);
         $startGate = max(500, $minPending);
 
@@ -1158,12 +1141,7 @@ class Commands
 
         $optionKey = \WP_CLI\Utils\get_flag_value($assoc_args, 'option_key', 'fluentcrm_is_sending_cli_emails');
 
-        // Normalize custom keys onto the shared sender-lock prefix: the
-        // stale-reset defer discovers live sender locks by this prefix, and an
-        // unprefixed key would be invisible to it — its claimed rows could be
-        // reset mid-batch during a long rate-limit wait. The check includes
-        // the trailing underscore so near-prefix keys (fluentcrm_is_sendingX)
-        // can't hide from that discovery or from the stale-row cleanup.
+        // Stale-row recovery finds live sender locks by this prefix.
         if (strpos($optionKey, 'fluentcrm_is_sending_') !== 0) {
             $optionKey = 'fluentcrm_is_sending_' . sanitize_key($optionKey);
         }

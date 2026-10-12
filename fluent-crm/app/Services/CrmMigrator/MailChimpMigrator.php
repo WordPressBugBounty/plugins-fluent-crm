@@ -19,7 +19,7 @@ class MailChimpMigrator extends BaseMigrator
 
         return [
             'title'                  => 'MailChimp',
-            'description'            => __('Transfer your mailchimp lists, tags and contacts from MailChimp to FluentCRM', 'fluent-crm'),
+            'description'            => __('Transfer your lists, tags and contacts from MailChimp to FluentCRM', 'fluent-crm'),
             'logo'                   => fluentCrmMix('images/migrators/mailchimp.png'),
             'logo_svg'               => $logo,
             'supports'               => [
@@ -71,7 +71,8 @@ class MailChimpMigrator extends BaseMigrator
             $formattedLists[] = [
                 'id'          => $list['id'],
                 'name'        => $list['name'],
-                'description' => __('(Contacts count ', 'fluent-crm') . Arr::get($list, 'stats.member_count') . ')'
+                /* translators: %s: number of contacts in the Mailchimp list */
+                'description' => sprintf(__('(Contacts: %s)', 'fluent-crm'), Arr::get($list, 'stats.member_count'))
             ];
         }
 
@@ -134,7 +135,7 @@ class MailChimpMigrator extends BaseMigrator
                 }
 
                 if ($item['remote_tag'] == 'FNAME') {
-                    $item['fluentcrm_field'] = 'full_name';
+                    $item['fluentcrm_field'] = 'first_name';
                 } else if ($item['remote_label'] == 'First Name') {
                     $item['fluentcrm_field'] = 'first_name';
                 } else if ($item['remote_label'] == 'Last Name') {
@@ -171,7 +172,8 @@ class MailChimpMigrator extends BaseMigrator
             $count = $membersCount;
         }
 
-        $message = __('Based on your selections ', 'fluent-crm') . $count . __(' contacts will be imported', 'fluent-crm');
+        /* translators: %d: number of contacts that will be imported */
+        $message = sprintf(_n('Based on your selections, %d contact will be imported.', 'Based on your selections, %d contacts will be imported.', (int) $count, 'fluent-crm'), (int) $count);
 
         return [
             'subscribed_count'   => $membersCount,
@@ -216,10 +218,7 @@ class MailChimpMigrator extends BaseMigrator
 
         $fieldMaps = Arr::get($postedData, 'contact_fields', []);
 
-        // MailChimp statuses must be mapped to FluentCRM's vocabulary: 'cleaned' means
-        // hard-bounced, and unmapped values would otherwise be stored verbatim as
-        // statuses FluentCRM doesn't recognize — invisible to every status filter,
-        // segment, and count. (Same pattern as DripMigrator.)
+        // Map MailChimp statuses to FluentCRM's; 'cleaned' means hard-bounced.
         $statusMaps = [
             'subscribed'    => 'subscribed',
             'unsubscribed'  => 'unsubscribed',
@@ -229,9 +228,7 @@ class MailChimpMigrator extends BaseMigrator
         ];
 
         foreach ($subscribers as $subscriber) {
-            // 'archived' members were deliberately removed from the audience by the
-            // owner — skip them entirely rather than importing them as mailable
-            // 'pending' contacts.
+            // 'archived' members were removed by the audience owner; skip them.
             if (Arr::get($subscriber, 'status') == 'archived') {
                 continue;
             }
@@ -287,9 +284,7 @@ class MailChimpMigrator extends BaseMigrator
 
             $contact = FluentCrmApi('contacts')->createOrUpdate($data);
 
-            // An "active only" import may promote e.g. a local 'pending' contact, but must
-            // never resurrect a locally suppressed one — an opt-out or bounce recorded here
-            // outranks the remote system saying the address is active.
+            // An "active only" import may promote a pending contact but never a locally suppressed one.
             if (isset($params['status']) && $params['status'] == 'subscribed' && $contact && $contact->status != 'subscribed' && !in_array($contact->status, fluentcrm_strict_statues())) {
                 $contact->updateStatus('subscribed');
             }

@@ -81,7 +81,22 @@ final class Extender
         }
     }
 
-    public function addSmartCode($key, $title, $shortcodes, $callback)
+    /**
+     * Register a smartcode group, e.g. {{my_plugin.name}}.
+     *
+     * Each code has a sensitivity level that decides where it may resolve (see ShortcodeParser::parse()):
+     * basic (front-end pages too), private (the default: staff-facing output, notes, webhooks) or
+     * credential (only an email to the contact's own inbox). A code that grants access to anything,
+     * such as a login link, download link or personal token, must be declared credential.
+     *
+     * @param string   $key        Group key; core and Pro group names are reserved.
+     * @param string   $title      Group title shown in the smartcode picker.
+     * @param array    $shortcodes Code => label, e.g. ['name' => 'Member name'].
+     * @param callable $callback   function ($code, $valueKey, $defaultValue, $subscriber, $level): string
+     * @param array    $args       Optional. 'level' => default level for the group,
+     *                             'levels' => [code => level] overrides, e.g. ['magic_link' => 'credential'].
+     */
+    public function addSmartCode($key, $title, $shortcodes, $callback, $args = [])
     {
         $reservedKeys = [
             'crm',
@@ -90,16 +105,48 @@ final class Extender
             'wp',
             'fluentcrm',
             'user',
+            'wp_user',
             'learndash',
+            'ld',
             'tutorlms',
+            'tl',
+            'lifterlms',
+            'lifter',
             'aff_wp',
             'edd_customer',
-            'lifterlms',
-            'woo_customer'
+            'edd_order',
+            'edd_license',
+            'woo_customer',
+            'woo_order',
+            'woo_last_order',
+            'woo_coupon',
+            'woo_subscription',
+            'cart_order',
+            'cart_customer',
+            'cart_transaction',
+            'cart_receipt',
+            'cart_coupon',
+            'ab_cart_woo',
+            'ab_cart_fluent_cart'
         ];
 
-        if (in_array($key, $reservedKeys)) {
+        if (in_array(strtolower(trim((string)$key)), $reservedKeys, true)) {
             return;
+        }
+
+        // Keys are lower-cased: the parser always checks the lower-cased code too, so any spelling matches.
+        $levels = [];
+        if (!empty($args['level'])) {
+            $levels[strtolower($key . '.*')] = $args['level'];
+        }
+        foreach ((array)(isset($args['levels']) ? $args['levels'] : []) as $code => $level) {
+            $levels[strtolower($key . '.' . $code)] = $level;
+        }
+
+        if ($levels) {
+            add_filter('fluent_crm/smartcode_levels', function ($map) use ($levels) {
+                return array_merge($map, $levels);
+            });
         }
 
         /*
@@ -116,12 +163,12 @@ final class Extender
         /*
          * This is the callback function for the shortcode parser
          */
-        add_filter('fluent_crm/smartcode_group_callback_' . $key, function ($code, $valueKey, $defaultValue, $subscriber) use ($callback) {
+        add_filter('fluent_crm/smartcode_group_callback_' . $key, function ($code, $valueKey, $defaultValue, $subscriber, $level = 'private') use ($callback) {
             if (is_callable($callback)) {
-                return $callback($code, $valueKey, $defaultValue, $subscriber);
+                return $callback($code, $valueKey, $defaultValue, $subscriber, $level);
             }
             return $code; // return the code if no parser function is provided
-        }, 10, 4);
+        }, 10, 5);
     }
 
     /**

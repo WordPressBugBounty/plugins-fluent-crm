@@ -10,22 +10,13 @@ use FluentCrm\App\Models\Subscriber;
 use FluentCrm\Framework\Support\Arr;
 
 /**
- * Lazily materialises the real FluentCart coupon for a generated dynamic code.
- *
- * The CreateCouponAction only stores a unique code on the funnel metric. This service turns
- * that code into an actual fct_coupons row the first time the {{cart_coupon.*}} smartcode is
- * parsed, reading the originating sequence's settings (or a base coupon when in template mode)
- * and translating FluentCRM's Woo-style UI settings into FluentCart's coupon shape.
+ * Creates the real FluentCart coupon for a generated code the first time {{cart_coupon.*}} is parsed.
  */
 class DynamicCouponService
 {
     /**
      * Create the FluentCart coupon for $code if it does not already exist (idempotent).
-     *
-     * Returns false whenever $code is NOT backed by a real fct_coupons row, so the caller can
-     * avoid shipping a code FluentCart would reject at checkout. Because creation happens at
-     * email-parse time rather than at checkout, a silent failure here would otherwise put a dead
-     * coupon straight into the customer's inbox.
+     * Returns false when $code is not backed by a real fct_coupons row.
      *
      * @return bool True when a coupon row for $code exists after this call.
      */
@@ -52,16 +43,15 @@ class DynamicCouponService
         }
 
         $couponData['code'] = $code;
+        /* translators: %s is the generated coupon code */
         $couponData['title'] = sanitize_text_field(sprintf(__('FluentCRM Automation Coupon - %s', 'fluent-crm'), $code));
         $couponData['notes'] = sanitize_textarea_field(sprintf(
-            __('Created dynamically from FluentCRM Automation Funnel: %s', 'fluent-crm'),
+            /* translators: %s is the automation title */
+            __('Created dynamically from FluentCRM automation: %s', 'fluent-crm'),
             $funnelMetric->funnel ? $funnelMetric->funnel->title : ''
         ));
 
-        // This runs inside the email sending path, which is NOT covered by FunnelProcessor's
-        // action try/catch. fct_coupons.code is UNIQUE, so a racing insert of the same code
-        // throws; that must not take the whole sending job down. Re-check on failure because
-        // the racing writer may have created the very row we wanted.
+        // Runs in the sending path; a racing insert on the UNIQUE code throws, so re-check instead.
         try {
             $created = CouponResource::create($couponData);
         } catch (\Throwable $e) {
@@ -86,11 +76,7 @@ class DynamicCouponService
 
     /**
      * Translate stored action settings into a CouponResource::create() payload.
-     *
-     * Amount/condition units: CouponResource::formatAmount() cent-converts `amount`
-     * (non-percentage), `conditions.min_purchase_amount` and `conditions.max_discount_amount`,
-     * but NOT `conditions.max_purchase_amount` — FluentCart stores that bound in major units,
-     * so it is passed through as a plain decimal.
+     * formatAmount() cent-converts every amount except max_purchase_amount, which is stored in major units.
      *
      * @return array|false
      */
@@ -98,6 +84,8 @@ class DynamicCouponService
     {
         if (Arr::get($data, 'template_type') === 'templated') {
             $data = $this->mergeBaseCouponData($data);
+        } else {
+            unset($data['template_conditions']);
         }
 
         if (!$data) {
@@ -113,9 +101,7 @@ class DynamicCouponService
 
         $conditions = [
             'min_purchase_amount' => $this->sanitizeAmount(Arr::get($data, 'minimum_amount', 0)),
-            // NOT cent-converted: FluentCart stores max_purchase_amount in major units. DiscountService
-            // compares it directly against the already-divided cart total, while min_purchase_amount is
-            // divided by 100 first. formatAmount() leaves this key alone for exactly that reason.
+            // Not cent-converted: FluentCart stores max_purchase_amount in major units.
             'max_purchase_amount' => $this->sanitizeAmount(Arr::get($data, 'maximum_amount', 0)),
             'max_discount_amount' => $this->sanitizeAmount(Arr::get($data, 'max_discount_amount', 0)),
             'apply_to_whole_cart' => 'yes',
@@ -129,6 +115,15 @@ class DynamicCouponService
             'email_restrictions'  => Arr::get($data, 'contact_email_only') === 'yes' ? sanitize_email($subscriber->email) : '',
             'is_recurring'        => 'no',
         ];
+
+        // Template coupons pass their spend basis, renewal and apply-to settings through unchanged.
+        foreach ((array)Arr::get($data, 'template_conditions', []) as $key => $value) {
+            if ($key === 'min_amount_basis') {
+                $conditions[$key] = $value === 'subtotal' ? 'subtotal' : 'total';
+            } else {
+                $conditions[$key] = $value === 'yes' ? 'yes' : 'no';
+            }
+        }
 
         return [
             'priority'         => $this->sanitizeInt(Arr::get($data, 'priority', 0)),
@@ -146,11 +141,8 @@ class DynamicCouponService
 
     /**
      * Hydrate the settings array from an existing FluentCart coupon used as a template.
-     *
-     * FluentCart stores fixed amounts and min_purchase_amount in cents, so those are converted
-     * back to plain decimals (via toDecimalWithoutComma, NOT toDecimal which returns a currency
-     * formatted string) before they re-enter the normal cents conversion in getFormattedCouponData.
-     * max_purchase_amount is the exception: it is stored in major units and copied verbatim.
+     * Cent amounts convert back with toDecimalWithoutComma(); max_purchase_amount is copied verbatim.
+     * Conditions with no matching action setting travel in 'template_conditions'.
      *
      * @return array|false
      */
@@ -176,11 +168,14 @@ class DynamicCouponService
         $data['product_categories'] = Arr::get($conditions, 'included_categories', []);
         $data['exclude_product_categories'] = Arr::get($conditions, 'excluded_categories', []);
         $data['minimum_amount'] = Helper::toDecimalWithoutComma(Arr::get($conditions, 'min_purchase_amount', 0));
-        // max_purchase_amount is already stored in major units, so it needs no conversion in
-        // either direction — getFormattedCouponData() passes it straight back through.
+        // Already in major units.
         $data['maximum_amount'] = Arr::get($conditions, 'max_purchase_amount', 0);
         $data['usage_limit'] = Arr::get($conditions, 'max_uses', 0);
         $data['usage_limit_per_user'] = Arr::get($conditions, 'max_per_customer', 0);
+        $data['max_discount_amount'] = Helper::toDecimalWithoutComma(Arr::get($conditions, 'max_discount_amount', 0));
+        $data['template_conditions'] = Arr::only($conditions, ['is_recurring', 'apply_to_whole_cart', 'apply_to_quantity']);
+        // A template saved before FluentCart had min_amount_basis is evaluated against the order total.
+        $data['template_conditions']['min_amount_basis'] = Arr::get($conditions, 'min_amount_basis') ?: 'total';
         $data['individual_use'] = $coupon->stackable === 'yes' ? 'no' : 'yes';
 
         if ($coupon->end_date) {

@@ -20,8 +20,8 @@ class ListAppliedBenchmark extends BaseBenchMark
     public function getBlock()
     {
         return [
-            'title'       => __('List Applied', 'fluent-crm'),
-            'description' => __('This will run when selected lists have been applied to a contact', 'fluent-crm'),
+            'title'       => __('Contact Added to List', 'fluent-crm'),
+            'description' => __('This runs when the contact is added to the selected lists.', 'fluent-crm'),
             'icon'        => 'fc-icon-list_applied_2',//fluentCrmMix('images/funnel_icons/list_applied.svg'),
             'settings'    => [
                 'lists'       => [],
@@ -45,8 +45,8 @@ class ListAppliedBenchmark extends BaseBenchMark
     public function getBlockFields($funnel)
     {
         return [
-            'title'     => __('List Applied', 'fluent-crm'),
-            'sub_title' => __('This will run when selected lists have been applied to a contact', 'fluent-crm'),
+            'title'     => __('Contact Added to List', 'fluent-crm'),
+            'sub_title' => __('This runs when the contact is added to the selected lists.', 'fluent-crm'),
             'fields'    => [
                 'lists'       => [
                     'type'        => 'option_selectors',
@@ -62,11 +62,11 @@ class ListAppliedBenchmark extends BaseBenchMark
                     'options'    => [
                         [
                             'id'    => 'any',
-                            'title' => __('contact added in any of the selected Lists', 'fluent-crm')
+                            'title' => __('contact added to any of the selected lists', 'fluent-crm')
                         ],
                         [
                             'id'    => 'all',
-                            'title' => __('contact added in all of the selected lists', 'fluent-crm')
+                            'title' => __('contact added to all of the selected lists', 'fluent-crm')
                         ]
                     ],
                     'dependency' => [
@@ -89,9 +89,7 @@ class ListAppliedBenchmark extends BaseBenchMark
 
         $benchmarkLists = Arr::get($settings, 'lists', []);
 
-        // Gate on the lists actually applied in this event. Without this a contact
-        // who already belongs to the benchmark list would advance past the benchmark
-        // on any unrelated list-add event.
+        // Gate on the lists applied in this event, not ones the contact already had.
         if (!$benchmarkLists || !array_intersect((array) $listIds, $benchmarkLists)) {
             return;
         }

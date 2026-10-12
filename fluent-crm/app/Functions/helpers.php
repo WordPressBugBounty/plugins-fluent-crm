@@ -95,10 +95,7 @@ function fluentCrmTimestamp($timestamp = null)
  */
 function fluentCrmGetTimezoneString()
 {
-    // wp_timezone_string() (WP 5.3+) returns either a named zone or a ±HH:MM
-    // offset — both valid DateTimeZone inputs. The legacy guess below used
-    // gmdate('I'), which is always '0' (UTC has no DST), so offset-only sites
-    // could match a wrong non-DST zone.
+    // wp_timezone_string() (WP 5.3+) returns a named zone or a ±HH:MM offset.
     if (function_exists('wp_timezone_string')) {
         return wp_timezone_string();
     }
@@ -480,15 +477,11 @@ function fluentcrm_delete_list_meta($listId, $key)
  */
 function fluentcrm_get_subscriber_meta($subscriberId, $key, $deafult = '')
 {
-    // fc_subscriber_meta is shared with contact custom fields (object_type =
-    // 'custom_field'). These internal-meta helpers must exclude them, or a custom
-    // field slugged like an internal key (e.g. "unsubscribe_reason") collides
-    // with — and corrupts — the internal row (Behavioral Rule 11).
+    // fc_subscriber_meta also holds custom field values; exclude object_type 'custom_field'.
     $item = SubscriberMeta::where('key', $key)
         ->where('subscriber_id', $subscriberId)
         ->where(function ($q) {
-            // NULL-safe exclusion: legacy rows may carry a NULL object_type and
-            // `!= 'custom_field'` alone would drop them (NULL never compares true).
+            // Legacy rows may have a NULL object_type.
             $q->whereNull('object_type')->orWhere('object_type', '!=', 'custom_field');
         })
         ->first();
@@ -510,12 +503,11 @@ function fluentcrm_get_subscriber_meta($subscriberId, $key, $deafult = '')
 function fluentcrm_update_subscriber_meta($subscriberId, $key, $value)
 {
     $value = maybe_serialize($value);
-    // check if exists — internal meta only, never a custom_field row (Rule 11)
+    // Internal meta only, never a custom_field row.
     $model = SubscriberMeta::where('key', $key)
         ->where('subscriber_id', $subscriberId)
         ->where(function ($q) {
-            // NULL-safe exclusion: legacy rows may carry a NULL object_type and
-            // `!= 'custom_field'` alone would drop them (NULL never compares true).
+            // Legacy rows may have a NULL object_type.
             $q->whereNull('object_type')->orWhere('object_type', '!=', 'custom_field');
         })
         ->first();
@@ -547,8 +539,7 @@ function fluentcrm_delete_subscriber_meta($subscriberId, $key)
     return SubscriberMeta::where('key', $key)
         ->where('subscriber_id', $subscriberId)
         ->where(function ($q) {
-            // NULL-safe exclusion: legacy rows may carry a NULL object_type and
-            // `!= 'custom_field'` alone would drop them (NULL never compares true).
+            // Legacy rows may have a NULL object_type.
             $q->whereNull('object_type')->orWhere('object_type', '!=', 'custom_field');
         })
         ->delete();
@@ -858,7 +849,8 @@ function fluentcrmGravatar($email, $name = '')
 
     $fallback = '';
     if ($fallbackEnabled && $name) {
-        $fallback = '&d=https%3A%2F%2Fui-avatars.com%2Fapi%2F' . urlencode($name) . '/128';
+        // Gravatar only accepts a fallback URL with an image extension and no query string.
+        $fallback = '&d=' . urlencode('https://textavatars.com/api/' . rawurlencode($name) . '/128.png');
     }
 
     /**
@@ -878,11 +870,7 @@ function fluentcrmGravatar($email, $name = '')
 }
 
 /**
- * Get avatar HTML for admin-facing UI and guarantee a safe placeholder.
- *
- * WordPress get_avatar() can return false when avatars are disabled, which
- * breaks consumers that expect markup. In that case we fall back to the
- * plugin's avatar URL helper and return a simple image tag.
+ * Get avatar HTML, falling back to an img tag when get_avatar() returns false.
  *
  * @param string $email
  * @param string $name
@@ -1498,22 +1486,41 @@ function fluentcrm_get_custom_company_fields()
 /**
  * Sending a job to background for further processing
  *
+ * Posts a non-blocking loopback to admin-ajax.php, which runs do_action($callbackName, $payload).
+ * The request is signed by fluentcrm_background_signature() rather than a nonce: a nonce is tied
+ * to the logged-in user, and an automation started by a REST call with an application password
+ * (no login cookie) produced a nonce the loopback could never verify, so the job was dropped.
+ *
+ * The payload travels as one JSON string. Sent as form fields, PHP rewrote keys containing
+ * brackets (a webhook field named merge_fields[FNAME] arrived as merge_fields[FNAME), so the
+ * receiver could not reproduce what was signed.
+ *
  * @param string $callbackName - name of the callback
  * @param mixed $payload
  * @return bool
  */
 function fluentcrm_queue_on_background($callbackName, $payload)
 {
+    $timestamp = time();
+    $payloadJson = wp_json_encode($payload);
+
+    if ($payloadJson === false) {
+        // Not encodable (NAN or INF in a value): run it now rather than send an empty job.
+        do_action($callbackName, $payload);
+        return true;
+    }
+
     $body = [
-        'payload'       => $payload,
-        'callback_name' => $callbackName
+        'payload_json'  => $payloadJson,
+        'callback_name' => $callbackName,
+        'timestamp'     => $timestamp,
+        'signature'     => fluentcrm_background_signature($callbackName, $payloadJson, $timestamp)
     ];
 
     $args = array(
         'timeout'   => 0.1,
         'blocking'  => false,
         'body'      => $body,
-        'cookies'   => $_COOKIE,
         /**
          * Determine if local SSL verification should be performed.
          *
@@ -1525,14 +1532,41 @@ function fluentcrm_queue_on_background($callbackName, $payload)
         'sslverify' => apply_filters('fluent_crm/https_local_ssl_verify', false),
     );
 
-    $queryArgs = array(
-        'action' => 'fluentcrm_callback_for_background',
-        'nonce'  => wp_create_nonce('fluentcrm_callback_for_background'),
-    );
-
-    $url = add_query_arg($queryArgs, admin_url('admin-ajax.php'));
+    $url = add_query_arg(['action' => 'fluentcrm_callback_for_background'], admin_url('admin-ajax.php'));
     wp_remote_post(esc_url_raw($url), $args);
     return true;
+}
+
+/**
+ * Signature for a background job request, independent of the current user and cookies.
+ *
+ * @param string $callbackName
+ * @param string $payloadJson The JSON-encoded payload, exactly as sent
+ * @param int $timestamp
+ * @return string
+ */
+function fluentcrm_background_signature($callbackName, $payloadJson, $timestamp)
+{
+    return hash_hmac('sha256', $callbackName . '|' . (int)$timestamp . '|' . (string)$payloadJson, wp_salt('auth'));
+}
+
+/**
+ * Whether a background job request was signed by this site within the last 10 minutes.
+ *
+ * @param string $callbackName
+ * @param string $payloadJson Unslashed JSON payload, as received
+ * @param int $timestamp
+ * @param string $signature
+ * @return bool
+ */
+function fluentcrm_verify_background_signature($callbackName, $payloadJson, $timestamp, $signature)
+{
+    $timestamp = (int)$timestamp;
+    if (!$callbackName || !$signature || !$timestamp || !is_string($payloadJson) || abs(time() - $timestamp) > 10 * MINUTE_IN_SECONDS) {
+        return false;
+    }
+
+    return hash_equals(fluentcrm_background_signature($callbackName, $payloadJson, $timestamp), (string)$signature);
 }
 
 /**
@@ -1555,9 +1589,7 @@ function fluentcrm_is_rtl()
 
 /**
  * Get FluentCRM Database Connection instance.
- *
- * Note: ->table()->get() returns \FluentCrm\Framework\Support\Collection (not array).
- * Use ->isEmpty() instead of !$result to check for empty results.
+ * ->table()->get() returns a Collection, not an array.
  *
  * @return \FluentCrm\Framework\Database\Query\WPDBConnection
  */
@@ -1572,7 +1604,18 @@ function fluentCrmIsMemoryExceeded($percent = 75)
     $memory_limit = $memoryLimit * ($percent / 100);
     $current_memory = memory_get_usage(true);
 
-    return $current_memory >= $memory_limit;
+    /**
+     * Filter whether FluentCRM treats the current request as out of memory.
+     *
+     * Background tasks stop early when this is true, to avoid a fatal error midway.
+     *
+     * @since 3.2.6
+     *
+     * @param bool $isExceeded     Whether usage passed the threshold.
+     * @param int  $current_memory Bytes allocated to PHP (memory_get_usage(true)).
+     * @param int  $memory_limit   The threshold in bytes ($percent of the memory limit).
+     */
+    return (bool)apply_filters('fluent_crm/is_memory_exceeded', $current_memory >= $memory_limit, $current_memory, $memory_limit);
 }
 
 function fluentCrmGetMemoryUsagePercentage()
@@ -1679,16 +1722,8 @@ function fluentCrmGetContactSecureHash($contactId)
 }
 
 /**
- * The contact's managed hash, creating one if it does not exist yet.
- *
- * The hash is stable for the life of the contact so that List-Unsubscribe and
- * manage-subscription links keep resolving however long an email lingers in an
- * inbox. It is rotated only on an explicit security event — a WordPress
- * password change (see Cleanup::handleUserPasswordChanged()).
- *
- * The lookup, per-process cache and batch priming live on Helper so the bulk
- * send loop can resolve a whole claimed batch in one round trip
- * (Helper::primeManagedHashes). Behaviour here is unchanged.
+ * Get the contact's managed hash, creating one if it does not exist yet.
+ * Stable for the contact's life; rotated only on a WordPress password change.
  *
  * @param int $contactId
  * @return string

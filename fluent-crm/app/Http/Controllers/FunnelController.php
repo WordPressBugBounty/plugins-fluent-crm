@@ -13,7 +13,9 @@ use FluentCrm\App\Models\Meta;
 use FluentCrm\App\Models\Subscriber;
 use FluentCrm\App\Models\TermRelation;
 use FluentCrm\App\Services\Funnel\FunnelHelper;
+use FluentCrm\App\Services\Funnel\SequenceDelays;
 use FluentCrm\App\Services\Funnel\FunnelProcessor;
+use FluentCrm\App\Services\Funnel\PrivilegedSteps;
 use FluentCrm\App\Services\Funnel\ProFunnelItems;
 use FluentCrm\App\Services\Helper;
 use FluentCrm\App\Services\Libs\Parser\Parser;
@@ -35,9 +37,7 @@ use FluentCrm\Framework\Validator\ValidationException;
 class FunnelController extends Controller
 {
     /**
-     * Stream one automation export after the REST nonce and route policy have
-     * authenticated the POST request. The attachment structure intentionally
-     * matches the retired AJAX exporter so imports remain compatible.
+     * Stream one automation as a JSON attachment, in the shape the importer reads.
      *
      * @param Request $request
      * @param int $id
@@ -86,10 +86,7 @@ class FunnelController extends Controller
             ->orderBy($orderBy, $orderType);
 
         if (!Helper::isEdd3()) {
-            /*
-             * EDD 2 is no longer supported, so hide existing EDD automations
-             * without deleting stored funnel data from the database.
-             */
+            // EDD 2 is unsupported: hide its automations without deleting them.
             $funnelQuery->whereNotIn('trigger_name', [
                 'edd_update_payment_status',
                 'edd_sl_post_set_status',
@@ -136,14 +133,12 @@ class FunnelController extends Controller
         $funnelIds = $funnels->pluck('id')->toArray();
         $inProgressCounts = $this->getInProgressSubscriberCounts($funnelIds);
 
-        // Batch fetch descriptions + sticky notes from fc_meta in a single pass
         $funnelMeta = Meta::whereIn('object_id', $funnelIds)
             ->where('object_type', 'FluentCrm\App\Models\Funnel')
             ->whereIn('key', ['description', FunnelHelper::STICKY_NOTE_META_KEY])
             ->get()
             ->groupBy('object_id');
 
-        // Batch fetch labels via term_relations + labels
         $termRelations = TermRelation::whereIn('object_id', $funnelIds)
             ->where('object_type', 'FluentCrm\App\Models\Funnel')
             ->get()
@@ -156,8 +151,7 @@ class FunnelController extends Controller
             $funnel->in_progress_subscribers_count = $inProgressCounts[(int) $funnel->id] ?? 0;
 
             $funnel->description = '';
-            // A short preview, not the full note: the list shows it inline, and notes can
-            // run to 2000 chars which would bloat every page of this response.
+            // The list returns a 300-char sticky note preview, not the full note.
             $funnel->sticky_note = null;
             foreach ($funnelMeta[$funnel->id] ?? [] as $meta) {
                 if ($meta->key === FunnelHelper::STICKY_NOTE_META_KEY) {
@@ -270,7 +264,7 @@ class FunnelController extends Controller
             $sequenceActionNames = array_merge($sequenceActionNames, $sequenceMap[$segmentKey]);
         }
 
-        // Match automation triggers first, keeping results grouped by segment so combined filters can be intersected later.
+        // Results stay grouped by segment so the caller can intersect combined filters.
         $triggerFunnels = Funnel::whereIn('trigger_name', array_values(array_unique($triggerNames)))
             ->get(['id', 'trigger_name', 'settings']);
 
@@ -286,7 +280,6 @@ class FunnelController extends Controller
             }
         }
 
-        // Match related automation actions and benchmarks in one chunked scan instead of scanning once per segment.
         FunnelSequence::whereIn('action_name', array_values(array_unique($sequenceActionNames)))
             ->select(['id', 'funnel_id', 'action_name', 'settings'])
             ->chunkById(500, function ($chunk) use (&$funnelIds, $segmentFilters, $sequenceMap) {
@@ -343,7 +336,7 @@ class FunnelController extends Controller
         $funnel = Funnel::findOrFail($funnelId);
 
         if (defined('MEPR_PLUGIN_NAME')) {
-            // Maybe trigger name changed
+            // Migrate renamed MemberPress trigger names.
             $migrationMaps = [
                 'recurring-transaction-expired' => 'mepr-event-transaction-expired'
             ];
@@ -400,7 +393,7 @@ class FunnelController extends Controller
              * @since 2.5.7
              *
              */
-            $data['composer_context_codes'] = apply_filters('fluent_crm_funnel_context_smart_codes', [], $funnel->trigger_name, $funnel);
+            $data['composer_context_codes'] = Helper::withSmartCodeLevels(apply_filters('fluent_crm_funnel_context_smart_codes', [], $funnel->trigger_name, $funnel));
         }
 
         if (in_array('funnel_sequences', $with)) {
@@ -416,7 +409,6 @@ class FunnelController extends Controller
         try {
             $funnel = $request->get('funnel');
 
-            // Missing or malformed funnel data must reach required-field validation.
             $funnel = $this->validate(is_array($funnel) ? $funnel : [], [
                 'trigger_name' => 'required'
             ]);
@@ -448,7 +440,7 @@ class FunnelController extends Controller
 
             return [
                 'funnel'  => $funnel,
-                'message' => __('Automation has been created. Please configure now', 'fluent-crm')
+                'message' => __('Automation has been created. Please configure it now.', 'fluent-crm')
             ];
         } catch (ValidationException $e) {
             return $this->validationErrors($e);
@@ -508,7 +500,7 @@ class FunnelController extends Controller
 
         if ($funnel->trigger_name == $data['trigger_name']) {
             return $this->sendError([
-                'message' => __('Trigger name is same', 'fluent-crm')
+                'message' => __('This trigger is already selected', 'fluent-crm')
             ]);
         }
 
@@ -517,9 +509,6 @@ class FunnelController extends Controller
 
         $funnel->settings = [];
         $funnel->conditions = [];
-
-        // A published funnel's trigger is a live listener; swap it in the registry.
-        (new FunnelHandler())->resetFunnelIndexes();
 
         /**
          * Determine the funnel editor details based on the funnel's trigger name in FluentCRM.
@@ -532,14 +521,18 @@ class FunnelController extends Controller
          */
         $editorFunnel = apply_filters('fluentcrm_funnel_editor_details_' . $funnel->trigger_name, clone $funnel);
 
-        // Persist the new trigger's defaults without saving editor-only field definitions.
+        // Save the new trigger's defaults, not the editor-only field definitions.
         $funnel->settings = $editorFunnel->settings;
         $funnel->conditions = $editorFunnel->conditions;
         $funnel->save();
+
+        // Rebuilt from the database, so this must follow the save.
+        (new FunnelHandler())->resetFunnelIndexes();
+
         $editorFunnel->updated_at = $funnel->updated_at;
 
         return [
-            'message' => __('Automation trigger has been successfully updated', 'fluent-crm'),
+            'message' => __('The automation trigger has been updated.', 'fluent-crm'),
             'funnel'  => $editorFunnel
         ];
 
@@ -571,7 +564,17 @@ class FunnelController extends Controller
          * @since 1.0.0
          *
          */
-        return apply_filters('fluentcrm_funnel_blocks', [], $funnel);
+        $blocks = apply_filters('fluentcrm_funnel_blocks', [], $funnel);
+
+        // Steps the user may not add are kept (existing ones still render) but marked locked,
+        // so the editor leaves them out of the block chooser.
+        foreach (PrivilegedSteps::capabilities() as $actionName => $capability) {
+            if (isset($blocks[$actionName]) && is_array($blocks[$actionName]) && !current_user_can($capability)) {
+                $blocks[$actionName]['locked'] = true;
+            }
+        }
+
+        return $blocks;
     }
 
     private function getBlockFields($funnel)
@@ -647,12 +650,12 @@ class FunnelController extends Controller
         } catch (\Exception $e) {
             return $this->sendError([
                 'message' => $e->getMessage()
-            ], 422);
+            ], $e->getCode() === 403 ? 403 : 422);
         }
 
         return [
             'sequences' => $this->getFunnelSequences($funnel, true),
-            'message'   => __('Sequence successfully updated', 'fluent-crm')
+            'message'   => __('The sequence has been updated.', 'fluent-crm')
         ];
     }
 
@@ -819,7 +822,7 @@ class FunnelController extends Controller
         FunnelSubscriber::whereIn('id', $funnel_subscriber_ids)->delete();
 
         return [
-            'message' => __('Selected subscribers have been removed from this automation', 'fluent-crm')
+            'message' => __('Selected contacts have been removed from this automation', 'fluent-crm')
         ];
     }
 
@@ -851,7 +854,6 @@ class FunnelController extends Controller
         $funnel->status = $newStatus;
         $funnel->save();
 
-        // Refresh active triggers and benchmarks after publishing or unpublishing.
         (new FunnelHandler())->resetFunnelIndexes();
 
         return [
@@ -878,7 +880,7 @@ class FunnelController extends Controller
             $newStatus = sanitize_text_field($request->get('status', ''));
             if (!$newStatus) {
                 return $this->sendError([
-                    'message' => __('Please select status', 'fluent-crm')
+                    'message' => __('Please select a status', 'fluent-crm')
                 ]);
             }
 
@@ -953,12 +955,12 @@ class FunnelController extends Controller
             }
 
             return [
-                'message' => __('Labels has been applied successfully', 'fluent-crm'),
+                'message' => __('The labels have been applied.', 'fluent-crm'),
             ];
         }
 
         return $this->sendError([
-            'message' => __('invalid bulk action', 'fluent-crm')
+            'message' => __('Invalid bulk action', 'fluent-crm')
         ]);
     }
 
@@ -966,8 +968,13 @@ class FunnelController extends Controller
     {
         $oldFunnel = Funnel::findOrFail($funnelId);
 
+        if ($error = $this->privilegedStepsError(FunnelHelper::getFunnelSequences($oldFunnel, true))) {
+            return $error;
+        }
+
         $newFunnelData = [
-            'title'        => __('[Copy] ', 'fluent-crm') . $oldFunnel->title,
+            /* translators: %s: title of the automation being copied */
+            'title'        => sprintf(__('[Copy] %s', 'fluent-crm'), $oldFunnel->title),
             'trigger_name' => $oldFunnel->trigger_name,
             'status'       => 'draft',
             'conditions'   => $oldFunnel->conditions,
@@ -976,100 +983,97 @@ class FunnelController extends Controller
         ];
         $labelIds = $oldFunnel->getFormattedLabels()->pluck('id')->toArray();
 
-        $funnel = Funnel::create($newFunnelData);
-        $funnel->attachLabels($labelIds);
+        // One transaction: a step's saving filter can throw partway, which left a half-built
+        // [Copy] draft behind.
+        $db = fluentCrmDb();
+        $db->beginTransaction();
+        try {
+            $funnel = Funnel::create($newFunnelData);
+            $funnel->attachLabels($labelIds);
 
-        // Carry the sticky note into the copy: its warnings ("this delay is deliberate")
-        // apply to the clone too, and a copy is exactly when that context is easiest to lose.
-        // Re-stamped to the current user/time, since this is a new note on a new automation.
-        $oldNote = FunnelHelper::getStickyNote($oldFunnel);
-        if ($oldNote && ($stickyNote = FunnelHelper::sanitizeStickyNote($oldNote['content']))) {
-            $funnel->updateMeta(FunnelHelper::STICKY_NOTE_META_KEY, $stickyNote);
-        }
-
-        $sequences = FunnelHelper::getFunnelSequences($oldFunnel, true);
-
-        $sequenceIds = [];
-        $cDelay = 0;
-        $delay = 0;
-
-        $childs = [];
-        $oldNewMaps = [];
-
-        foreach ($sequences as $index => $sequence) {
-            $oldId = $sequence['id'];
-            unset($sequence['id']);
-            unset($sequence['created_at']);
-            unset($sequence['updated_at']);
-
-            // it's creatable
-            $sequence['funnel_id'] = $funnel->id;
-            $sequence['status'] = 'published';
-            $sequence['conditions'] = [];
-            $sequence['sequence'] = $index + 1;
-            $sequence['c_delay'] = $cDelay;
-            $sequence['delay'] = $delay;
-            $delay = 0;
-
-            $actionName = $sequence['action_name'];
-
-            if ($actionName == 'fluentcrm_wait_times') {
-                $delay = FunnelHelper::getDelayInSecond($sequence['settings']);
-                $cDelay += $delay;
+            // The copied sticky note is re-stamped to the current user and time.
+            $oldNote = FunnelHelper::getStickyNote($oldFunnel);
+            if ($oldNote && ($stickyNote = FunnelHelper::sanitizeStickyNote($oldNote['content']))) {
+                $funnel->updateMeta(FunnelHelper::STICKY_NOTE_META_KEY, $stickyNote);
             }
 
-            /**
-             * Determine the funnel sequence before saving.
-             *
-             * This filter allows modification of the funnel sequence before it is saved.
-             *
-             * @param array $sequence The sequence data to be saved.
-             * @param array $funnel The funnel data associated with the sequence.
-             *
-             * @return array The modified sequence data.
-             * @since 1.1.4
-             *
-             */
-            $sequence = apply_filters('fluentcrm_funnel_sequence_saving_' . $sequence['action_name'], $sequence, $funnel);
-            if (Arr::get($sequence, 'type') == 'benchmark') {
-                $delay = $sequence['delay'];
+            $sequences = FunnelHelper::getFunnelSequences($oldFunnel, true);
+
+            $sequenceIds = [];
+            $delays = new SequenceDelays();
+
+            $childs = [];
+            $oldNewMaps = [];
+
+            foreach ($sequences as $index => $sequence) {
+                $oldId = $sequence['id'];
+                unset($sequence['id']);
+                unset($sequence['created_at']);
+                unset($sequence['updated_at']);
+
+                $sequence['funnel_id'] = $funnel->id;
+                $sequence['status'] = 'published';
+                $sequence['conditions'] = [];
+                $sequence['sequence'] = $index + 1;
+                $stepDelays = $delays->next($sequence, $oldId);
+                $sequence['c_delay'] = $stepDelays['c_delay'];
+                $sequence['delay'] = $stepDelays['delay'];
+
+                /**
+                 * Determine the funnel sequence before saving.
+                 *
+                 * This filter allows modification of the funnel sequence before it is saved.
+                 *
+                 * @param array $sequence The sequence data to be saved.
+                 * @param array $funnel The funnel data associated with the sequence.
+                 *
+                 * @return array The modified sequence data.
+                 * @since 1.1.4
+                 *
+                 */
+                $sequence = apply_filters('fluentcrm_funnel_sequence_saving_' . $sequence['action_name'], $sequence, $funnel);
+                $delays->afterSavingFilter($sequence);
+
+                $sequence['created_by'] = get_current_user_id();
+
+                $parentId = Arr::get($sequence, 'parent_id');
+
+                if ($parentId) {
+                    $childs[$parentId][] = $sequence;
+                } else {
+                    $createdSequence = FunnelSequence::create($sequence);
+                    do_action('fluent_crm/sequence_created_' . $createdSequence->action_name, $createdSequence);
+                    $sequenceIds[] = $createdSequence->id;
+                    $oldNewMaps[$oldId] = $createdSequence->id;
+                }
             }
 
-            $sequence['created_by'] = get_current_user_id();
-
-            $parentId = Arr::get($sequence, 'parent_id');
-
-            if ($parentId) {
-                $childs[$parentId][] = $sequence;
-            } else {
-                $createdSequence = FunnelSequence::create($sequence);
-                do_action('fluent_crm/sequence_created_' . $createdSequence->action_name, $createdSequence);
-                $sequenceIds[] = $createdSequence->id;
-                $oldNewMaps[$oldId] = $createdSequence->id;
-            }
-        }
-
-        if ($childs) {
-            foreach ($childs as $oldParentId => $childBlocks) {
-                foreach ($childBlocks as $childBlock) {
-                    $newParentId = Arr::get($oldNewMaps, $oldParentId);
-                    if ($newParentId) {
-                        $childBlock['parent_id'] = $newParentId;
-                        $createdSequence = FunnelSequence::create($childBlock);
-                        // Fire the same hook as top-level sequences so action handlers (e.g. the
-                        // FluentCart coupon smartcode injector) run for nested/child sequences too.
-                        do_action('fluent_crm/sequence_created_' . $createdSequence->action_name, $createdSequence);
-                        $sequenceIds[] = $createdSequence->id;
+            if ($childs) {
+                foreach ($childs as $oldParentId => $childBlocks) {
+                    foreach ($childBlocks as $childBlock) {
+                        $newParentId = Arr::get($oldNewMaps, $oldParentId);
+                        if ($newParentId) {
+                            $childBlock['parent_id'] = $newParentId;
+                            $createdSequence = FunnelSequence::create($childBlock);
+                            do_action('fluent_crm/sequence_created_' . $createdSequence->action_name, $createdSequence);
+                            $sequenceIds[] = $createdSequence->id;
+                        }
                     }
                 }
             }
+            FunnelHelper::maybeMigrateConditions($funnel->id);
+            $db->commit();
+        } catch (\Throwable $e) {
+            $db->rollBack();
+            return $this->sendError([
+                'message' => $e->getMessage()
+            ], 422);
         }
 
-        FunnelHelper::maybeMigrateConditions($funnel->id);
         (new FunnelHandler())->resetFunnelIndexes();
 
         return [
-            'message' => __('Automation has been successfully cloned', 'fluent-crm'),
+            'message' => __('The automation has been cloned.', 'fluent-crm'),
             'funnel'  => $funnel
         ];
     }
@@ -1089,10 +1093,19 @@ class FunnelController extends Controller
             $sequences = [];
         }
 
-        $funnel = $this->createFunnelFromData($funnelArray, $sequences);
+        if ($error = $this->privilegedStepsError($sequences)) {
+            return $error;
+        }
+
+        $funnel = $this->createFunnelInTransaction($funnelArray, $sequences);
+        if (is_wp_error($funnel)) {
+            return $this->sendError([
+                'message' => $funnel->get_error_message()
+            ], 422);
+        }
 
         return [
-            'message' => __('Automation has been successfully imported', 'fluent-crm'),
+            'message' => __('The automation has been imported.', 'fluent-crm'),
             'funnel'  => $funnel
         ];
 
@@ -1114,7 +1127,7 @@ class FunnelController extends Controller
         FunnelHelper::removeSubscribersFromFunnel($funnelId, $ids);
 
         return [
-            'message' => __('Subscriber has been removed from this automation', 'fluent-crm')
+            'message' => __('Contact has been removed from this automation', 'fluent-crm')
         ];
     }
 
@@ -1151,13 +1164,13 @@ class FunnelController extends Controller
 
         if (!$funnelSubscriber) {
             return $this->sendError([
-                'message' => __('No Corresponding report found', 'fluent-crm')
+                'message' => __('No corresponding record found', 'fluent-crm')
             ]);
         }
 
         if ($funnelSubscriber->status == 'completed') {
             return $this->sendError([
-                'message' => __('The status already completed state', 'fluent-crm')
+                'message' => __('This contact has already completed this automation', 'fluent-crm')
             ]);
         }
 
@@ -1183,17 +1196,7 @@ class FunnelController extends Controller
 
         if (!$funnelSubscriber) {
             return $this->sendError([
-                'message' => __('No corresponding subscriber found in this automation', 'fluent-crm')
-            ]);
-        }
-
-        if (in_array($funnelSubscriber->status, ['completed', 'cancelled', 'pending'])) {
-            return $this->sendError([
-                'message' => sprintf(
-                    /* translators: %s: subscriber status */
-                    esc_html__('Cannot advance a subscriber with status: %s', 'fluent-crm'),
-                    $funnelSubscriber->status
-                )
+                'message' => __('This contact was not found in this automation', 'fluent-crm')
             ]);
         }
 
@@ -1208,69 +1211,19 @@ class FunnelController extends Controller
             ]);
         }
 
-        $processor = new FunnelProcessor();
-
-        // If waiting on benchmark, record skip metric for the current benchmark
-        if ($funnelSubscriber->status === 'waiting') {
-            $benchmarkSeq = FunnelSequence::find($funnelSubscriber->next_sequence_id);
-            if ($benchmarkSeq) {
-                FunnelMetric::updateOrCreate(
-                    [
-                        'funnel_id'     => intval($funnelId),
-                        'sequence_id'   => $benchmarkSeq->id,
-                        'subscriber_id' => intval($subscriberId),
-                    ],
-                    [
-                        'benchmark_value'    => 0,
-                        'benchmark_currency' => 'USD',
-                        'status'             => 'skipped',
-                        'notes'              => __('Manually skipped by admin', 'fluent-crm'),
-                    ]
-                );
-                FunnelHelper::changeFunnelSubSequenceStatus($funnelSubscriber->id, $benchmarkSeq->id, 'skipped');
-            }
+        $advanced = FunnelHelper::advanceSubscriberToSequence($funnelSubscriber, $targetSequence, __('Manually skipped by admin', 'fluent-crm'));
+        if (is_wp_error($advanced)) {
+            return $this->sendError([
+                'message' => $advanced->get_error_message()
+            ]);
         }
-
-        // Advance to the target sequence
-        // Find the sequence just before the target so SequencePoints includes the
-        // target in its query. Branch-aware: when the target lives inside a
-        // conditional branch, the previous step must be a sibling in the SAME branch
-        // (or the parent conditional when the target is the branch's first child) —
-        // an ordinal-only pick can land in the other branch and skip the target.
-        $prevQuery = FunnelSequence::where('funnel_id', intval($funnelId))
-            ->where('sequence', '<', $targetSequence->sequence)
-            ->orderBy('sequence', 'DESC');
-
-        if ($targetSequence->parent_id) {
-            $prevQuery->where(function ($q) use ($targetSequence) {
-                $q->where(function ($sibling) use ($targetSequence) {
-                    $sibling->where('parent_id', $targetSequence->parent_id)
-                        ->where('condition_type', $targetSequence->condition_type);
-                })->orWhere('id', $targetSequence->parent_id);
-            });
-        } else {
-            $prevQuery->where(function ($q) {
-                $q->whereNull('parent_id')->orWhere('parent_id', '0');
-            });
-        }
-
-        $prevSequence = $prevQuery->first();
-
-        $funnelSubscriber->last_sequence_id = $prevSequence ? $prevSequence->id : 0;
-        $funnelSubscriber->next_sequence_id = $targetSequence->id;
-        $funnelSubscriber->next_sequence = $targetSequence->sequence;
-        $funnelSubscriber->status = 'active';
-        $funnelSubscriber->next_execution_time = current_time('mysql');
-        $funnelSubscriber->save();
-
-        $processor->processFunnelAction($funnelSubscriber);
 
         $funnelSubscriber = FunnelSubscriber::where('id', $funnelSubscriber->id)
             ->with(['last_sequence', 'next_sequence_item'])
             ->first();
 
         return [
-            'message'           => __('Subscriber has been advanced', 'fluent-crm'),
+            'message'           => __('Contact has been advanced', 'fluent-crm'),
             'funnel_subscriber' => $funnelSubscriber
         ];
     }
@@ -1339,7 +1292,6 @@ class FunnelController extends Controller
         $type = 'created';
 
         if ($funnelCampaignId && $funnel->id == Arr::get($data, 'parent_id')) {
-            // We have this campaign
             $data['settings'] = \maybe_serialize($data['settings']);
             $data['type'] = 'funnel_email_campaign';
             $data['title'] = $funnel->title . ' (' . $funnel->id . ')';
@@ -1405,7 +1357,7 @@ class FunnelController extends Controller
 
         if ($funnel->status != 'published') {
             return $this->sendError([
-                'message' => __('Automation status needs to be published', 'fluent-crm')
+                'message' => __('Publish the automation before syncing new steps.', 'fluent-crm')
             ]);
         }
 
@@ -1430,7 +1382,7 @@ class FunnelController extends Controller
         }
 
         return [
-            'message' => __('Synced successfully', 'fluent-crm')
+            'message' => __('The automation steps have been synced.', 'fluent-crm')
         ];
     }
 
@@ -1547,13 +1499,62 @@ class FunnelController extends Controller
         $funnelArray = $templateData;
         $sequences = $templateData['sequences'];
 
-        $funnel = $this->createFunnelFromData($funnelArray, $sequences);
+        if ($error = $this->privilegedStepsError((array)$sequences)) {
+            return $error;
+        }
+
+        $funnel = $this->createFunnelInTransaction($funnelArray, $sequences);
+        if (is_wp_error($funnel)) {
+            return $this->sendError([
+                'message' => $funnel->get_error_message()
+            ], 422);
+        }
 
         return [
             'funnel'  => $funnel,
             'message' => __('Automation has been created from template', 'fluent-crm')
         ];
 
+    }
+
+    /**
+     * A 403 response when the steps hold a privileged step the current user may not add
+     * (see PrivilegedSteps), or null. Used by clone, import and create-from-template, which
+     * all create every step anew.
+     */
+    private function privilegedStepsError(array $sequences)
+    {
+        try {
+            PrivilegedSteps::assertCanSave($sequences);
+        } catch (\Exception $e) {
+            return $this->sendError([
+                'message' => $e->getMessage()
+            ], 403);
+        }
+
+        return null;
+    }
+
+    /**
+     * createFunnelFromData() in one transaction: a step's saving filter that throws (an invalid
+     * WhatsApp template, a FluentCart coupon check) rolls the new automation back instead of
+     * leaving a half-built draft.
+     *
+     * @return Funnel|\WP_Error
+     */
+    private function createFunnelInTransaction($funnelArray, $sequences)
+    {
+        $db = fluentCrmDb();
+        $db->beginTransaction();
+        try {
+            $funnel = $this->createFunnelFromData($funnelArray, $sequences);
+            $db->commit();
+        } catch (\Throwable $e) {
+            $db->rollBack();
+            return new \WP_Error('step_rejected', $e->getMessage());
+        }
+
+        return $funnel;
     }
 
     private function createFunnelFromData($funnelArray, $sequences)
@@ -1571,9 +1572,7 @@ class FunnelController extends Controller
 
         $funnel = Funnel::create($newFunnelData);
 
-        // Preserve the sticky note across export/import — handing an automation to someone
-        // else is precisely when its "why" matters most. Accepts either the exported
-        // {content: ...} shape or a bare string.
+        // Sticky note may be the exported {content: ...} shape or a bare string.
         $importedNote = Arr::get($funnelArray, 'sticky_note');
         if (is_array($importedNote)) {
             $importedNote = Arr::get($importedNote, 'content');
@@ -1586,9 +1585,8 @@ class FunnelController extends Controller
         if (isset($funnelLabels) && !empty($funnelLabels)) {
             $newLabels = [];
             foreach ($funnelLabels as $key => $funnelLabel) {
-                // Validate required fields
                 if (!isset($funnelLabel['slug'], $funnelLabel['title'])) {
-                    continue; // Skip invalid labels
+                    continue;
                 }
 
                 $existLabel = Label::where('taxonomy_name', 'global_label')->where('slug', $funnelLabel['slug'])->first();
@@ -1612,8 +1610,7 @@ class FunnelController extends Controller
         }
 
         $sequenceIds = [];
-        $cDelay = 0;
-        $delay = 0;
+        $delays = new SequenceDelays();
 
         $childs = [];
         $oldNewMaps = [];
@@ -1623,29 +1620,16 @@ class FunnelController extends Controller
             unset($sequence['id']);
             unset($sequence['created_at']);
             unset($sequence['updated_at']);
-            // it's creatable
             $sequence['funnel_id'] = $funnel->id;
             $sequence['status'] = 'published';
             $sequence['conditions'] = [];
             $sequence['sequence'] = $index + 1;
-            $sequence['c_delay'] = $cDelay;
-            $sequence['delay'] = $delay;
-            $delay = 0;
+            $stepDelays = $delays->next($sequence, $oldId);
+            $sequence['c_delay'] = $stepDelays['c_delay'];
+            $sequence['delay'] = $stepDelays['delay'];
 
-            $actionName = $sequence['action_name'];
-
-            if ($actionName == 'fluentcrm_wait_times') {
-                $delay = FunnelHelper::getDelayInSecond($sequence['settings']);
-                $cDelay += $delay;
-            }
-
-            // Imported payloads carry the SOURCE site's campaign ids inside
-            // settings.campaign / settings.reference_campaign. Auto-increment ids
-            // from another database must never be treated as local: if the new
-            // funnel's id happens to equal the payload's campaign parent_id, the
-            // email step's saving filter would UPDATE an unrelated local
-            // FunnelCampaign instead of creating one. Strip them so email steps
-            // always create a fresh local campaign from the payload's content.
+            // Campaign ids in the payload belong to the source site; drop them so
+            // email steps create a new local campaign instead of updating an unrelated one.
             if (!empty($sequence['settings']['campaign']) && is_array($sequence['settings']['campaign'])) {
                 unset($sequence['settings']['campaign']['id'], $sequence['settings']['campaign']['parent_id']);
             }
@@ -1665,9 +1649,7 @@ class FunnelController extends Controller
              */
             $sequence = apply_filters('fluentcrm_funnel_sequence_saving_' . $sequence['action_name'], $sequence, $funnel);
 
-            if (Arr::get($sequence, 'type') == 'benchmark') {
-                $delay = $sequence['delay'];
-            }
+            $delays->afterSavingFilter($sequence);
 
             $sequence['created_by'] = get_current_user_id();
 
@@ -1691,8 +1673,6 @@ class FunnelController extends Controller
                     if ($newParentId) {
                         $childBlock['parent_id'] = $newParentId;
                         $createdSequence = FunnelSequence::create($childBlock);
-                        // Fire the same hook as top-level sequences so action handlers (e.g. the
-                        // FluentCart coupon smartcode injector) run for nested/child sequences too.
                         do_action('fluent_crm/sequence_created_' . $createdSequence->action_name, $createdSequence);
                         $sequenceIds[] = $createdSequence->id;
                     }
@@ -1721,7 +1701,6 @@ class FunnelController extends Controller
         ]);
 
         if (is_wp_error($response)) {
-            // Handle error
             error_log($response->get_error_message());
             return [];
         }
@@ -1730,7 +1709,6 @@ class FunnelController extends Controller
         $templateLists = json_decode($body, true);
 
         if (json_last_error() !== JSON_ERROR_NONE) {
-            // Handle JSON error
             error_log('JSON Decode Error: ' . json_last_error_msg());
             return [];
         }
@@ -1743,13 +1721,11 @@ class FunnelController extends Controller
         foreach ($templateLists as $template) {
 
             if (!$template['template_json']) {
-                // Skip if no template json
                 continue;
             }
             $formattedTemplates[] = [
                 'id'                => $template['id'],
                 'title'             => $template['title']['rendered'],
-//                'description'  => $template['excerpt']['rendered'],
                 'short_description' => $template['short_description'],
                 'type'              => $template['template_type'],
                 'dependencies'      => $template['plugin_dependencies'],
@@ -1826,7 +1802,7 @@ class FunnelController extends Controller
 
         if (!$subscriber) {
             return $this->sendError([
-                'message' => __('No subscriber found to send test webhook. Please add at least one contact with subscribed status.', 'fluent-crm')
+                'message' => __('No subscribed contact is available for the test webhook. Add at least one contact with the Subscribed status.', 'fluent-crm')
             ]);
         }
 
@@ -1891,12 +1867,13 @@ class FunnelController extends Controller
 
         if (is_wp_error($response)) {
             return $this->sendError([
-                'message' => __('Test Webhook failed to send', 'fluent-crm') . ': ' . $response->get_error_message()
+                /* translators: %s: error message returned by the webhook request */
+                'message' => sprintf(__('Test webhook failed to send: %s', 'fluent-crm'), $response->get_error_message())
             ]);
         }
 
         return [
-            'message' => __('Test Webhook has been sent successfully', 'fluent-crm')
+            'message' => __('The test webhook has been sent.', 'fluent-crm')
         ];
     }
 
@@ -1953,22 +1930,14 @@ class FunnelController extends Controller
         $funnel->save();
 
         return [
-            /* translators: %s: the new funnel title */
+            /* translators: %s: the new automation title */
             'message' => sprintf(esc_html__('Title has been updated to %s', 'fluent-crm'), $newTitle)
         ];
     }
 
     /**
-     * Create, update or clear an automation's sticky note.
-     *
-     * The note is a plain-text reminder pinned at the top of the funnel editor, meant to
-     * warn whoever opens the automation next ("don't shorten this delay, it's tied to the
-     * webinar"). Sending an empty `content` removes the note.
-     *
-     * Intentionally its own endpoint rather than a field on save-funnel-sequences: that
-     * path rewrites Funnel::settings from the client's snapshot and deletes the
-     * description meta when the key is absent, so folding the note in there would make it
-     * silently vanish on the AJAX fallback save.
+     * Create, update or clear an automation's sticky note. Empty `content` removes it.
+     * Kept separate from save-funnel-sequences, which would drop the note on the fallback save.
      */
     public function updateStickyNote(Request $request, $funnelId)
     {
@@ -2015,7 +1984,7 @@ class FunnelController extends Controller
         }
 
         return [
-            'message' => __('Labels has been updated', 'fluent-crm')
+            'message' => __('Labels have been updated', 'fluent-crm')
         ];
 
     }

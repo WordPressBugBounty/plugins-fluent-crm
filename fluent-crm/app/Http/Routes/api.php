@@ -71,8 +71,7 @@ $router->prefix('lists')->withPolicy('ListPolicy')->group(function ($router) {
 });
 
 /*
- * Global search: contacts + email campaigns + automations in one call.
- * Each Permission is checked in the controller. 
+ * Global search across contacts, campaigns and automations. Permissions are checked in the controller.
  */
 $router->get('global-search', [OptionsController::class, 'search']);
 
@@ -88,6 +87,7 @@ $router->prefix('subscribers')->withPolicy('SubscriberPolicy')->group(function (
     $router->post('sync-segments', [SubscriberController::class, 'tagger']);
     $router->post('do-bulk-action', [SubscriberController::class, 'handleBulkActions']);
     $router->get('prev-next-ids', [SubscriberController::class, 'getPrevNextIds']);
+    $router->post('quick-pins', [SubscriberController::class, 'saveQuickPins']);
 
     $router->get('{id}', [SubscriberController::class, 'show'])->int('id');
     $router->delete('{id}', [SubscriberController::class, 'deleteSubscriber'])->int('id');
@@ -148,7 +148,7 @@ $router->prefix('campaigns')->withPolicy('CampaignPolicy')->group(function ($rou
 
     $router->post('do-bulk-action', [CampaignController::class, 'handleBulkAction'])->int('id');
 
-    // todo: delete this endpoint '{id}/subscribe' in future since it is not in use anywhere. We will keep it for reference for now. We will remove in the immediate next version
+    // todo: remove the unused '{id}/subscribe' endpoint.
     // $router->post('{id}/subscribe', [CampaignController::class, 'subscribe'])->int('id');
     $router->post('{id}/draft-recipients', [CampaignController::class, 'draftRecipients'])->int('id');
     $router->get('{id}/estimated-recipients-count', [CampaignController::class, 'recipientsCount'])->int('id');
@@ -180,10 +180,6 @@ $router->prefix('templates')->withPolicy('TemplatePolicy')->group(function ($rou
     $router->get('/all', [TemplateController::class, 'allTemplates']);
     $router->get('/smartcodes', [TemplateController::class, 'getSmartCodes']);
     $router->post('/', [TemplateController::class, 'create']);
-    // $router->get('default-campaign-template', [TemplateController::class, 'getDefaultCampaignTemplate']);
-    // $router->post('default-campaign-template', [TemplateController::class, 'setDefaultCampaignTemplate']);
-    // $router->delete('default-campaign-template', [TemplateController::class, 'deleteDefaultCampaignTemplate']);
-
     $router->get('{id}', [TemplateController::class, 'template'])->int('id');
     $router->put('{id}', [TemplateController::class, 'update'])->int('id');
     $router->post('/duplicate/{id}', [TemplateController::class, 'duplicate'])->int('id');
@@ -316,6 +312,7 @@ $router->prefix('setting')->withPolicy('SettingsPolicy')->group(function ($route
     $router->post('complete-installation', [SetupController::class, 'CompleteWizard']);
     $router->get('double-optin', [SettingsController::class, 'getDoubleOptinSettings']);
     $router->put('double-optin', [SettingsController::class, 'saveDoubleOptinSettings']);
+    $router->post('double-optin/preview', [SettingsController::class, 'previewDoubleOptin']);
 
     $router->post('install-fluentform', [SetupController::class, 'handleFluentFormInstall']);
     $router->post('install-fluentsmtp', [SetupController::class, 'handleFluentSmtpInstall']);
@@ -384,7 +381,7 @@ $router->prefix('ai')->withPolicy('AiPolicy')->group(function ($router) {
 });
 
 /*
- * MCP settings endpoints — Settings → MCP admin page (MCP_PLAN.md § 13).
+ * MCP settings endpoints.
  */
 $router->prefix('mcp')->withPolicy('SettingsPolicy')->group(function ($router) {
     $router->get('status', [MCPSettingsController::class, 'status']);
@@ -459,7 +456,7 @@ $router->prefix('forms')->withPolicy('FormsPolicy')->group(function ($router) {
 
 
 /*
- * Fluent Forms Wrapper
+ * Docs
  */
 $router->prefix('docs')->withPolicy('ReportPolicy')->group(function ($router) {
     $router->get('/', [DocsController::class, 'index']);
@@ -492,10 +489,7 @@ $router->prefix('migrators')->withPolicy('SettingsPolicy')->group(function ($rou
     $router->post('/import', [MigratorController::class, 'handleImport']);
 });
 
-// The conversation inbox (`messaging/threads`) and its one-shot legacy
-// migration (`messaging/migration`) are registered by FluentCampaign Pro, in
-// app/Modules/Messaging/Http/messaging_api.php. Messaging has no free channel
-// to send on, so the models, controllers and routes live with the channels.
+// Messaging routes (`messaging/threads`, `messaging/migration`) are registered by FluentCampaign Pro.
 
 $router->prefix('companies')->withPolicy('CompanyPolicy')->group(function ($router) {
     $router->get('/', [CompanyController::class, 'index']);

@@ -51,19 +51,14 @@ class FluentCart
         new OrderRefundedTrigger();
         new OrderCanceledTrigger();
 
-        // new OrderStatusChangedTrigger();
         new SubscriptionExpiredTrigger();
 
-        //subscription activated
         new SubscriptionActivatedTrigger();
 
-        //subscription cancelled
         new SubscriptionCancelledTrigger();
 
-        //subscription renewed
         new SubscriptionRenewedTrigger();
 
-        //subscription end of term(completed)
         new SubscriptionEndOfTermTrigger();
 
         // Actions
@@ -105,7 +100,6 @@ class FluentCart
 
         add_filter('fluentcrm_automation_condition_groups', array($this, 'addAutomationConditions'), 10, 2);
         add_filter('fluentcrm_automation_conditions_assess_fluent_cart', array($this, 'assessAutomationConditions'), 10, 3);
-        // add_filter('fluentcrm_automation_conditions_assess_woo_order', array($this, 'assessAutomationOrderConditions'), 10, 5);
     }
 
     public function getProducts($items, $search, $ids)
@@ -155,7 +149,6 @@ class FluentCart
             return [];
         }
 
-        // Pagination params (using super global to avoid dependency on request wrapper here)
         $page = isset($_GET['page']) ? (int)$_GET['page'] : 1;
         if ($page < 1) { $page = 1; }
         $perPage = isset($_GET['per_page']) ? (int)$_GET['per_page'] : 10;
@@ -167,7 +160,6 @@ class FluentCart
             ->offset(($page - 1) * $perPage)
             ->get();
 
-        // Use a helper method for formatting
         $formattedOrders = $this->formatOrders($orders);
 
         return [
@@ -179,14 +171,34 @@ class FluentCart
             'columns_config' => [
                 'order' => ['label' => __('Order', 'fluent-crm'), 'width' => '100px', 'sortable' => true, 'key' => 'id'],
                 'date' => ['label' => __('Date', 'fluent-crm'), 'sortable' => true, 'key' => 'created_at'],
-//                'coupon' => ['label' => __('Coupon', 'fluent-crm'), 'sortable' => true, 'key' => 'created_at'],
                 'status' => ['label' => __('Status', 'fluent-crm'), 'width' => '140px', 'sortable' => false],
-//                'payment' => ['label' => __('Payment', 'fluent-crm'), 'width' => '140px', 'sortable' => false, 'key' => 'payment_status'],
                 'total' => ['label' => __('Total', 'fluent-crm'), 'width' => '120px', 'sortable' => true, 'key' => 'total'],
-                'action' => ['label' => __('', 'fluent-crm'), 'width' => '100px', 'sortable' => false],
+                'action' => ['label' => '', 'width' => '100px', 'sortable' => false],
             ],
         ];
 
+    }
+
+    /**
+     * A FluentCart timestamp in site time.
+     *
+     * FluentCart stores created_at in GMT; FluentCRM's date formatting expects site time, so
+     * dates were off by the site's UTC offset (a new order read "in 4 hours" on a US site).
+     *
+     * @param mixed $gmtDate string or DateTimeInterface in GMT
+     * @return string|mixed Y-m-d H:i:s in site time, or the input when empty
+     */
+    private static function siteTime($gmtDate)
+    {
+        if (!$gmtDate) {
+            return $gmtDate;
+        }
+
+        if ($gmtDate instanceof \DateTimeInterface) {
+            $gmtDate = $gmtDate->format('Y-m-d H:i:s');
+        }
+
+        return get_date_from_gmt((string)$gmtDate);
     }
 
     private function formatOrders($orders)
@@ -202,14 +214,12 @@ class FluentCart
             $coupons = implode(', ', array_column($order['appliedCoupons']->toArray(), 'code'));
 
             // Purchase dates follow FluentCRM's global date/time display preference.
-            $date = '<span class="order_id">#' . $order->id .'</span><span class="order_date">'.esc_html(CrmHelper::formatDateTime($order->created_at)).'</span>';
+            $date = '<span class="order_id">#' . $order->id .'</span><span class="order_date">'.esc_html(CrmHelper::formatDateTime(self::siteTime($order->created_at))).'</span>';
             $status = '<span class="fcrm_badge fcrm_badge_'.esc_attr($order->status).'">'. \FluentCrm\App\Services\Helper::getStatusText($order->status) .'</span>';
 
             $formattedOrders[] = [
                 'date' => $date,
                 'status' => $status,
-//                'payment' => $order->payment_status,
-//                'coupons' => $coupons,
                 'total' => Helper::toDecimal($order->total_amount), // Adjust if using a different helper
                 'action' => $orderActionHtml,
             ];
@@ -220,15 +230,13 @@ class FluentCart
 
     private function getSidebarHtml($subscriber = null)
     {
-        // We will build a similar widget like WooCommerce's purchase sidebar
-        // Show a quick customer summary + recently purchased products (flat list of items)
+        // Customer summary plus recently purchased items.
         $customer = null;
         if ($subscriber && !empty($subscriber->email)) {
             $customer = Customer::where('email', $subscriber->email)->first();
         }
 
         if (!$customer) {
-            // Fallback: Just return the static block as before
             return '<div class="fluent-crm-sidebar-content">'
                 . '<h3>' . __('Product History', 'fluent-crm') . '</h3>'
                 . '<p>' . __('View your purchase history from FluentCart.', 'fluent-crm') . '</p>'
@@ -246,12 +254,13 @@ class FluentCart
                 . '</div>';
         }
 
-        $totalSpent = (clone $ordersQuery)->sum('total_amount');
+        // What the customer actually paid: successful orders, net of refunds.
+        $paidOrders = (clone $ordersQuery)->whereIn('payment_status', \FluentCart\App\Helpers\Status::getOrderPaymentSuccessStatuses());
+        $totalSpent = (clone $paidOrders)->sum('total_paid') - (clone $paidOrders)->sum('total_refund');
         $firstOrder = (clone $ordersQuery)->orderBy('id', 'ASC')->value('created_at');
         $lastOrder = (clone $ordersQuery)->orderBy('id', 'DESC')->value('created_at');
 
-        // Fetch recent purchased items (latest 15 order items across latest orders)
-        // We'll eager load order_items for performance
+        // Latest 15 order items across the latest orders.
         $recentOrders = (clone $ordersQuery)
             ->with(['order_items' => function($q){
                 $q->orderBy('id', 'DESC');
@@ -273,7 +282,7 @@ class FluentCart
                 $items[] = [
                     'name' => $itemDisplayName,
                     'price' => isset($orderItem->line_total) ? Helper::toDecimal($orderItem->line_total) : 0,
-                    'created_at' => $order->created_at,
+                    'created_at' => self::siteTime($order->created_at),
                     'order_id' => $order->id,
                 ];
                 if (count($items) >= 15) {
@@ -288,10 +297,10 @@ class FluentCart
         $html .= '<li><span class="fc_list_sub">' . __('Total Orders', 'fluent-crm') . '</span><span class="fc_list_value">' . intval($orderCount) . '</span></li>';
         $html .= '<li><span class="fc_list_sub">' . __('Total Spent', 'fluent-crm') . '</span><span class="fc_list_value">' . esc_html(Helper::toDecimal($totalSpent)) . '</span></li>';
         if ($firstOrder) {
-            $html .= '<li><span class="fc_list_sub">' . __('First Order', 'fluent-crm') . '</span><span class="fc_list_value">' . esc_html(CrmHelper::formatDateTime($firstOrder)) . '</span></li>';
+            $html .= '<li><span class="fc_list_sub">' . __('First Order', 'fluent-crm') . '</span><span class="fc_list_value">' . esc_html(CrmHelper::formatDateTime(self::siteTime($firstOrder))) . '</span></li>';
         }
         if ($lastOrder) {
-            $html .= '<li><span class="fc_list_sub">' . __('Last Order', 'fluent-crm') . '</span><span class="fc_list_value">' . esc_html(CrmHelper::formatDateTime($lastOrder)) . '</span></li>';
+            $html .= '<li><span class="fc_list_sub">' . __('Last Order', 'fluent-crm') . '</span><span class="fc_list_value">' . esc_html(CrmHelper::formatDateTime(self::siteTime($lastOrder))) . '</span></li>';
         }
         $html .= '</ul></div>';
 
@@ -323,7 +332,7 @@ class FluentCart
                 'type'              => 'selections',
                 'is_multiple'       => false,
                 'disable_values'    => true,
-                'value_description' => __('This filter will check if a contact has at least one shop order or not', 'fluent-crm'),
+                'value_description' => __('This filter checks whether the contact has at least one order', 'fluent-crm'),
                 'custom_operators'  => [
                     'exist'     => __('Yes', 'fluent-crm'),
                     'not_exist' => __('No', 'fluent-crm'),
@@ -359,7 +368,7 @@ class FluentCart
                     'exist'     => __('purchased', 'fluent-crm'),
                     'not_exist' => __('not purchased', 'fluent-crm'),
                 ],
-                'help'             => __('Will filter the contacts who have at least one order', 'fluent-crm')
+                'help'             => __('This filter checks whether the contact has a paid order that includes at least one of the selected products', 'fluent-crm')
             ],
             [
                 'value'             => 'variation_purchased',
@@ -367,7 +376,7 @@ class FluentCart
                 'type'              => 'cascade_selections',
                 'provider'          => 'fct_variations',
                 'is_multiple'       => true,
-                'value_description' => __('This filter will check if a contact has purchased at least one specific product variation or not', 'fluent-crm'),
+                'value_description' => __('This filter checks whether the contact has purchased at least one of the selected product variations', 'fluent-crm'),
                 'custom_operators'  => [
                     'exist'     => __('purchased', 'fluent-crm'),
                     'not_exist' => __('not purchased', 'fluent-crm'),
@@ -381,7 +390,7 @@ class FluentCart
                 'taxonomy'         => 'product-categories',
                 'is_multiple'      => true,
                 'disabled'         => true,
-                'help'             => __('Will filter the contacts who have at least one order', 'fluent-crm'),
+                'help'             => __('This filter checks whether the contact has a paid order that includes a product from at least one of the selected categories', 'fluent-crm'),
                 'custom_operators' => [
                     'exist'     => __('purchased', 'fluent-crm'),
                     'not_exist' => __('not purchased', 'fluent-crm'),
@@ -399,7 +408,7 @@ class FluentCart
                     'exist'     => __('in', 'fluent-crm'),
                     'not_exist' => __('not in', 'fluent-crm'),
                 ],
-                'help'             => __('Will filter the contacts who have at least one order', 'fluent-crm')
+                'help'             => __('This filter checks whether the contact has used at least one of the selected coupons', 'fluent-crm')
             ]
         ];
 
@@ -414,7 +423,7 @@ class FluentCart
                     'exist'     => __('have', 'fluent-crm'),
                     'not_exist' => __('do not have', 'fluent-crm'),
                 ],
-                'help'             => __('Will filter the contacts who have at least one active licenses or not', 'fluent-crm')
+                'help'             => __('This filter checks whether the contact has a valid (not expired) license for at least one of the selected products', 'fluent-crm')
             ];
             $conditionItems[] = [
                 'value'             => 'active_variation_licenses',
@@ -422,7 +431,7 @@ class FluentCart
                 'type'              => 'cascade_selections',
                 'provider'          => 'fct_variations',
                 'is_multiple'       => true,
-                'value_description' => __('This filter will check if a contact has at least one specific variation license or not', 'fluent-crm'),
+                'value_description' => __('This filter checks whether the contact has a valid (not expired) license for at least one of the selected variations', 'fluent-crm'),
                 'custom_operators'  => [
                     'exist'     => __('have', 'fluent-crm'),
                     'not_exist' => __('do not have', 'fluent-crm'),
@@ -438,7 +447,7 @@ class FluentCart
                     'exist'     => __('have', 'fluent-crm'),
                     'not_exist' => __('do not have', 'fluent-crm'),
                 ],
-                'help'             => __('Will filter the contacts who have at least one expired licenses or not', 'fluent-crm')
+                'help'             => __('This filter checks whether the contact has an expired license for at least one of the selected products', 'fluent-crm')
             ];
             $conditionItems[] = [
                 'value'             => 'expired_variation_licenses',
@@ -446,7 +455,7 @@ class FluentCart
                 'type'              => 'cascade_selections',
                 'provider'          => 'fct_variations',
                 'is_multiple'       => true,
-                'value_description' => __('This filter will check if a contact has at least one specific variation expired license or not', 'fluent-crm'),
+                'value_description' => __('This filter checks whether the contact has an expired license for at least one of the selected variations', 'fluent-crm'),
                 'custom_operators'  => [
                     'exist'     => __('have', 'fluent-crm'),
                     'not_exist' => __('do not have', 'fluent-crm'),
@@ -458,7 +467,7 @@ class FluentCart
                 'type'              => 'selections',
                 'is_multiple'       => false,
                 'disable_values'    => true,
-                'value_description' => __('Check if contacts has any active license from any products', 'fluent-crm'),
+                'value_description' => __('Check if the contact has an active license for any product', 'fluent-crm'),
                 'custom_operators'  => [
                     'exist'     => __('Yes', 'fluent-crm'),
                     'not_exist' => __('No', 'fluent-crm'),
@@ -478,7 +487,6 @@ class FluentCart
     public function assessAutomationConditions($result, $conditions, $subscriber)
     {
         $legacyConditions = [];
-        // if (Commerce::isEnabled('woo')) {
             $formattedConditions = [];
 
             $commerceProps = [
@@ -489,13 +497,25 @@ class FluentCart
                 'last_purchase_date',
                 'purchased_items', // products purchased
                 'variation_purchased', // product variations purchased
-                'purchased_categories', // product categories 
+                'purchased_categories', // product categories
                 'commerce_coupons', // used coupons
+                // Licence conditions (license module); FluentCart's contact filter evaluates them.
+                'active_licenses',
+                'active_variation_licenses',
+                'expired_licenses',
+                'expired_variation_licenses',
+                'license_exist',
             ];
+
+            $licenseProps = ['active_licenses', 'active_variation_licenses', 'expired_licenses', 'expired_variation_licenses', 'license_exist'];
 
             foreach ($conditions as $condition) {
                 $prop = $condition['data_key'];
                 $operator = $condition['operator'];
+                // A saved licence condition with the license module off cannot be evaluated: fail closed.
+                if (in_array($prop, $licenseProps, true) && !ModuleSettings::isActive('license')) {
+                    return false;
+                }
                 if (in_array($prop, $commerceProps)) {
                     $formattedConditions[] = [
                         'operator' => $operator,
@@ -515,9 +535,6 @@ class FluentCart
                     return false;
                 }
             }
-        // } else {
-        //     $legacyConditions = $conditions;
-        // }
 
         if ($legacyConditions) {
             $cartCustomer = Customer::query()

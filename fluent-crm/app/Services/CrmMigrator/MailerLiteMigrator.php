@@ -15,7 +15,7 @@ class MailerLiteMigrator extends BaseMigrator
 
         return [
             'title'                  => 'MailerLite',
-            'description'            => __('Migrate your MailerLite contacts and associate to FluentCRM', 'fluent-crm'),
+            'description'            => __('Migrate your MailerLite contacts and their associated data to FluentCRM', 'fluent-crm'),
             'logo'                   => fluentCrmMix('images/migrators/mailerlite.png'),
             'logo_svg'               => $logo,
             'supports'               => [
@@ -24,8 +24,8 @@ class MailerLiteMigrator extends BaseMigrator
                 'empty_tags'          => false,
                 'active_imports_only' => true
             ],
-            'field_map_info'         => __('Email Address and First name will be mapped automatically', 'fluent-crm'),
-            'tags_map_info'           => __('Only Selected Groups will be imported from MailerLite', 'fluent-crm'),
+            'field_map_info'         => __('Email address and first name will be mapped automatically', 'fluent-crm'),
+            'tags_map_info'           => __('Only the selected groups will be imported from MailerLite', 'fluent-crm'),
             'credentials'            => [
                 'api_key' => ''
             ],
@@ -35,7 +35,8 @@ class MailerLiteMigrator extends BaseMigrator
                     'placeholder' => __('MailerLite API Key', 'fluent-crm'),
                     'data_type'   => 'password',
                     'type'        => 'input-text',
-                    'inline_help' => $infoSvg . ' ' . __('You can find your API key at MailerLite', 'fluent-crm') . ' <a href="https://app.mailerlite.com/integrations/api/" target="_blank" rel="noopener">'. __("Account -> Integrations -> Developer API", "fluent-crm") .'</a>'
+                    /* translators: %1$s: opening link tag to the MailerLite API page, %2$s: closing link tag */
+                    'inline_help' => $infoSvg . ' ' . sprintf(__('You can find your API key at MailerLite %1$sAccount -> Integrations -> Developer API%2$s', 'fluent-crm'), '<a href="https://app.mailerlite.com/integrations/api/" target="_blank" rel="noopener">', '</a>')
                 ]
             ],
             'refresh_on_list_change' => false,
@@ -147,7 +148,8 @@ class MailerLiteMigrator extends BaseMigrator
             $tagCounts++;
         }
 
-        $message = __('Based on your selections, ', 'fluent-crm') . $tagCounts . __(' groups and associate contacts will be imported from MailerLite', 'fluent-crm');
+        /* translators: %d: number of MailerLite groups selected for import */
+        $message = sprintf(_n('Based on your selections, %d group and its contacts will be imported from MailerLite.', 'Based on your selections, %d groups and their contacts will be imported from MailerLite.', $tagCounts, 'fluent-crm'), $tagCounts);
 
         return [
             'subscribed_count'   => 1,
@@ -238,9 +240,7 @@ class MailerLiteMigrator extends BaseMigrator
 
             $contact = FluentCrmApi('contacts')->createOrUpdate($data);
 
-            // Never resurrect a locally suppressed contact (unsubscribed/bounced/complained/
-            // spammed) just because the remote system lists the address as active — a re-run
-            // of the migration must not undo an opt-out or bounce recorded here.
+            // Never resurrect a locally suppressed contact because the remote lists it as active.
             if ($contact && $contact->status != 'subscribed' && !in_array($contact->status, fluentcrm_strict_statues())) {
                 $contact->updateStatus('subscribed');
             }
@@ -273,7 +273,8 @@ class MailerLiteMigrator extends BaseMigrator
             'total'          => 0,
             'import_tracker' => $import_tracker,
             'has_more'       => isset($taggingKeys[$import_tracker['current_index']]),
-            'message' => __('Importer is running now. ', 'fluent-crm').( $import_tracker['current_index']+1 ) .__(' tags have been imported so far', 'fluent-crm')
+            /* translators: %d: number of tags imported so far */
+            'message' => sprintf(__('The import is running. %d tags have been imported so far.', 'fluent-crm'), $import_tracker['current_index'] + 1)
         ];
     }
 

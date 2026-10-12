@@ -62,7 +62,7 @@ class RemoveFromListBenchmark extends BaseBenchMark
                     'options'    => [
                         [
                             'id'    => 'any',
-                            'title' => __('contact removed from any of the selected Lists', 'fluent-crm')
+                            'title' => __('contact removed from any of the selected lists', 'fluent-crm')
                         ],
                         [
                             'id'    => 'all',
@@ -139,7 +139,7 @@ class RemoveFromListBenchmark extends BaseBenchMark
             return empty(array_intersect($benchmarkLists, $attachedListIds));
         }
 
-        // 'any' — at least one benchmark list is NOT in subscriber's lists
+        // 'any': at least one benchmark list is NOT in subscriber's lists
         $removed = array_diff($benchmarkLists, $attachedListIds);
         return !empty($removed);
     }

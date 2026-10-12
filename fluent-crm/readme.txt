@@ -4,7 +4,7 @@ Tags: email marketing, newsletter, crm, email newsletter, subscribers
 Requires at least: 6.0
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 3.2.5
+Stable tag: 3.2.6
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -260,6 +260,26 @@ You can report any security bugs found in the source code of FluentCRM plugins t
 10. Pro Integrations
 
 == Changelog ==
+
+= 3.2.6 (Date: October 12, 2026) =
+- New: Contact status dropdown with counts and smarter field-specific search.
+- New: First-run contact shortcuts and email/confirmation-page previews in Double Opt-in Settings.
+- Improvement: Clearer contact bulk actions and Gmail-style email previews.
+- Improvement: More consistent editor styling, mobile layouts, settings, dashboard cards, and dark mode.
+- Improvement: Consistent US English wording and broader translation coverage.
+- Important: Changed strings may need retranslation. Your selected language stays unchanged.
+- Improvement: Safer smartcodes and stronger permissions for WordPress-user automation actions.
+- Fixed: Campaign scheduling, queue recovery, recipient exclusions, unscheduling, and bounce handling.
+- Fixed: Live automation edits, branch delays, date conditions, and A/B split percentages.
+- Fixed: Sequence timing, completion, queued-email cancellation, and recurring campaign runs.
+- Fixed: Email autosave, smartcodes, product blocks, conditional content, and tracking preferences.
+- Fixed: Contact filtering, exports, webhook creation, list edits, and campaign duplication.
+- Fixed: Fluent Forms custom-field clearing while preserving hidden fields.
+- Fixed: Automation custom-field updates, subtraction, and smart-link URLs.
+- Fixed: SMS/WhatsApp audiences, opt-outs, reporting, conversations, and disabled-channel sends.
+- Fixed: Commerce, membership, and LMS integrations, including subscription restarts and failed-payment cart recovery.
+- Fixed: Report totals, labels, note editing, and AI settings saves.
+- Other: Updated AI models, MCP tools, security, and compatibility improvements across Core and Pro.
 
 = 3.2.5 (Date: September 30, 2026) =
 - New: Company sync for new Fluent Forms contacts.

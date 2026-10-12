@@ -43,12 +43,12 @@ class Tags
             $tag['slug'] = sanitize_text_field($tag['slug']);
 
             $tag = \FluentCrm\App\Models\Tag::updateOrCreate(
+                ['slug' => $tag['slug']],
+                // A description that is not passed keeps the stored one.
                 array_filter([
-                    'slug'        => $tag['slug'],
                     'title'       => sanitize_text_field($tag['title']),
                     'description' => sanitize_textarea_field(Arr::get($tag, 'description'))
-                ]),
-                ['slug' => $tag['slug']]
+                ])
             );
 
             if ($tag->wasRecentlyCreated) {
@@ -81,7 +81,6 @@ class Tags
             return call_user_func_array([$this->instance, $method], $params);
         }
 
-        /* translators: %s: method name */
         throw new \Exception(sprintf('Method %s does not exist.', esc_html($method)));
     }
 }

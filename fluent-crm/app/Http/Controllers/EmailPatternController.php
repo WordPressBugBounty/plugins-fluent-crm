@@ -95,7 +95,7 @@ class EmailPatternController extends Controller
         ]);
 
         return $this->sendSuccess([
-            'message' => __('Pattern saved successfully', 'fluent-crm'),
+            'message' => __('The pattern has been saved.', 'fluent-crm'),
             'pattern' => $this->formatPattern($pattern),
         ]);
     }
@@ -209,7 +209,7 @@ class EmailPatternController extends Controller
         $pattern->save();
 
         return $this->sendSuccess([
-            'message' => __('Pattern updated successfully', 'fluent-crm'),
+            'message' => __('The pattern has been updated.', 'fluent-crm'),
             'pattern' => $this->formatPattern($pattern),
         ]);
     }
@@ -222,7 +222,7 @@ class EmailPatternController extends Controller
             ->delete();
 
         return $this->sendSuccess([
-            'message' => __('Pattern deleted successfully', 'fluent-crm'),
+            'message' => __('The pattern has been deleted.', 'fluent-crm'),
         ]);
     }
 
@@ -258,7 +258,8 @@ class EmailPatternController extends Controller
         $count = $query->delete();
 
         return $this->sendSuccess([
-            'message' => sprintf(__('%d pattern(s) deleted successfully', 'fluent-crm'), $count)
+            /* translators: %d: number of deleted email patterns */
+            'message' => sprintf(_n('%d pattern has been deleted.', '%d patterns have been deleted.', $count, 'fluent-crm'), $count)
         ]);
     }
 
@@ -267,7 +268,6 @@ class EmailPatternController extends Controller
      */
     public function getCategories()
     {
-        // Collect unique category names from all patterns
         $patterns = Meta::where('object_type', $this->objectType)->get();
         $categories = [];
         foreach ($patterns as $pattern) {
@@ -293,7 +293,6 @@ class EmailPatternController extends Controller
 
         $slug = sanitize_title($name);
 
-        // Check for existing
         $existing = Meta::where('object_type', $this->categoryObjectType)
             ->where('key', $slug)
             ->first();
@@ -320,7 +319,7 @@ class EmailPatternController extends Controller
             ->delete();
 
         return $this->sendSuccess([
-            'message' => __('Category deleted successfully', 'fluent-crm'),
+            'message' => __('The category has been deleted.', 'fluent-crm'),
         ]);
     }
 

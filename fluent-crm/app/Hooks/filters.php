@@ -21,17 +21,29 @@ $app->addFilter('fluent_crm/purchase_history_pmpro', 'PurchaseHistory@pmproOrder
 // Fluent Forms Integration
 (new \FluentCrm\App\Hooks\Handlers\FormSubmissions())->register();
 
-add_filter('fluent_crm/parse_campaign_email_text', function ($text, $subscriber) {
-    return \FluentCrm\App\Services\Libs\Parser\Parser::parse($text, $subscriber);
+/*
+ * The optional third argument is the smartcode level (basic, private or credential; see
+ * ShortcodeParser::parse()). It defaults to private; only an email to the contact's own inbox passes credential.
+ */
+add_filter('fluent_crm/parse_campaign_email_text', function ($text, $subscriber, $level = 'private') {
+    return \FluentCrm\App\Services\Libs\Parser\Parser::parse($text, $subscriber, $level);
+}, 10, 3);
+
+/*
+ * Smartcode parsing for stored notes (contact notes, automation activity notes). Private level: the
+ * result is readable by every contact reader, so access-token smartcodes never resolve.
+ */
+add_filter('fluent_crm/parse_contact_note_text', function ($text, $subscriber) {
+    return \FluentCrm\App\Services\Libs\Parser\Parser::parse($text, $subscriber, 'private');
 }, 10, 2);
 
-$app->addFilter('fluent_crm/parse_extended_crm_text', function ($text, $subscriber) {
+$app->addFilter('fluent_crm/parse_extended_crm_text', function ($text, $subscriber, $level = 'private') {
     if (!$subscriber) {
         return $text;
     }
 
-    return \FluentCrm\App\Services\Libs\Parser\Parser::parseCrmValue($text, $subscriber);
-}, 10, 2);
+    return \FluentCrm\App\Services\Libs\Parser\Parser::parseCrmValue($text, $subscriber, $level);
+}, 10, 3);
 
 $app->addFilter('comment_form_submit_field', 'AutoSubscribeHandler@addSubscribeCheckbox', 10, 1);
 $app->addFilter('wp_privacy_personal_data_exporters', 'Cleanup@attachCrmExporter');

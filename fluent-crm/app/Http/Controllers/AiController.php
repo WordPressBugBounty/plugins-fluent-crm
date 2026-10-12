@@ -14,24 +14,24 @@ class AiController extends Controller
     private $writingSettingsOptionKey = '_ai_writing_settings';
     private $providerModels = [
         'wordpress' => ['wordpress'],
-        'open_ai' => ['auto', 'gpt-5.6-terra', 'gpt-5.6-sol', 'gpt-5.6-luna', 'gpt-5.5', 'gpt-5.4', 'gpt-5.4-mini', 'gpt-5.4-nano', 'gpt-4.1', 'gpt-4o', 'gpt-4o-mini'],
-        'claude'  => ['auto', 'claude-sonnet-5', 'claude-opus-5', 'claude-haiku-4-5-20251001', 'claude-opus-4-8', 'claude-opus-4-7', 'claude-sonnet-4-6', 'claude-opus-4-6'],
-        'gemini'  => ['auto', 'gemini-3.6-flash', 'gemini-3.7-flash', 'gemini-3.5-flash', 'gemini-3.5-flash-lite', 'gemini-3.1-flash-lite', 'gemini-3.1-pro-preview', 'gemini-3-flash-preview', 'gemini-2.5-flash', 'gemini-2.5-pro', 'gemini-2.5-flash-lite'],
+        'open_ai' => ['auto', 'gpt-6.1-sol', 'gpt-6-astra', 'gpt-6-luna', 'gpt-5.6-terra', 'gpt-5.6-sol', 'gpt-5.6-luna', 'gpt-5.5', 'gpt-5.4', 'gpt-5.4-mini', 'gpt-4.1', 'gpt-4o', 'gpt-4o-mini'],
+        'claude'  => ['auto', 'claude-sonnet-5-5', 'claude-opus-5-5', 'claude-haiku-5-5', 'claude-fable-5-1', 'claude-sonnet-5', 'claude-opus-5', 'claude-haiku-4-5-20251001', 'claude-opus-4-8', 'claude-opus-4-7', 'claude-sonnet-4-6', 'claude-opus-4-6'],
+        'gemini'  => ['auto', 'gemini-3.8-flash', 'gemini-3.6-flash', 'gemini-3.7-flash', 'gemini-3.5-flash', 'gemini-3.5-flash-lite', 'gemini-3.1-flash-lite', 'gemini-3.1-pro-preview', 'gemini-3-flash-preview', 'gemini-2.5-flash', 'gemini-2.5-pro', 'gemini-2.5-flash-lite'],
         'openrouter' => [],
     ];
 
     private $autoProviderModels = [
-        'open_ai' => 'gpt-5.6-terra',
-        'claude'  => 'claude-sonnet-5',
-        'gemini'  => 'gemini-3.6-flash',
-        'wordpress' => 'wordpress',
+        'open_ai' => ['gpt-6.1-sol', 'gpt-5.6-terra'],
+        'claude'  => ['claude-sonnet-5-5', 'claude-sonnet-5'],
+        'gemini'  => ['gemini-3.8-flash', 'gemini-3.5-flash'],
+        'wordpress' => ['wordpress'],
+        'openrouter' => ['openrouter/auto'],
     ];
 
     public function getSettings(Request $request)
     {
         $settings = $this->getSavedSettings();
 
-        // Mask the API key for frontend display
         if (!empty($settings['api_key'])) {
             $settings['api_key'] = '****' . substr($settings['api_key'], -4);
         }
@@ -82,31 +82,44 @@ class AiController extends Controller
 
         $existingCredentials = $this->getSavedCredentials();
 
-        // Handle API key: if masked value is sent back, keep existing; if empty, clear it.
-        $plainApiKey = Arr::get($existingCredentials, 'api_key', '');
-        if (empty($apiKey)) {
-            $plainApiKey = '';
-        } elseif (strpos($apiKey, '****') !== 0) {
-            $plainApiKey = $apiKey;
+        $preferences = [
+            'is_enabled'    => $isEnabled,
+            'custom_prompt' => $customPrompt,
+        ];
+
+        $plainApiKey = $this->resolveApiKey($provider, $apiKey);
+        // An empty key would erase the stored one (the UI clears the field when the provider is
+        // switched), so it is never saved. Turning AI off for the saved provider still works: only
+        // the preferences change. A provider change always needs a key.
+        if ($provider && $provider !== 'wordpress' && !$plainApiKey) {
+            if ($isEnabled !== 'yes' && $provider === Arr::get($existingCredentials, 'provider', '')) {
+                fluentcrm_update_option($this->writingSettingsOptionKey, $preferences);
+                return $this->sendSuccess([
+                    'message' => __('The AI configuration has been saved.', 'fluent-crm'),
+                ]);
+            }
+
+            return $this->sendError([
+                'message' => __('Please enter an API key for the selected provider.', 'fluent-crm'),
+            ], 422);
+        }
+
+        if ($provider === 'openrouter' && $model === 'auto') {
+            $model = 'openrouter/auto';
         }
 
         $credentials = [
             'provider'   => $provider,
             'model'      => $model,
             'api_key'    => $plainApiKey,
-            'created_by' => 'fluent_crm',
-        ];
-
-        $preferences = [
-            'is_enabled'    => $isEnabled,
-            'custom_prompt' => $customPrompt,
+            'created_by' => Arr::get($existingCredentials, 'created_by', '') ?: 'fluent_crm',
         ];
 
         update_option($this->credentialsOptionKey, $credentials, false);
         fluentcrm_update_option($this->writingSettingsOptionKey, $preferences);
 
         return $this->sendSuccess([
-            'message' => __('AI configuration saved successfully.', 'fluent-crm'),
+            'message' => __('The AI configuration has been saved.', 'fluent-crm'),
         ]);
     }
 
@@ -124,9 +137,7 @@ class AiController extends Controller
         }
 
         if ($provider === 'openrouter') {
-            if (!$apiKey || strpos($apiKey, '****') === 0) {
-                $apiKey = Arr::get($this->getSavedCredentials(), 'api_key', '');
-            }
+            $apiKey = $this->resolveApiKey($provider, $apiKey);
 
             if (!$apiKey) {
                 return $this->sendError([
@@ -167,11 +178,7 @@ class AiController extends Controller
             ], 422);
         }
 
-        // If the API key is masked, use the saved one
-        if (!$apiKey || strpos($apiKey, '****') === 0) {
-            $savedSettings = $this->getSavedSettings();
-            $apiKey = Arr::get($savedSettings, 'api_key', '');
-        }
+        $apiKey = $this->resolveApiKey($provider, $apiKey);
 
         if ($provider !== 'wordpress' && !$apiKey) {
             return $this->sendError([
@@ -179,7 +186,7 @@ class AiController extends Controller
             ], 422);
         }
 
-        $resolvedModel = $this->resolveModel($provider, $model);
+        $resolvedModel = $this->resolveModels($provider, $model);
         if (!$resolvedModel) {
             return $this->sendError([
                 'message' => __('AI model is not configured. Please set it in Settings.', 'fluent-crm'),
@@ -257,7 +264,7 @@ class AiController extends Controller
             ], 422);
         }
 
-        $resolvedModel = $this->resolveModel($provider, $model);
+        $resolvedModel = $this->resolveModels($provider, $model);
         if (!$resolvedModel) {
             return $this->sendError([
                 'message' => __('AI model is not configured. Please set it in Settings.', 'fluent-crm'),
@@ -329,7 +336,8 @@ class AiController extends Controller
             $aiConfig['api_key'],
             $this->buildEmailBodyUserPrompt($promptData),
             $this->getEmailBodySystemPrompt($settings),
-            45
+            45,
+            $usedModel
         );
 
         if (is_wp_error($result)) {
@@ -362,7 +370,7 @@ class AiController extends Controller
             'subject_suggestions'  => array_values(array_map('sanitize_text_field', Arr::get($generated, 'subject_suggestions', []))),
             'preview_text'         => sanitize_text_field(Arr::get($generated, 'preview_text', '')),
             'provider'             => $aiConfig['provider'],
-            'model'                => $aiConfig['model'],
+            'model'                => $usedModel,
         ]);
     }
 
@@ -397,7 +405,7 @@ class AiController extends Controller
 
         if (!$subscriber) {
             return $this->sendError([
-                'message' => __('Subscriber not found', 'fluent-crm'),
+                'message' => __('Contact not found', 'fluent-crm'),
             ], 404);
         }
 
@@ -449,7 +457,7 @@ class AiController extends Controller
             ], 422);
         }
 
-        $resolvedModel = $this->resolveModel($provider, $model);
+        $resolvedModel = $this->resolveModels($provider, $model);
         if (!$resolvedModel) {
             return $this->sendError([
                 'message' => __('AI model is not configured. Please set it in Settings.', 'fluent-crm'),
@@ -463,7 +471,8 @@ class AiController extends Controller
             $apiKey,
             $this->buildContactSummaryPrompt($context, $locale),
             $this->getContactSummarySystemPrompt($settings, $locale),
-            45
+            45,
+            $usedModel
         );
 
         if (is_wp_error($result)) {
@@ -476,7 +485,7 @@ class AiController extends Controller
             'content'      => sanitize_textarea_field($result),
             'generated_at' => fluentCrmTimestamp(),
             'provider'     => $provider,
-            'model'        => $model,
+            'model'        => $usedModel,
             'locale'       => $locale,
             'counts'       => Arr::get($context, 'counts', []),
         ];
@@ -490,13 +499,9 @@ class AiController extends Controller
     }
 
     /**
-     * Resolve the WordPress site locale used for AI contact summaries.
+     * Site locale (not the user's profile locale) for AI contact summaries.
      *
-     * The contact summary must follow Settings > General > Site Language, not the
-     * current admin user's profile language. The fallback keeps cache comparison
-     * deterministic if WordPress returns an empty locale for any reason.
-     *
-     * @return string Sanitized WordPress locale, for example en_US or bn_BD.
+     * @return string Sanitized locale, e.g. en_US.
      */
     private function getContactSummaryLocale()
     {
@@ -506,17 +511,12 @@ class AiController extends Controller
     }
 
     /**
-     * Check whether a cached AI contact summary can be reused for the site locale.
+     * Whether a cached AI contact summary can be reused for the site locale.
      *
-     * New summaries store their generation locale and are reusable only when it
-     * matches the current site locale. Older cached summaries did not store a
-     * locale and were generated from English-only prompts, so they are treated as
-     * valid only while the current site locale is English.
+     * @param array  $summary Cached summary payload.
+     * @param string $locale  Current site locale.
      *
-     * @param array  $summary Cached subscriber meta summary payload.
-     * @param string $locale  Current sanitized WordPress site locale.
-     *
-     * @return bool True when the cached summary can be shown without regenerating.
+     * @return bool
      */
     private function isCachedContactSummaryForLocale($summary, $locale)
     {
@@ -530,19 +530,16 @@ class AiController extends Controller
             return $cachedLocale === $locale;
         }
 
-        // Legacy cached summaries were generated from English-only prompts.
+        // Summaries without a stored locale were generated in English.
         return $this->isEnglishLocale($locale);
     }
 
     /**
-     * Determine whether a WordPress locale belongs to the English language family.
+     * Whether a WordPress locale is English (en_*).
      *
-     * Used only for legacy AI summary cache compatibility, where existing cached
-     * records have no explicit locale but were produced by English prompts.
+     * @param string $locale
      *
-     * @param string $locale WordPress locale to inspect.
-     *
-     * @return bool True for locales beginning with en, such as en_US or en_GB.
+     * @return bool
      */
     private function isEnglishLocale($locale)
     {
@@ -617,7 +614,7 @@ class AiController extends Controller
             return new \WP_Error('missing_model', __('AI model is not configured. Please set it in Settings.', 'fluent-crm'));
         }
 
-        $resolvedModel = $this->resolveModel($provider, $model);
+        $resolvedModel = $this->resolveModels($provider, $model);
         if (!$resolvedModel) {
             return new \WP_Error('missing_model', __('AI model is not configured. Please set it in Settings.', 'fluent-crm'));
         }
@@ -876,9 +873,7 @@ class AiController extends Controller
                 'total' => 0,
             ], $subscriber);
 
-            // Every core producer (FluentCart, Woo, EDD, Paymattic, PMPro)
-            // returns rows under 'data'; only the legacy REST seed used
-            // 'orders'. Reading 'orders' alone left this context empty.
+            // Producers return rows under 'data'; 'orders' is the legacy key.
             $orders = Arr::get($data, 'data', []) ?: Arr::get($data, 'orders', []);
 
             $providers[$providerKey] = [
@@ -966,7 +961,43 @@ class AiController extends Controller
         return $titles;
     }
 
-    private function callProviderApi($provider, $model, $apiKey, $userPrompt, $systemPrompt = '', $timeout = 30)
+    /** Auto candidates are tried in order; explicit choices contain one candidate only.
+     * The successful model is returned separately for response/cache metadata.
+     */
+    private function callProviderApi($provider, $models, $apiKey, $userPrompt, $systemPrompt = '', $timeout = 30, &$usedModel = null)
+    {
+        $usedModel = null;
+        foreach ((array) $models as $model) {
+            $result = $this->callProviderModel($provider, $model, $apiKey, $userPrompt, $systemPrompt, $timeout);
+            if (!is_wp_error($result)) {
+                $usedModel = $model;
+                return $result;
+            }
+            if (!$this->isModelUnavailableError($provider, $model, $result)) {
+                return $result;
+            }
+        }
+        return $result;
+    }
+
+    /** Fail closed: generic 404s and all auth, quota, permission and parameter errors do not retry. */
+    private function isModelUnavailableError($provider, $model, $error)
+    {
+        $data = (array) $error->get_error_data();
+        if ((int) Arr::get($data, 'status') !== 404) {
+            return false;
+        }
+        $code = Arr::get($data, 'provider_error');
+        if ($provider === 'open_ai') {
+            return $code === 'model_not_found';
+        }
+        // Claude/Gemini use resource-wide codes, so also require the requested model ID.
+        $expected = ['claude' => 'not_found_error', 'gemini' => 'NOT_FOUND'];
+        return isset($expected[$provider]) && $code === $expected[$provider]
+            && strpos($error->get_error_message(), $model) !== false;
+    }
+
+    private function callProviderModel($provider, $model, $apiKey, $userPrompt, $systemPrompt = '', $timeout = 30)
     {
         switch ($provider) {
             case 'open_ai':
@@ -1024,21 +1055,31 @@ class AiController extends Controller
         }
         $messages[] = ['role' => 'user', 'content' => $userPrompt];
 
+        $data = [
+            'model' => $model,
+            'messages' => $messages,
+            'max_completion_tokens' => 2048,
+        ];
+        // Astra and 6.1 Sol require reasoning; reserve room for reasoning and text.
+        if (in_array($model, ['gpt-6-astra', 'gpt-6.1-sol'], true)) {
+            $data['reasoning_effort'] = 'low';
+            $data['max_completion_tokens'] = 8192;
+        } elseif ($model === 'gpt-6-luna') {
+            $data['reasoning_effort'] = 'none';
+        }
+
         $response = wp_remote_post('https://api.openai.com/v1/chat/completions', [
             'timeout' => $timeout,
             'headers' => [
                 'Authorization' => 'Bearer ' . $apiKey,
                 'Content-Type'  => 'application/json',
             ],
-            'body' => wp_json_encode([
-                'model'                 => $model,
-                'messages'              => $messages,
-                'max_completion_tokens' => 2048,
-            ]),
+            'body' => wp_json_encode($data),
         ]);
 
         if (is_wp_error($response)) {
-            return new \WP_Error('api_error', __('Failed to connect to OpenAI: ', 'fluent-crm') . $response->get_error_message());
+            /* translators: %1$s: AI provider name, %2$s: error message returned by the provider */
+            return new \WP_Error('api_error', sprintf(__('Failed to connect to %1$s: %2$s', 'fluent-crm'), 'OpenAI', $response->get_error_message()));
         }
 
         $code = wp_remote_retrieve_response_code($response);
@@ -1046,7 +1087,7 @@ class AiController extends Controller
 
         if ($code !== 200) {
             $errorMessage = Arr::get($body, 'error.message', __('Unknown error from OpenAI.', 'fluent-crm'));
-            return new \WP_Error('api_error', $errorMessage);
+            return new \WP_Error('api_error', $errorMessage, ['status' => $code, 'provider_error' => Arr::get($body, 'error.code')]);
         }
 
         $content = Arr::get($body, 'choices.0.message.content', '');
@@ -1067,6 +1108,18 @@ class AiController extends Controller
             ],
         ];
 
+        // These models think by default. Keep short CRM writing requests bounded.
+        if ($model === 'claude-sonnet-5-5') {
+            $data['thinking'] = ['type' => 'between_tools'];
+            $data['output_config'] = ['effort' => 'low'];
+        } elseif ($model === 'claude-haiku-5-5') {
+            $data['thinking'] = ['type' => 'disabled'];
+            $data['output_config'] = ['effort' => 'low'];
+        } elseif (in_array($model, ['claude-opus-5-5', 'claude-fable-5-1'], true)) {
+            $data['output_config'] = ['effort' => 'low'];
+            $data['max_tokens'] = 8192;
+        }
+
         if ($systemPrompt) {
             $data['system'] = $systemPrompt;
         }
@@ -1082,7 +1135,8 @@ class AiController extends Controller
         ]);
 
         if (is_wp_error($response)) {
-            return new \WP_Error('api_error', __('Failed to connect to Claude: ', 'fluent-crm') . $response->get_error_message());
+            /* translators: %1$s: AI provider name, %2$s: error message returned by the provider */
+            return new \WP_Error('api_error', sprintf(__('Failed to connect to %1$s: %2$s', 'fluent-crm'), 'Claude', $response->get_error_message()));
         }
 
         $code = wp_remote_retrieve_response_code($response);
@@ -1090,10 +1144,17 @@ class AiController extends Controller
 
         if ($code !== 200) {
             $errorMessage = Arr::get($body, 'error.message', __('Unknown error from Claude.', 'fluent-crm'));
-            return new \WP_Error('api_error', $errorMessage);
+            return new \WP_Error('api_error', $errorMessage, ['status' => $code, 'provider_error' => Arr::get($body, 'error.type')]);
         }
 
-        $content = Arr::get($body, 'content.0.text', '');
+        // Thinking and other non-text blocks may precede or separate answer blocks.
+        $textBlocks = [];
+        foreach ((array) Arr::get($body, 'content', []) as $block) {
+            if (Arr::get($block, 'type') === 'text') {
+                $textBlocks[] = Arr::get($block, 'text', '');
+            }
+        }
+        $content = implode("\n", $textBlocks);
         if (empty($content)) {
             return new \WP_Error('empty_response', __('No content generated. Please try again.', 'fluent-crm'));
         }
@@ -1114,6 +1175,12 @@ class AiController extends Controller
             ],
         ];
 
+        // Gemini 3.8 does not support minimal thinking; budget for low thinking plus text.
+        if ($model === 'gemini-3.8-flash') {
+            $data['generationConfig']['thinkingConfig'] = ['thinkingLevel' => 'low'];
+            $data['generationConfig']['maxOutputTokens'] = 8192;
+        }
+
         if ($systemPrompt) {
             $data['system_instruction'] = ['parts' => [['text' => $systemPrompt]]];
         }
@@ -1128,7 +1195,8 @@ class AiController extends Controller
         ]);
 
         if (is_wp_error($response)) {
-            return new \WP_Error('api_error', __('Failed to connect to Gemini: ', 'fluent-crm') . $response->get_error_message());
+            /* translators: %1$s: AI provider name, %2$s: error message returned by the provider */
+            return new \WP_Error('api_error', sprintf(__('Failed to connect to %1$s: %2$s', 'fluent-crm'), 'Gemini', $response->get_error_message()));
         }
 
         $code = wp_remote_retrieve_response_code($response);
@@ -1136,7 +1204,7 @@ class AiController extends Controller
 
         if ($code !== 200) {
             $errorMessage = Arr::get($body, 'error.message', __('Unknown error from Gemini.', 'fluent-crm'));
-            return new \WP_Error('api_error', $errorMessage);
+            return new \WP_Error('api_error', $errorMessage, ['status' => $code, 'provider_error' => Arr::get($body, 'error.status')]);
         }
 
         $content = Arr::get($body, 'candidates.0.content.parts.0.text', '');
@@ -1169,7 +1237,8 @@ class AiController extends Controller
         ]);
 
         if (is_wp_error($response)) {
-            return new \WP_Error('api_error', __('Failed to connect to OpenRouter: ', 'fluent-crm') . $response->get_error_message());
+            /* translators: %1$s: AI provider name, %2$s: error message returned by the provider */
+            return new \WP_Error('api_error', sprintf(__('Failed to connect to %1$s: %2$s', 'fluent-crm'), 'OpenRouter', $response->get_error_message()));
         }
 
         $code = wp_remote_retrieve_response_code($response);
@@ -1218,6 +1287,12 @@ class AiController extends Controller
 
         $provider = $this->normalizeProvider(Arr::get($credentials, 'provider', ''));
         $model = sanitize_text_field(Arr::get($credentials, 'model', 'auto'));
+        // Only an explicitly deprecated choice is reset; preserve other plugins' models.
+        if ($provider === 'open_ai' && $model === 'gpt-5.4-nano') {
+            $model = 'auto';
+        } elseif ($provider === 'openrouter' && (!$model || $model === 'auto')) {
+            $model = 'openrouter/auto';
+        }
 
         return [
             'provider'   => $provider,
@@ -1248,15 +1323,26 @@ class AiController extends Controller
         return $provider === 'openai' ? 'open_ai' : $provider;
     }
 
-    private function resolveModel($provider, $model)
+    /** Only a masked key for the same provider may reuse the shared credential. */
+    private function resolveApiKey($provider, $apiKey)
     {
-        $model = $model ?: 'auto';
-
-        if ($model !== 'auto') {
-            return $model;
+        if (strpos($apiKey, '****') !== 0) {
+            return $apiKey;
         }
 
-        return Arr::get($this->autoProviderModels, $provider, '');
+        $credentials = $this->getSavedCredentials();
+        return $provider === Arr::get($credentials, 'provider', '')
+            ? Arr::get($credentials, 'api_key', '') : '';
+    }
+
+    /** Ordered candidates; never substitute an explicit model (except deprecated Nano). */
+    private function resolveModels($provider, $model)
+    {
+        $model = $model ?: 'auto';
+        if ($provider === 'open_ai' && $model === 'gpt-5.4-nano') {
+            $model = 'auto';
+        }
+        return $model === 'auto' ? Arr::get($this->autoProviderModels, $provider, []) : [$model];
     }
 
     private function formatModelOptions($provider)
@@ -1281,7 +1367,8 @@ class AiController extends Controller
         ]);
 
         if (is_wp_error($response)) {
-            return new \WP_Error('api_error', __('Failed to load OpenRouter models: ', 'fluent-crm') . $response->get_error_message());
+            /* translators: %s: error message returned by OpenRouter */
+            return new \WP_Error('api_error', sprintf(__('Failed to load OpenRouter models: %s', 'fluent-crm'), $response->get_error_message()));
         }
 
         $code = wp_remote_retrieve_response_code($response);

@@ -117,23 +117,8 @@ class Sanitize
     }
 
     /**
-     * Remove control characters that WordPress's sanitizers let through.
-     *
-     * sanitize_text_field() folds tab, newline and carriage return into spaces
-     * but leaves the remaining C0 controls — including NUL — untouched, so a
-     * value like "before\0after" round-trips through the API intact. A NUL byte
-     * truncates C-string comparisons, corrupts CSV and JSON exports, and can
-     * split a value differently in PHP than in MySQL.
-     *
-     * Tab, newline and carriage return are deliberately preserved: they are
-     * legitimate inside the multi-line fields that route through wp_kses_post
-     * rather than sanitize_text_field, and stripping them there would damage
-     * real content.
-     *
-     * The pattern is intentionally **not** /u. These are all single-byte ASCII
-     * controls, a bytewise replace cannot corrupt a multi-byte sequence (UTF-8
-     * continuation bytes are all >= 0x80), and the /u modifier would make
-     * preg_replace() return null for input that is not already valid UTF-8.
+     * Remove C0 control characters (including NUL) that WordPress's sanitizers let through.
+     * Tab, newline and carriage return are kept. The pattern is not /u so invalid UTF-8 does not null the value.
      *
      * @param mixed $value Scalar or nested array; anything else is returned as-is.
      * @return mixed
@@ -154,6 +139,44 @@ class Sanitize
         return $stripped === null ? $value : $stripped;
     }
 
+    /**
+     * A registered contact status, or $default.
+     * Strict, string-only and case-sensitive; surrounding spaces are ignored.
+     *
+     * @param mixed $value
+     * @param string|null $default Returned when $value is not a registered status.
+     * @return string|null
+     */
+    public static function contactStatus($value, $default = null)
+    {
+        if (!is_string($value)) {
+            return $default;
+        }
+
+        $value = trim($value);
+
+        return in_array($value, fluentcrm_subscriber_statuses(), true) ? $value : $default;
+    }
+
+    /**
+     * A registered contact type (a key of fluentcrm_contact_types()), or $default.
+     * Strict like contactStatus(); a non-string never matches.
+     *
+     * @param mixed $value
+     * @param string|null $default Returned when $value is not a registered type.
+     * @return string|null
+     */
+    public static function contactType($value, $default = null)
+    {
+        if (!is_string($value)) {
+            return $default;
+        }
+
+        $value = trim($value);
+
+        return in_array($value, array_map('strval', array_keys(fluentcrm_contact_types())), true) ? $value : $default;
+    }
+
     public static function contact($data)
     {
         $fieldMaps = [
@@ -161,6 +184,7 @@ class Sanitize
             'prefix'          => 'sanitize_text_field',
             'first_name'      => 'sanitize_text_field',
             'last_name'       => 'sanitize_text_field',
+            'full_name'       => 'sanitize_text_field',
             'user_id'         => 'intval',
             'email'           => 'sanitize_email',
             'status'          => 'sanitize_text_field',
@@ -196,15 +220,20 @@ class Sanitize
         }
 
         if (isset($data['status'])) {
-            $status = $data['status'];
-            if (!in_array($status, fluentcrm_subscriber_statuses())) {
+            $status = self::contactStatus($data['status']);
+            if ($status === null) {
                 unset($data['status']);
+            } else {
+                $data['status'] = $status;
             }
         }
 
         if (isset($data['contact_type'])) {
-            if (!array_key_exists($data['contact_type'], fluentcrm_contact_types())) {
+            $type = self::contactType($data['contact_type']);
+            if ($type === null) {
                 unset($data['contact_type']);
+            } else {
+                $data['contact_type'] = $type;
             }
         }
 
@@ -213,25 +242,11 @@ class Sanitize
 
     /**
      * Sanitize custom contact field values before they are persisted.
-     *
-     * Custom fields are stored as free-form meta rows rather than mapped columns,
-     * so self::contact() cannot cover them from a static field map — the set of
-     * keys is defined by the site owner at runtime. The field's own configured
-     * type decides the rule instead:
-     *
-     *   - textarea            wp_kses_post, matching contactNote()'s description,
-     *                         so multi-line fields keep safe formatting HTML
-     *   - number              numeric cast, preserving int vs float
-     *   - checkbox / *-select array of sanitize_text_field
-     *   - everything else     sanitize_text_field
-     *
-     * A key with no matching field definition is treated as text. Unregistered
-     * keys are still written (integrations rely on ad-hoc keys), but an unknown
-     * key is never a reason to trust the value.
+     * The field's type picks the rule: textarea wp_kses_post, number numeric cast,
+     * arrays sanitize_text_field per item, anything else (including unknown keys) text.
      *
      * @param array $values slug => value, as submitted
-     * @param array $fields optional pre-loaded field definitions keyed by slug,
-     *                      to avoid re-reading the option in a loop
+     * @param array $fields optional pre-loaded field definitions keyed by slug
      * @return array sanitized values, keys preserved
      */
     public static function contactCustomValues($values, $fields = [])
@@ -241,12 +256,7 @@ class Sanitize
 
     /**
      * Sanitize custom company field values before they are persisted.
-     *
-     * Same rules and the same reasoning as self::contactCustomValues() — only the
-     * option holding the field definitions differs. Company custom values live in
-     * the serialized `meta` column instead of their own rows, and every write path
-     * (REST create/update, CSV import, the public Companies API) reaches them
-     * through Api\Classes\Companies::createOrUpdate(), which is where this runs.
+     * Same rules as contactCustomValues(), with the company field definitions.
      *
      * @param array $values slug => value, as submitted
      * @param array $fields optional pre-loaded field definitions keyed by slug
@@ -286,8 +296,7 @@ class Sanitize
             $type = Arr::get($fields, $key . '.type', 'text');
 
             if (is_array($value)) {
-                // checkbox and multi-select arrive as arrays; the values are
-                // choice labels, so plain text is always correct here.
+                // checkbox and multi-select values are choice labels.
                 $sanitized[$key] = array_values(array_map(function ($item) {
                     return is_scalar($item) ? sanitize_text_field($item) : '';
                 }, $value));
@@ -308,17 +317,25 @@ class Sanitize
             }
 
             if ($type === 'number') {
-                $sanitized[$key] = ($value === '') ? '' : $value + 0;
+                $number = trim($value);
+                if ($number === '') {
+                    $sanitized[$key] = ''; // explicit empty clears the stored value
+                    continue;
+                }
+                // Accept thousands separators in strict 1,234,567 grouping; "1,5" stays invalid.
+                if (preg_match('/^-?\d{1,3}(,\d{3})+(\.\d+)?$/', $number)) {
+                    $number = str_replace(',', '', $number);
+                }
+                // Skip non-numeric values; an empty string would delete the existing value.
+                if (is_numeric($number)) {
+                    $sanitized[$key] = $number + 0;
+                }
                 continue;
             }
 
             $sanitized[$key] = sanitize_text_field($value);
         }
 
-        // Custom values reach the same sanitizers as the mapped columns, so they
-        // inherit the same control-character gap. Applied once over the finished
-        // set rather than at each branch above; the helper recurses into the
-        // array values that checkbox and multi-select fields produce.
         return self::stripControlCharacters($sanitized);
     }
 
@@ -422,6 +439,35 @@ class Sanitize
         return $data;
     }
 
+    /**
+     * Keep only ids that exist in the given model's table. Confirmed ids are cached per request.
+     *
+     * @param string $modelClass Tag::class or Lists::class
+     * @param int[]  $ids
+     * @return int[]
+     */
+    private static function existingIds($modelClass, $ids)
+    {
+        static $known = [];
+
+        if (!$ids) {
+            return [];
+        }
+
+        if (!isset($known[$modelClass])) {
+            $known[$modelClass] = [];
+        }
+
+        $unknown = array_values(array_diff(array_unique($ids), $known[$modelClass]));
+        if ($unknown) {
+            foreach ($modelClass::whereIn('id', $unknown)->pluck('id') as $id) {
+                $known[$modelClass][] = (int)$id;
+            }
+        }
+
+        return array_values(array_intersect($ids, $known[$modelClass]));
+    }
+
     public static function sanitizeTagIds($inputTagIds, $willCreate = true)
     {
         if (!$inputTagIds) {
@@ -438,6 +484,8 @@ class Sanitize
                 $nonNumericIds[] = $tagId;
             }
         }
+
+        $tagIds = self::existingIds(Tag::class, $tagIds);
 
         if (!$nonNumericIds) {
             return $tagIds;
@@ -461,7 +509,6 @@ class Sanitize
                 continue;
             }
 
-            // Let's create a new
             $tag = Tag::create([
                 'title' => $maybeNewTag,
                 'slug'  => sanitize_title($maybeNewTag)
@@ -491,6 +538,8 @@ class Sanitize
             }
         }
 
+        $listIds = self::existingIds(Lists::class, $listIds);
+
         if (!$nonNumericIds) {
             return $listIds;
         }
@@ -513,7 +562,6 @@ class Sanitize
                 continue;
             }
 
-            // Let's create a new
             $list = Lists::create([
                 'title' => sanitize_text_field($maybeNewList),
                 'slug'  => sanitize_title($maybeNewList)

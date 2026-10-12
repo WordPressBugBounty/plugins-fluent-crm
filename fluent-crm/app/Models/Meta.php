@@ -38,8 +38,7 @@ class Meta extends Model
 
     public function getValueAttribute($value)
     {
-        // Guard against PHP Object Injection: meta values can be user-influenced, so never
-        // instantiate objects on read. Arrays/scalars are preserved.
+        // Values can be user-influenced; never instantiate objects on read (PHP Object Injection).
         return Helper::safeUnserialize($value);
     }
 }

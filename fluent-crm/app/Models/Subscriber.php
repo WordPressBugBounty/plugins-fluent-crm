@@ -3,12 +3,14 @@
 namespace FluentCrm\App\Models;
 
 use FluentCrm\App\Models\CampaignEmail;
+use FluentCrm\App\Services\ContactSearch;
 use FluentCrm\App\Services\Helper;
 use FluentCrm\App\Services\Sanitize;
 use FluentCrm\Framework\Support\Arr;
 use FluentCrm\App\Services\Libs\Mailer\Handler;
 use FluentCrm\Framework\Database\Orm\Collection;
 use FluentCrm\Framework\Support\Str;
+use FluentCrm\Framework\Database\QueryException;
 
 
 /**
@@ -24,11 +26,8 @@ class Subscriber extends Model
 {
     /**
      * Mirrors the DEFAULT on the fc_subscribers.status column.
-     *
-     * A row inserted without an explicit status persists as 'subscribed' while the
-     * in-memory model created by self::create() has no status attribute at all. Any
-     * code that decides something from a freshly created contact's status must
-     * resolve through this constant rather than reading the model or defaulting to ''.
+     * A row inserted without an explicit status persists as 'subscribed', but the model
+     * returned by self::create() has no status attribute; resolve it through this constant.
      */
     const DEFAULT_STATUS = 'subscribed';
 
@@ -83,11 +82,7 @@ class Subscriber extends Model
         });
 
         static::updating(function ($model) {
-            // During bulk imports, only pay the WP-user lookup when the import
-            // actually changed a synced field — a large update-import would
-            // otherwise run get_user_by() + usermeta writes for every row
-            // (50k+ extra queries). When a name/email DID change, the sync below
-            // must still run so linked WP profiles don't go stale (user-sync sites).
+            // Bulk imports skip the WP user sync unless a synced field changed.
             if (defined('FLUENTCRM_DOING_BULK_IMPORT') && !$model->isDirty(['first_name', 'last_name', 'email'])) {
                 return;
             }
@@ -158,43 +153,10 @@ class Subscriber extends Model
      */
     public function scopeSearchBy($query, $search, $custom_fields = false)
     {
-        if ($search) {
-            // Escape LIKE wildcards (%, _) so search terms match literally, not as wildcards.
-            global $wpdb;
-            $search = $wpdb->esc_like($search);
-            $fields = $this->searchable;
-            $query->where(function ($query) use ($fields, $search, $custom_fields) {
-                $query->where(array_shift($fields), 'LIKE', "%$search%");
-
-                $nameArray = explode(' ', $search);
-                if (count($nameArray) >= 2) {
-                    $query->orWhere(function ($q) use ($nameArray) {
-                        $fname = array_shift($nameArray);
-                        $lastName = implode(' ', $nameArray);
-                        $q->where('first_name', 'LIKE', "%$fname%")
-                            ->orWhere('last_name', 'LIKE', "%$lastName%");
-                    });
-                }
-
-                foreach ($fields as $field) {
-                    $query->orWhere($field, 'LIKE', "%$search%");
-                }
-            });
-
-            /**
-             * If contact list has custom field
-             * Then this block is responsible for searching by custom filed
-             */
-            if ($custom_fields) {
-                $query->orWhere(function ($q) use ($search, $custom_fields) {
-                    $q->whereHas('custom_field_meta', function ($q) use ($search) {
-                        $q->where('value', 'LIKE', "%$search%");
-                    });
-                });
-            }
-        }
-
-        return $query;
+        // The whole search is one AND group, so it never widens surrounding filters.
+        return ContactSearch::apply($query, (string)$search, [
+            'include_custom_fields' => (bool)$custom_fields,
+        ]);
     }
 
     /**
@@ -644,10 +606,7 @@ class Subscriber extends Model
      */
     public function syncCustomFieldValues($values, $deleteOtherValues = true, $customFields = [])
     {
-        // Sanitize here rather than at the callers: this is the single point every
-        // custom-field write passes through (REST update, import, updateOrCreate,
-        // bulk import), and Sanitize::contact() cannot reach these values because
-        // they are runtime-defined meta keys rather than mapped columns.
+        // Every custom-field write passes through here; Sanitize::contact() does not cover these keys.
         $values = Sanitize::contactCustomValues($values, $customFields);
 
         $emptyValues = array_filter($values, function ($value) {
@@ -660,8 +619,12 @@ class Subscriber extends Model
             $deleteMetaKeys = array_keys($emptyValues);
 
             if ($deleteMetaKeys) {
-                $this->custom_field_meta()->whereIn('key', $deleteMetaKeys)->delete();
-                foreach ($deleteMetaKeys as $key) {
+                // Only a key that had a stored value changed; clearing one that was never set is a no-op.
+                $clearedKeys = $this->custom_field_meta()->whereIn('key', $deleteMetaKeys)->pluck('key')->toArray();
+                if ($clearedKeys) {
+                    $this->custom_field_meta()->whereIn('key', $clearedKeys)->delete();
+                }
+                foreach (array_unique($clearedKeys) as $key) {
                     $updateValues[$key] = '';
                 }
             }
@@ -672,12 +635,11 @@ class Subscriber extends Model
         });
 
         foreach ($newValues as $key => $value) {
-            // Scope to object_type = 'custom_field' (Behavioral Rule 11): the untyped
-            // meta() lookup can collide with an internal meta key of the same name
-            // and overwrite the internal row while scoped reads keep showing empty.
+            // Scoped to object_type = 'custom_field' so internal meta keys of the same name are not overwritten.
             $exist = $this->custom_field_meta()->where('key', $key)->first();
             if ($exist) {
-                if ($exist->value == $value) {
+                // Compare as text: PHP 8's == treats '123' and '0123' (or '5' and '5.0') as equal.
+                if ((string)maybe_serialize($exist->value) === (string)maybe_serialize($value)) {
                     continue;
                 }
                 $updateValues[$key] = $value;
@@ -708,7 +670,7 @@ class Subscriber extends Model
     {
         return [
             'emails' => CampaignEmail::where('subscriber_id', $this->id)
-                ->where('status', 'sent')
+                ->whereIn('status', CampaignEmail::SENT_STATUSES)
                 ->count(),
             'opens'  => CampaignEmail::where('subscriber_id', $this->id)
                 ->where('is_open', '>', 0)
@@ -761,8 +723,8 @@ class Subscriber extends Model
     {
         $fields = [
             'prefix'         => __('Name Prefix', 'fluent-crm'),
-            'first_name'     => __('First Name', 'fluent-crm'),
-            'last_name'      => __('Last Name', 'fluent-crm'),
+            'first_name'     => __('First name', 'fluent-crm'),
+            'last_name'      => __('Last name', 'fluent-crm'),
             'full_name'      => __('Full Name', 'fluent-crm'),
             'email'          => __('Email', 'fluent-crm'),
             'contact_type'   => __('Contact Type', 'fluent-crm'),
@@ -771,12 +733,12 @@ class Subscriber extends Model
             'address_line_2' => __('Address Line 2', 'fluent-crm'),
             'city'           => __('City', 'fluent-crm'),
             'state'          => __('State', 'fluent-crm'),
-            'postal_code'    => __('Postal Code', 'fluent-crm'),
+            'postal_code'    => __('Postal code', 'fluent-crm'),
             'country'        => __('Country', 'fluent-crm'),
             'ip'             => __('IP Address', 'fluent-crm'),
             'phone'          => __('Phone', 'fluent-crm'),
             'source'         => __('Source', 'fluent-crm'),
-            'date_of_birth'  => __('Date of Birth (Y-m-d Format only)', 'fluent-crm')
+            'date_of_birth'  => __('Date of Birth (Y-m-d format only)', 'fluent-crm')
         ];
 
         if (Helper::isCompanyEnabled()) {
@@ -806,10 +768,10 @@ class Subscriber extends Model
         }
 
         if (isset($this->attributes['last_name'])) {
-            $fallBack .= '+' . $this->attributes['last_name'];
+            $fallBack .= ' ' . $this->attributes['last_name'];
         }
 
-        return fluentcrmGravatar($this->attributes['email'], $fallBack);
+        return fluentcrmGravatar($this->attributes['email'], trim($fallBack));
     }
 
     /**
@@ -874,9 +836,7 @@ class Subscriber extends Model
             $existingSubscribers[strtolower($model->email)] = $model;
         }
 
-        // Preload existing tag/list pivots for the whole chunk in one query —
-        // the per-row lists()->get()/tags()->get() pattern fans out to 2 extra
-        // queries per contact on large imports.
+        // Preload existing tag/list pivots for the whole chunk in one query.
         $existingListIdMap = [];
         $existingTagIdMap = [];
         if (!$oldSubscribers->isEmpty()) {
@@ -937,8 +897,7 @@ class Subscriber extends Model
                 unset($item['tags']);
 
                 $item['updated_at'] = fluentCrmTimestamp();
-                // Keep legit falsy values ("0" phone, 0 points) — only drop
-                // empty strings / nulls so they don't overwrite existing data.
+                // Drop only empty strings and nulls; keep falsy values like "0".
                 $updateables[] = array_filter($item, function ($value) {
                     return $value !== '' && $value !== null;
                 });
@@ -999,7 +958,6 @@ class Subscriber extends Model
                     }
                 }
 
-                //checking insertable email has tags, lists that need to be created or is already have
                 if (!empty($newTags[$insertedModel->email])) {
                     $newlyCreateTagIds = Helper::createNewTags($newTags[$insertedModel->email]);
                     $attachableTags = array_merge($tags, $newlyCreateTagIds);
@@ -1014,17 +972,10 @@ class Subscriber extends Model
                     $attachableTags && $insertedModel->attachTags($attachableTags);
                     $attachableLists && $insertedModel->attachLists($attachableLists);
 
-                    // Resolve the status the row ACTUALLY persisted with. Two traps
-                    // meet here: self::create() is not re-find()ed, so
-                    // $insertedModel->status is unset in memory whenever the insertable
-                    // carried no status; and fc_subscribers.status is DEFAULT
-                    // 'subscribed' at the column level, so those rows land as subscribed.
-                    // Reading either the model or a bare Arr::get() would mail a
-                    // confirmation request to a contact the database records as already
-                    // subscribed (import() leaves status unset whenever $newStatus is '').
+                    // A row inserted without a status persists with the column default.
                     $importedStatus = Arr::get($insertable, 'status') ?: self::DEFAULT_STATUS;
 
-                    if ($doubleOptin && $importedStatus != 'subscribed') {
+                    if ($doubleOptin && $importedStatus == 'pending') {
                         $insertedModel->sendDoubleOptinEmail();
                     }
                 }
@@ -1034,8 +985,7 @@ class Subscriber extends Model
                     $insertedModel->attachCompanies([$insertable['company_id']]);
                 }
 
-                // "Import silently" must also suppress the contact-created triggers —
-                // otherwise every inserted row enrolls into "Contact Created" funnels.
+                // "Import silently" also suppresses the contact-created triggers.
                 if (!defined('FLUENTCRM_DISABLE_TAG_LIST_EVENTS')) {
                     /*
                      * @deprecated since 2.8.0. Use fluent_crm/contact_created instead
@@ -1059,24 +1009,29 @@ class Subscriber extends Model
                 if ($updateData) {
                     $existingModel->save();
 
-                    if (!empty($updateable['company_id']) && Helper::isCompanyEnabled()) {
-                        $existingModel->attachCompanies([$updateable['company_id']]);
-                    }
-
                     if (!empty($updateable['status']) && $updateable['status'] != $oldStatus) {
                         $newStatus = $updateable['status'];
                         do_action('fluent_crm/subscriber_status_changed', $existingModel, $oldStatus, $newStatus);
                         do_action('fluentcrm_subscriber_status_to_' . $newStatus, $existingModel, $oldStatus);
                     }
+                }
 
-                    //attaching new lists, tags to subscriber
-                    if (!empty($newLists[$updateable['email']])) {
-                        $existingModel->attachLists($newLists[$updateable['email']]);
-                    }
-                    if (!empty($newTags[$updateable['email']])) {
-                        $existingModel->attachTags($newTags[$updateable['email']]);
-                    }
+                // The row's company, lists and tags apply even when none of its fields changed. A row
+                // whose company is already the contact's has it attached: skip the pivot write
+                // (one INSERT and reload per row on big re-imports).
+                if (!empty($updateable['company_id']) && Helper::isCompanyEnabled()
+                    && ($updateData || (int)$existingModel->company_id !== (int)$updateable['company_id'])) {
+                    $existingModel->attachCompanies([$updateable['company_id']]);
+                }
 
+                if (!empty($newLists[$updateable['email']])) {
+                    $existingModel->attachLists($newLists[$updateable['email']]);
+                }
+                if (!empty($newTags[$updateable['email']])) {
+                    $existingModel->attachTags($newTags[$updateable['email']]);
+                }
+
+                if ($updateData) {
                     do_action('fluentcrm_contact_updated', $existingModel, $updateData);
                     do_action('fluent_crm/contact_updated', $existingModel, $updateData);
                 }
@@ -1110,13 +1065,22 @@ class Subscriber extends Model
 
     public function updateOrCreate($data, $forceUpdate = false, $deleteOtherValues = false, $sync = false)
     {
+        return $this->persistContact($data, $forceUpdate, $deleteOtherValues, $sync);
+    }
+
+    /**
+     * Apply normal contact writes, optionally to the winner of an email insert race.
+     * Passing the winning row forces recovery through the update branch only.
+     */
+    protected function persistContact($data, $forceUpdate, $deleteOtherValues, $sync, $existingContact = null)
+    {
         $subscriberData = static::explodeFullName($data);
         $subscriberData = array_filter(Arr::only($subscriberData, $this->getFillable()));
         $tags = Arr::get($data, 'tags', []);
         $lists = Arr::get($data, 'lists', []);
         $companies = Arr::get($data, 'companies', []);
 
-        $exist = static::where('email', $subscriberData['email'])->first();
+        $exist = $existingContact ?: static::where('email', $subscriberData['email'])->first();
 
         if (empty($subscriberData['user_id'])) {
             $user = get_user_by('email', $subscriberData['email']);
@@ -1132,31 +1096,33 @@ class Subscriber extends Model
             $oldStatus = $exist->status;
         }
 
+        // Loose spellings ("Unsubscribed", "pending ") are read as the status they name. A status
+        // that is still not a FluentCRM status (e.g. Fluent Support's "active") is ignored for an
+        // existing contact, and makes a new one pending, never subscribed: consent is not assumed.
+        if (!empty($data['status']) && is_string($data['status'])) {
+            $data['status'] = strtolower(trim($data['status']));
+            if (isset($subscriberData['status'])) {
+                $subscriberData['status'] = $data['status'];
+            }
+        }
+        if (!empty($data['status']) && !in_array($data['status'], fluentcrm_subscriber_statuses(), true)) {
+            unset($data['status'], $subscriberData['status']);
+            if (!$exist) {
+                $data['status'] = $subscriberData['status'] = 'pending';
+            }
+        }
+
         if (!empty($data['status'])) {
             $status = $data['status'];
 
             if ($forceUpdate) {
-                /*
-                 * $forceUpdate means the CALLER explicitly took responsibility for this
-                 * status write — honor it unconditionally, including moving a bounced or
-                 * unsubscribed contact to 'pending' (re-consent flows) or 'subscribed'.
-                 * All safety lives in the non-forced default below, which is exactly why
-                 * force must never be turned on implicitly on a caller's behalf (see
-                 * Contacts::createOrUpdate).
-                 */
+                // A forced write is applied unconditionally, including out of suppression.
                 $subscriberData['status'] = $status;
             } else if (in_array($status, fluentcrm_strict_statues())) {
-                // Moving INTO suppression (an unsubscribed/bounced/complained/spammed
-                // payload) is the fail-safe direction and is always allowed — e.g. a
-                // migrator syncing a remote hard-bounce onto a 'subscribed' contact.
+                // Moving into a suppressed status is always allowed.
                 $subscriberData['status'] = $status;
             } else if ($exist && in_array($exist->status, array_merge(fluentcrm_strict_statues(), ['subscribed']))) {
-                // The safe default: a non-forced payload never downgrades a 'subscribed'
-                // contact and never resurrects a suppressed one (unsubscribed/bounced/
-                // complained/spammed) — not even to 'pending'. A caller that intends such
-                // a transition (a re-consent flow moving the contact into the double
-                // opt-in pipeline, an admin-confirmed update) must own that decision by
-                // passing $forceUpdate or calling updateStatus() directly.
+                // A non-forced write never downgrades a subscribed contact or resurrects a suppressed one.
                 unset($subscriberData['status']);
             } else {
                 $subscriberData['status'] = $status;
@@ -1180,7 +1146,19 @@ class Subscriber extends Model
             if (!isset($subscriberData['created_at'])) {
                 $subscriberData['created_at'] = current_time('mysql');
             }
-            $exist = static::create($subscriberData);
+            try {
+                $exist = static::create($subscriberData);
+            } catch (QueryException $e) {
+                // A concurrent request may have inserted this email between our lookup
+                // and insert. If a row now exists, apply this payload to it as an update;
+                // otherwise the failure is unrelated and must surface.
+                $winner = static::where('email', $subscriberData['email'])->first();
+                if (!$winner) {
+                    throw $e;
+                }
+
+                return $this->persistContact($data, $forceUpdate, $deleteOtherValues, $sync, $winner);
+            }
             $exist = $this->find($exist->id);
             $exist->wasRecentlyCreated = true;
         }
@@ -1193,12 +1171,10 @@ class Subscriber extends Model
         /*
          * TODO: investigate this attachTags and attachLists method. for Masiur
          */
-        // Syncing Lists
         if ($lists) {
             $exist->attachLists($lists);
         }
 
-        // Syncing Tags
         if ($tags) {
             $exist->attachTags($tags);
         }
@@ -1207,7 +1183,6 @@ class Subscriber extends Model
         if (Helper::isCompanyEnabled()) {
             $companyId = $exist->company_id;
             if (empty($companyId)) {
-                // Syncing Companies
                 $companies && $exist->attachCompanies($companies);
             } else {
                 $exist->attachCompanies([$companyId]);
@@ -1230,19 +1205,12 @@ class Subscriber extends Model
             do_action('fluent_crm/contact_updated', $exist, $dirtyFields);
         }
 
-        /*
-         * Fire the status hooks for EVERY real transition, not just to 'subscribed'.
-         * Listeners depend on them for correctness: Cleanup@handleUnsubscribe cancels
-         * queued campaign emails and active funnels when a contact is suppressed via a
-         * webhook/migrator/API call, and the 'Status Changed' automation trigger listens
-         * on fluent_crm/subscriber_status_changed. updateStatus() fires the same pair.
-         */
+        // Status hooks fire for every real transition; Cleanup@handleUnsubscribe depends on them.
         if (!$isNew && $oldStatus && $oldStatus != $exist->status) {
             do_action('fluent_crm/subscriber_status_changed', $exist, $oldStatus, $exist->status);
             do_action('fluentcrm_subscriber_status_to_' . $exist->status, $exist, $oldStatus);
         } else if ($isNew && !empty($subscriberData['status']) && $subscriberData['status'] === 'subscribed') {
-            // New contact explicitly created as subscribed (matches the pre-existing
-            // behavior; a contact that merely inherited the DB default does not fire).
+            // Fires only when the status was set explicitly, not inherited from the DB default.
             do_action('fluentcrm_subscriber_status_to_subscribed', $exist, $oldStatus);
         }
 
@@ -1252,17 +1220,7 @@ class Subscriber extends Model
     public function sendDoubleOptinEmail()
     {
         if ($this->status == 'subscribed') {
-            // Only an already-confirmed contact has nothing left to confirm. Every other
-            // status — pending, unsubscribed, bounced, complained — may be a contact the
-            // caller is legitimately re-inviting, and the caller is the only layer that
-            // knows whether a real consent event (form submit, checkout, resubscribe
-            // click) just happened. This sender does not second-guess that; the 150s
-            // throttle below is what bounds abuse.
-            //
-            // Sending never changes status: only the confirmation click does, in
-            // ExternalPages::confirmationPage(), which promotes ANY non-subscribed
-            // status and clears the soft-bounce counter. Gating this email on 'pending'
-            // made that recovery path unreachable for the very contacts it exists for.
+            // Any non-subscribed status may be re-invited; the 150s throttle bounds abuse.
             return false;
         }
 
@@ -1273,8 +1231,7 @@ class Subscriber extends Model
 
         $isSent = (new Handler())->sendDoubleOptInEmail($this);
 
-        // Consume the resend throttle only when an email actually went out — a refusal
-        // (e.g. missing opt-in subject/body config) must not block a corrected retry.
+        // The resend throttle is consumed only when an email actually went out.
         if ($isSent) {
             fluentcrm_update_subscriber_meta($this->id, '_last_double_optin_timestamp', time());
         }
@@ -1305,12 +1262,7 @@ class Subscriber extends Model
             return $this;
         }
 
-        // Guard against attaching to an unsaved Subscriber (id = 0 or unset).
-        // Without this, INSERT IGNORE would happily write a (0, X, 'Lists')
-        // garbage row and the contact_added_to_lists action would fire with
-        // $this->id = 0. Sanitize is also skipped because sanitizeListIds() can
-        // create new lists as a side effect, which we don't want to do for an
-        // invalid subscriber.
+        // Unsaved subscriber: skip before sanitizeListIds(), which can create lists.
         if (empty($this->id)) {
             return $this;
         }
@@ -1326,16 +1278,8 @@ class Subscriber extends Model
         $pivotTable = $wpdb->prefix . 'fc_subscriber_pivot';
         $objectType = 'FluentCrm\App\Models\Lists';
 
-        // Per-row INSERT IGNORE. The composite unique key on
-        // (subscriber_id, object_id, object_type) added in the SubscriberPivot
-        // migration makes this race-safe: when two concurrent integrations
-        // (e.g. WooCommerce + WP Fusion + LearnDash hooks all firing on the
-        // same enrollment) call attachLists() with the same pair, the second
-        // INSERT IGNORE gets rows_affected = 0 and we don't fire the
-        // contact_added_to_lists action for that ID — preventing the
-        // duplicate-event leak the customer was seeing.
-        // Timestamps use current_time('mysql') (WordPress site timezone) to
-        // match the ORM's freshTimestamp() convention used by historical rows.
+        // Per-row INSERT IGNORE on the unique pivot key; the event fires only for rows actually inserted.
+        // Timestamps use site time to match freshTimestamp().
         $now = current_time('mysql');
         $newListIds = [];
 
@@ -1344,11 +1288,7 @@ class Subscriber extends Model
                 "INSERT IGNORE INTO {$pivotTable} (subscriber_id, object_id, object_type, created_at, updated_at) VALUES (%d, %d, %s, %s, %s)",
                 $this->id, $listId, $objectType, $now, $now
             ));
-            // $wpdb->query() returns false on errors like deadlocks or lock-wait
-            // timeouts. PHP's `false > 0` is false, so without this check the
-            // failure would be silently treated as "row already existed" and we
-            // wouldn't fire contact_added_to_lists even when the row may have
-            // ultimately been written. Log and skip to surface the issue.
+            // false means a DB error (deadlock, lock wait), not an existing row.
             if ($affected === false) {
                 Helper::debugLog('Subscriber::attachLists pivot insert failed', $wpdb->last_error, 'error');
                 continue;
@@ -1358,17 +1298,12 @@ class Subscriber extends Model
             }
         }
 
-        // Always refresh the in-memory relationship so callers reusing this
-        // Subscriber instance see post-write state, even on the no-op path.
-        // Matches the original ORM-driven attach() behavior, which loaded
-        // upfront for the diff and reloaded after write.
+        // Always refresh the relation, even on the no-op path.
         $this->load('lists');
 
         if ($newListIds) {
             fluentcrm_contact_added_to_lists($newListIds, $this);
 
-            // The legacy helper above self-guards on FLUENTCRM_DISABLE_TAG_LIST_EVENTS;
-            // "import silently" must silence the modern hook variant too.
             if (!defined('FLUENTCRM_DISABLE_TAG_LIST_EVENTS')) {
                 do_action('fluent_crm/contact_added_to_lists', $this, $newListIds);
             }
@@ -1383,7 +1318,6 @@ class Subscriber extends Model
             return $this;
         }
 
-        // Guard against attaching to an unsaved Subscriber — see attachLists().
         if (empty($this->id)) {
             return $this;
         }
@@ -1399,7 +1333,6 @@ class Subscriber extends Model
         $pivotTable = $wpdb->prefix . 'fc_subscriber_pivot';
         $objectType = 'FluentCrm\App\Models\Tag';
 
-        // Per-row INSERT IGNORE — see attachLists() for the rationale.
         $now = current_time('mysql');
         $newTagIds = [];
 
@@ -1417,7 +1350,6 @@ class Subscriber extends Model
             }
         }
 
-        // Always refresh the relation — see attachLists() for rationale.
         $this->load('tags');
 
         if ($newTagIds) {
@@ -1437,7 +1369,6 @@ class Subscriber extends Model
             return $this;
         }
 
-        // Guard against attaching to an unsaved Subscriber — see attachLists().
         if (empty($this->id)) {
             return $this;
         }
@@ -1452,7 +1383,6 @@ class Subscriber extends Model
         $pivotTable = $wpdb->prefix . 'fc_subscriber_pivot';
         $objectType = 'FluentCrm\App\Models\Company';
 
-        // Per-row INSERT IGNORE — see attachLists() for the rationale.
         $now = current_time('mysql');
         $newCompanyIds = [];
 
@@ -1470,7 +1400,6 @@ class Subscriber extends Model
             }
         }
 
-        // Always refresh the relation — see attachLists() for rationale.
         $this->load('companies');
 
         if ($newCompanyIds) {
@@ -1486,9 +1415,6 @@ class Subscriber extends Model
             return $this;
         }
 
-        // Guard against detaching from an unsaved Subscriber — defensive, same
-        // pattern as the attach methods. With $this->id = 0 the SELECT would
-        // match any garbage rows the migration is supposed to have cleaned up.
         if (empty($this->id)) {
             return $this;
         }
@@ -1504,8 +1430,7 @@ class Subscriber extends Model
         $pivotTable = $wpdb->prefix . 'fc_subscriber_pivot';
         $objectType = 'FluentCrm\App\Models\Lists';
 
-        // Fresh DB read — bypass any stale relationship cached on $this — so we
-        // only consider list IDs that actually exist for this subscriber right now.
+        // Fresh DB read, not the cached relation.
         $placeholders = implode(',', array_fill(0, count($listIds), '%d'));
         $existingListIds = $wpdb->get_col($wpdb->prepare(
             "SELECT object_id FROM {$pivotTable} WHERE subscriber_id = %d AND object_type = %s AND object_id IN ({$placeholders})",
@@ -1519,11 +1444,7 @@ class Subscriber extends Model
             return $this;
         }
 
-        // Per-row DELETE so a concurrent detachLists() racing us against the
-        // same (subscriber, list) pair can be distinguished via rows_affected.
-        // The first DELETE removes the row and reports affected = 1; the
-        // second reports 0 and we skip firing the action — preventing the
-        // double-fire that would happen if we trusted our pre-DELETE diff.
+        // Per-row DELETE; the event fires only for rows this call actually removed.
         $removedListIds = [];
         foreach ($validListIds as $listId) {
             $affected = $wpdb->query($wpdb->prepare(
@@ -1539,7 +1460,6 @@ class Subscriber extends Model
             }
         }
 
-        // Always refresh the relation — see attachLists() for rationale.
         $this->load('lists');
 
         if ($removedListIds) {
@@ -1559,7 +1479,6 @@ class Subscriber extends Model
             return $this;
         }
 
-        // Guard against detaching from an unsaved Subscriber — see detachLists().
         if (empty($this->id)) {
             return $this;
         }
@@ -1575,7 +1494,6 @@ class Subscriber extends Model
         $pivotTable = $wpdb->prefix . 'fc_subscriber_pivot';
         $objectType = 'FluentCrm\App\Models\Tag';
 
-        // Fresh DB read — see detachLists() for rationale.
         $placeholders = implode(',', array_fill(0, count($tagsIds), '%d'));
         $existingTagIds = $wpdb->get_col($wpdb->prepare(
             "SELECT object_id FROM {$pivotTable} WHERE subscriber_id = %d AND object_type = %s AND object_id IN ({$placeholders})",
@@ -1589,7 +1507,6 @@ class Subscriber extends Model
             return $this;
         }
 
-        // Per-row DELETE with rows_affected check — see detachLists().
         $removedTagIds = [];
         foreach ($validTagIds as $tagId) {
             $affected = $wpdb->query($wpdb->prepare(
@@ -1605,7 +1522,6 @@ class Subscriber extends Model
             }
         }
 
-        // Always refresh the relation — see attachLists() for rationale.
         $this->load('tags');
 
         if ($removedTagIds) {
@@ -1625,7 +1541,6 @@ class Subscriber extends Model
             return $this;
         }
 
-        // Guard against detaching from an unsaved Subscriber — see detachLists().
         if (empty($this->id)) {
             return $this;
         }
@@ -1640,7 +1555,6 @@ class Subscriber extends Model
         $pivotTable = $wpdb->prefix . 'fc_subscriber_pivot';
         $objectType = 'FluentCrm\App\Models\Company';
 
-        // Fresh DB read — see detachLists() for rationale.
         $placeholders = implode(',', array_fill(0, count($companyIds), '%d'));
         $existingCompanyIds = $wpdb->get_col($wpdb->prepare(
             "SELECT object_id FROM {$pivotTable} WHERE subscriber_id = %d AND object_type = %s AND object_id IN ({$placeholders})",
@@ -1654,7 +1568,6 @@ class Subscriber extends Model
             return $this;
         }
 
-        // Per-row DELETE with rows_affected check — see detachLists().
         $removedCompanyIds = [];
         foreach ($validCompanyIds as $companyId) {
             $affected = $wpdb->query($wpdb->prepare(
@@ -1670,7 +1583,6 @@ class Subscriber extends Model
             }
         }
 
-        // Always refresh the relation — see attachLists() for rationale.
         $this->load('companies');
 
         if ($removedCompanyIds) {
@@ -1687,8 +1599,12 @@ class Subscriber extends Model
 
     public function unsubscribeReasonDate($metaKey = 'unsubscribe_reason')
     {
+        // Exclude custom fields that share the meta key.
         $item = SubscriberMeta::where('key', $metaKey)
             ->where('subscriber_id', $this->id)
+            ->where(function ($q) {
+                $q->whereNull('object_type')->orWhere('object_type', '!=', 'custom_field');
+            })
             ->first();
 
         if ($item) {
@@ -1745,10 +1661,7 @@ class Subscriber extends Model
             $exist->save();
             return true;
         }
-        // created_by is NOT NULL with no default. Omitting it only survives where
-        // STRICT_TRANS_TABLES is off; on MySQL 8 defaults the insert is rejected,
-        // which broke the unauthenticated preference form. Mirrors the value
-        // syncCustomFieldValues() already writes — 0 for a public, signed-out write.
+        // created_by is NOT NULL with no default; strict SQL mode rejects an insert without it.
         $this->meta()->create([
             'key'         => $metaKey,
             'object_type' => $objectType,
@@ -1818,8 +1731,7 @@ class Subscriber extends Model
                 $filter['operator'] = 'BETWEEN';
                 $filter['value'] = [
                     gmdate('Y-m-d 00:00:01', current_time('timestamp') - $daysToSeconds),
-                    // Site-local "today" like the lower bound — a bare gmdate() uses the
-                    // UTC day, which excludes rows created today for positive UTC offsets.
+                    // Site-local "today", matching the lower bound.
                     gmdate('Y-m-d 23:59:59', current_time('timestamp'))
                 ];
                 break;
@@ -1843,6 +1755,7 @@ class Subscriber extends Model
             }
             $query->where($referenceColumn, $operator, $filter['value']);
         } else {
+            $rawValue = $filter['value'];
             $filter = self::filterParser($filter);
 
             if ($filter['operator'] != $operator) {
@@ -1852,17 +1765,20 @@ class Subscriber extends Model
                 } elseif ($newOperator == 'LIKE' || $newOperator == 'NOT LIKE') {
                     $query->where($referenceColumn, $newOperator, '%' . $filter['value'] . '%');
                 } else {
-                    // Date operators (before/after/date_equal/days_before/days_within) are
-                    // already normalized by filterParser() into '<' / '>' with a datetime
-                    // string value. A plain where() is correct here — the previous
-                    // whereTimestamp() call was a phantom method that the WPFluent
-                    // dynamic-where __call magic silently rewrote to
-                    // `WHERE timestamp = '<column>'`, producing a SQL error.
-                    $query->where($referenceColumn, $newOperator, $filter['value']);
+                    // Date operators arrive normalized by filterParser() to '<' / '>' with a datetime value.
+                    $value = $filter['value'];
+                    // Custom field values are stored as 'Y-m-d' text: compare with the bare date, or
+                    // '2026-10-03' < '2026-10-03 00:00:00' puts day X itself "before X".
+                    if ($referenceColumn === 'value' && is_string($rawValue) && preg_match('/^\d{4}-\d{2}-\d{2}$/', trim($rawValue))) {
+                        $value = trim($rawValue);
+                    }
+                    $query->where($referenceColumn, $newOperator, $value);
                 }
             } else {
-                $filter['value'] = sanitize_text_field($filter['value']);
-                $query->where($referenceColumn, $operator, '%' . $filter['value'] . '%');
+                // Build from the raw value; sanitizing the %-wrapped value strips "%50" as a URL-encoded byte.
+                global $wpdb;
+                $value = sanitize_text_field(is_scalar($rawValue) ? (string)$rawValue : '');
+                $query->where($referenceColumn, $operator, '%' . $wpdb->esc_like($value) . '%');
             }
         }
 
@@ -1871,11 +1787,7 @@ class Subscriber extends Model
 
     /**
      * Build the inclusive end-of-day bound for "last activity" date filters.
-     *
-     * Activity filters first normalize before/date_equal/days_before into a date
-     * comparison, then add a second "no newer activity exists" condition. Always
-     * derive that second bound from the normalized date so relative-day values
-     * like "30" cannot leak into TIMESTAMP comparisons.
+     * Derived from the normalized date so relative-day values never reach TIMESTAMP comparisons.
      *
      * @param array $filter
      * @return string|false
@@ -1972,6 +1884,20 @@ class Subscriber extends Model
 
             return $query;
         });
+    }
+
+    /**
+     * LIKE pattern matching one whole quoted element of a JSON-encoded string list.
+     *
+     * @param string|int $value One list element, as the filter UI sends it.
+     * @return string
+     */
+    private static function jsonListElementPattern($value)
+    {
+        global $wpdb;
+
+        // Writers store the list with plain json_encode(), so encode the needle the same way.
+        return '%' . $wpdb->esc_like(json_encode((string)$value)) . '%';
     }
 
     /**
@@ -2074,6 +2000,24 @@ class Subscriber extends Model
                 $method = $childTaxMaps[$operator];
                 $checkAll = in_array($operator, ['in_all', 'not_in_all']);
 
+                // The selector stores term ids; the item taxonomies relation holds term_taxonomy_ids,
+                // which differ on most older sites.
+                $termIds = array_values(array_unique(array_map('intval', (array)$filter['value'])));
+                $filter['value'] = fluentCrmDb()->table('term_taxonomy')
+                    ->whereIn('term_id', $termIds)
+                    ->pluck('term_taxonomy_id')
+                    ->toArray();
+                // "All of" needs every selected term: a deleted one stays as a value nothing has,
+                // so the rule cannot quietly become "all of the remaining ones".
+                if ($checkAll) {
+                    for ($missing = count($termIds) - count($filter['value']); $missing > 0; $missing--) {
+                        $filter['value'][] = 0;
+                    }
+                }
+                if (!$filter['value']) {
+                    $filter['value'] = [0];
+                }
+
                 if ($checkAll) {
                     $query = static::buildChildRelationFilterQuery('commerce_by_provider', 'taxonomies', $query, $method, 'term_taxonomy_id', $filter['value'], $checkAll, $provider);
                 } else {
@@ -2085,7 +2029,13 @@ class Subscriber extends Model
 
         if (array_key_exists('contactCommerceIn', $filters)) {
             foreach ($filters['contactCommerceIn'] as $filter) {
-                $filter['value'] = (array)$filter['value'];
+                $filter['value'] = array_values(array_filter((array)$filter['value'], function ($value) {
+                    return is_scalar($value) && (string)$value !== '';
+                }));
+                // A row with nothing selected adds no constraint, as for the taxonomy filters above.
+                if (!$filter['value']) {
+                    continue;
+                }
 
                 $method = in_array($filter['operator'], ['in', 'in_all']) ? 'whereHas' : 'whereDoesntHave';
 
@@ -2094,12 +2044,8 @@ class Subscriber extends Model
                         $contactCommerceQuery
                             ->where('provider', $provider)
                             ->where(function ($query) use ($filter) {
-                                $firstVal = array_shift($filter['value']);
-                                $operator = 'LIKE';
-
-                                $query->where($filter['property'], $operator, '%' . $firstVal . '%');
                                 foreach ($filter['value'] as $value) {
-                                    $query->orWhere($filter['property'], $operator, '%' . $value . '%');
+                                    $query->orWhere($filter['property'], 'LIKE', static::jsonListElementPattern($value));
                                 }
                             });
 
@@ -2109,7 +2055,7 @@ class Subscriber extends Model
                         $query->{$method}('contact_commerce', function ($contactCommerceQuery) use ($filter, $value, $provider) {
                             $contactCommerceQuery
                                 ->where('provider', $provider)
-                                ->where($filter['property'], 'LIKE', '%' . $value . '%');
+                                ->where($filter['property'], 'LIKE', static::jsonListElementPattern($value));
                         });
                     }
                 }
@@ -2191,13 +2137,8 @@ class Subscriber extends Model
                     continue;
                 }
 
-                // created_at/last_activity are TIMESTAMP and date_of_birth is DATE.
-                // Comparing those columns to an empty string forces MySQL to coerce
-                // '' into a TIMESTAMP/DATE and throws "Incorrect TIMESTAMP value: ''".
-                // The zero-date guard is done as a CHAR comparison because a bare
-                // `!= '0000-00-00'` literal itself raises ER 1525 under MySQL 8
-                // strict/NO_ZERO_DATE modes. $filter['property'] is whitelisted via
-                // $dateFields above, so embedding it in raw SQL is safe.
+                // Zero-date guard compares as CHAR; a '0000-00-00' literal raises ER 1525 under NO_ZERO_DATE.
+                // The property is whitelisted by $dateFields.
                 $query = $query->where(function ($q) use ($filter) {
                     $q->whereNotNull($filter['property'])
                         ->whereRaw('CAST(`' . $filter['property'] . '` AS CHAR) NOT LIKE \'0000-00-00%\'');
@@ -2218,7 +2159,11 @@ class Subscriber extends Model
                     $searchTerm = (array)$searchTerm;
                 }
                 if ($searchTerm) {
-                    $query = $query->whereNotIn($filter['property'], $searchTerm);
+                    // An empty (NULL) field is "not in" any list, as in automation conditions.
+                    $query = $query->where(function ($q) use ($filter, $searchTerm) {
+                        $q->whereNull($filter['property'])
+                            ->orWhereNotIn($filter['property'], $searchTerm);
+                    });
                 }
             } else if ($operator == 'is_null') {
                 $query = $query->where(function ($q) use ($filter) {
@@ -2229,6 +2174,12 @@ class Subscriber extends Model
                 $query = $query->where(function ($q) use ($filter) {
                     return $q->whereNotNull($filter['property'])
                         ->where($filter['property'], '!=', '');
+                });
+            } else if ($operator == '!=' || $operator == 'NOT LIKE') {
+                // NULL != 'x' and NULL NOT LIKE '%x%' are not true in SQL; an empty field does not match.
+                $query = $query->where(function ($q) use ($filter, $operator, $searchTerm) {
+                    $q->whereNull($filter['property'])
+                        ->orWhere($filter['property'], $operator, $searchTerm);
                 });
             } else {
                 $query = $query->where($filter['property'], $operator, $searchTerm);
@@ -2278,13 +2229,7 @@ class Subscriber extends Model
         foreach ($filters as $filter) {
             $prop = $filter['property'];
 
-            /*
-             * Existence operators ("has none" / "has any") carry no value, so they
-             * must be handled before the empty-value guard below. has() with a
-             * count comparison mirrors the company_industry handling further down
-             * and respects each relation's pivot object_type scope on
-             * fc_subscriber_pivot.
-             */
+            // Existence operators carry no value, so they run before the empty-value guard.
             if (in_array($filter['operator'], ['is_null', 'not_null']) && in_array($prop, ['tags', 'lists', 'companies'])) {
                 $countOperator = $filter['operator'] == 'is_null' ? '<' : '>=';
                 $query = $query->has($prop, $countOperator, 1);
@@ -2306,7 +2251,8 @@ class Subscriber extends Model
                     $query = static::buildRelationFilterQuery($filter['property'], $query, $method, $subMethod, 'object_id', $filter);
                 }
             } else if ($prop == 'user_role') {
-                $userRole = esc_sql($filter['value']);
+                global $wpdb;
+                $userRole = $wpdb->esc_like((string)$filter['value']);
 
                 $operator = $filter['operator'];
                 $method = ($operator == 'in' || $operator == 'contains') ? 'whereHas' : 'whereDoesntHave';
@@ -2316,7 +2262,7 @@ class Subscriber extends Model
                         global $wpdb;
                         return $subQuery->select(fluentCrmDb()->raw(1))
                             ->from('usermeta')
-                            ->whereRaw("{$wpdb->prefix}usermeta.user_id = {$wpdb->prefix}users.ID")
+                            ->whereRaw("{$wpdb->usermeta}.user_id = {$wpdb->users}.ID")
                             ->where('usermeta.meta_key', '=', $wpdb->prefix . 'capabilities')
                             ->where('usermeta.meta_value', 'LIKE', '%"' . $userRole . '"%');
                     });
@@ -2333,8 +2279,6 @@ class Subscriber extends Model
                     $q->whereIn('industry', $values);
                 });
             } else if ($prop == 'company_type') {
-                // $operator must be read from THIS filter — without the assignment it
-                // holds whatever leaked from a previous iteration and "not in" inverts.
                 $operator = $filter['operator'];
                 $queryOperator = '>=';
                 if ($operator == 'not_in') {
@@ -2345,18 +2289,7 @@ class Subscriber extends Model
                     $q->whereIn('type', $values);
                 });
             } else if (!in_array($prop, $this->fillable, true)) {
-                /*
-                 * A segment row whose property is not a subscribers column was
-                 * put in this group by another plugin through
-                 * fluentcrm_advanced_filter_options, and only that plugin can
-                 * constrain the query — the data lives in its tables. Hand the
-                 * row to its owner, and fail closed when nobody claims it:
-                 * ContactsQuery already compiles an unregistered provider to
-                 * `1 = 0` for the same reason, and a row that cannot be applied
-                 * must never widen a campaign's audience to everyone. This also
-                 * keeps an arbitrary request-supplied property out of the column
-                 * comparison below.
-                 */
+                // A non-column property belongs to the plugin that registered it; fail closed when unclaimed.
                 if (has_action('fluent_crm/contacts_filter_segment_' . $prop)) {
                     do_action_ref_array('fluent_crm/contacts_filter_segment_' . $prop, [&$query, $filter]);
                 } else {
@@ -2393,8 +2326,7 @@ class Subscriber extends Model
                 && in_array(Arr::get($filter, 'operator'), $numericOperators, true);
             $value = Arr::get($filter, 'value');
 
-            // Fail the whole AND group before the inverted != branch can turn an
-            // invalid threshold into a match for every contact.
+            // An invalid numeric threshold fails the whole AND group.
             if ($isNumericFilter && (!is_scalar($value) || !is_numeric(trim((string)$value)))) {
                 return $query->whereRaw('1 = 0');
             }
@@ -2435,11 +2367,7 @@ class Subscriber extends Model
                     $customFieldQuery->where('key', $filter['property']);
                     $operator = self::parseCustomFieldsFilterOperator($filter);
                     if (is_array($filter['value'])) {
-                        // Multi-value fields store a PHP-serialized array, scalars store
-                        // plain text. Match either the exact scalar or the QUOTED item
-                        // inside the serialized blob — a bare '%val%' substring makes
-                        // option "Red" match "Dark Red" and "10" match "100", and an
-                        // unescaped %/_ in the option behaves as a wildcard.
+                        // Match the exact scalar or the quoted item inside a serialized multi-value array.
                         $customFieldQuery->where(function ($valueQuery) use ($filter) {
                             global $wpdb;
                             $first = true;
@@ -2586,9 +2514,10 @@ class Subscriber extends Model
 
             $relation = 'campaignEmails';
 
+            // Bounced emails were sent too (CampaignEmail::SENT_STATUSES).
             $filter['where'] = [
                 'prop'  => 'status',
-                'value' => 'sent',
+                'value' => CampaignEmail::SENT_STATUSES,
                 'field' => 'scheduled_at'
             ];
 
@@ -2690,7 +2619,11 @@ class Subscriber extends Model
             $filter = static::filterParser($filter);
 
             $query->whereHas($relation, function ($campaignEmailQuery) use ($filter, $relation) {
-                $campaignEmailQuery->where($filter['where']['prop'], $filter['where']['value']);
+                if (is_array($filter['where']['value'])) {
+                    $campaignEmailQuery->whereIn($filter['where']['prop'], $filter['where']['value']);
+                } else {
+                    $campaignEmailQuery->where($filter['where']['prop'], $filter['where']['value']);
+                }
                 if ($filter['operator'] == 'BETWEEN') {
                     $campaignEmailQuery->whereBetween($filter['where']['field'], $filter['value']);
                 } else {
@@ -2726,7 +2659,7 @@ class Subscriber extends Model
 
         if ($activityName == 'email_sent') {
             $lastEmail = CampaignEmail::where('subscriber_id', $this->id)
-                ->where('status', 'sent')
+                ->whereIn('status', CampaignEmail::SENT_STATUSES)
                 ->orderBy('scheduled_at', 'DESC')
                 ->first();
             if ($lastEmail) {

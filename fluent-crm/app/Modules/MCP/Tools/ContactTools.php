@@ -5,38 +5,24 @@ namespace FluentCrm\App\Modules\MCP\Tools;
 use FluentCrm\App\Models\Subscriber;
 use FluentCrm\App\Modules\MCP\Helpers\AdvancedFilters;
 use FluentCrm\App\Modules\MCP\Helpers\MCPHelper;
+use FluentCrm\App\Services\Sanitize;
 use FluentCrm\App\Services\ContactsQuery;
 use FluentCrm\App\Services\Helper;
 use FluentCrm\Framework\Support\Arr;
 
 /**
  * Contact-centric MCP tools.
- *
- * Read tools (Phase 2): listContacts, getContact.
- * Write tools (Phase 3): upsertContact, bulkUpsertContacts, deleteContact,
- * applySegmentsToContacts, addContactNote.
- *
- * Each method delegates to existing FluentCRM services (ContactsQuery,
- * Subscriber model, Helper::deleteContacts, etc.) — no business-logic
- * duplication — and shapes the result through MCPHelper formatters.
  */
 class ContactTools
 {
     /**
-     * Ceiling on one bulk row's tags[] / lists[]. A contact carrying more
-     * segments than this is a malformed row, not a real one.
+     * Ceiling on one bulk row's tags[] / lists[].
      */
     const MAX_SEGMENT_REFS_PER_ROW = 100;
 
     /**
-     * Ceiling on DISTINCT tag+list references across a whole bulk call. Bulk
-     * defaults auto_create to true, so without this a single request could
-     * mint a segment per distinct value of a mis-mapped column.
-     *
-     * Matches MCPHelper::MAX_SEGMENT_REFS. Deliberately well below the
-     * 500-contact cap: a real import draws its tags from a small controlled
-     * vocabulary, so needing more than this many DISTINCT segments in one
-     * batch is the signature of a mapping mistake rather than of intent.
+     * Ceiling on distinct tag+list references across a whole bulk call.
+     * Bounds auto_create from minting a segment per value of a mis-mapped column.
      */
     const MAX_BULK_SEGMENT_REFS = 100;
 
@@ -48,8 +34,6 @@ class ContactTools
     {
         $params = (array) $params;
 
-        // Reject up front if the caller passed an unsupported advanced_filters
-        // shape — round-2 review #3.
         $validation = MCPHelper::validateUniversalFilter($params);
         if (is_wp_error($validation)) {
             return $validation;
@@ -70,12 +54,7 @@ class ContactTools
 
         $out = MCPHelper::formatContactList($paginated, !empty($params['include_custom_fields']));
 
-        // Which of the requested addresses have no contact record at all.
-        // Resolved with its own indexed lookup rather than by diffing the
-        // current page, so the answer is the same on page 1 and page 3. Note
-        // the deliberate semantics: this reports addresses that do not exist
-        // in the CRM, NOT ones excluded by the other filters — a contact that
-        // exists but lacks the requested tag is filtered out, not missing.
+        // not_found lists requested addresses with no contact record, not ones excluded by other filters.
         if (!empty($params['emails'])) {
             $requested = MCPHelper::normalizeEmailList($params['emails']);
             $existing  = array_map('strtolower', Subscriber::whereIn('email', $requested)->pluck('email')->toArray());
@@ -85,9 +64,7 @@ class ContactTools
             }
         }
 
-        // Non-fatal advisories from advanced_filters normalization (values
-        // outside a documented option set, etc.). normalize() is memoized,
-        // so this re-read costs nothing.
+        // Non-fatal advisories from advanced_filters normalization. normalize() is memoized.
         if (!empty($params['advanced_filters'])) {
             $normalized = AdvancedFilters::normalize($params['advanced_filters']);
             if (!is_wp_error($normalized) && !empty($normalized['warnings'])) {
@@ -103,9 +80,7 @@ class ContactTools
     // -----------------------------------------------------------------
 
     /**
-     * Serve the advanced_filters reference on demand — progressive
-     * disclosure so the (large) filter catalog never bloats the input
-     * schema of every list tool. See AdvancedFilters::schema().
+     * Serve the advanced_filters reference on demand.
      */
     public static function getFilterSchema($params = [])
     {
@@ -122,20 +97,13 @@ class ContactTools
 
         $defaultIncludes = ['notes', 'email_history', 'automations'];
         $allowedIncludes = ['notes', 'email_history', 'automations', 'activity', 'purchase_history', 'support_tickets', 'info_widgets'];
-        // array_key_exists (not truthiness): omitted => defaults, [] =>
-        // metadata only, explicit list => exactly those sections (TRC-005).
+        // Omitted => defaults, [] => metadata only, explicit list => exactly those sections.
         if (array_key_exists('include', $params) && is_array($params['include'])) {
             $include = array_values(array_intersect($params['include'], $allowedIncludes));
         } else {
             $include = $defaultIncludes;
         }
 
-        // Token-bounding controls for the rich collections (OPT-002).
-        // Resolve the default BEFORE the enum test: the ternary form read
-        // $params['body_format'] on the true branch even when the key was
-        // absent, emitting an "Undefined array key" warning on every default
-        // call. With display_errors on that notice lands in the response body
-        // ahead of the JSON envelope and corrupts the tool result.
         $bodyFormat = $params['body_format'] ?? 'text';
         if (!in_array($bodyFormat, ['text', 'html', 'both'], true)) {
             $bodyFormat = 'text';
@@ -163,9 +131,9 @@ class ContactTools
 
         if (!$subscriber) {
             if (!$contactId && !$email) {
-                return MCPHelper::error('invalid_param', __('Provide contact_id or email', 'fluent-crm'));
+                return MCPHelper::error('invalid_param', 'Provide contact_id or email');
             }
-            return MCPHelper::error('not_found', __('Contact not found', 'fluent-crm'), array_filter([
+            return MCPHelper::error('not_found', 'Contact not found', array_filter([
                 'contact_id' => $contactId ?: null,
                 'email'      => $email ?: null,
             ]));
@@ -173,7 +141,6 @@ class ContactTools
 
         $data = MCPHelper::formatContactForMCP($subscriber, $profileOpts);
 
-        // Defaults already inlined by formatContactForMCP — fill the optional ones.
         if (in_array('activity', $include, true)) {
             $data['activity'] = self::buildActivityTimeline($subscriber);
         }
@@ -190,8 +157,6 @@ class ContactTools
             $data['info_widgets'] = self::buildInfoWidgets($subscriber);
         }
 
-        // Status-related context — surfaced inline so the agent can see why a
-        // contact is unsubscribed without an extra call.
         if (in_array($subscriber->status, ['unsubscribed', 'bounced', 'complained', 'spammed'], true)) {
             $data['unsubscribe_reason'] = method_exists($subscriber, 'unsubscribeReason')
                 ? $subscriber->unsubscribeReason()
@@ -202,17 +167,8 @@ class ContactTools
     }
 
     /**
-     * Activity timeline = tracked events. Wrapped in an availability marker
-     * so an empty result is distinguishable from "the feature is off" —
-     * a silent [] reads as "this contact never did anything", which is
-     * misleading when event tracking simply isn't enabled (MCP feedback
-     * 2026-07, P1 #2 class of issue).
-     *
-     * The fc_event_tracking table is created by the free plugin's migrations
-     * but may not exist on legacy installs that never ran the migration.
-     * Probe with SHOW TABLES so we never trigger wpdb's print_error (which
-     * leaks HTML into the response body before the JSON envelope, even when
-     * the exception is caught).
+     * Tracked events for a contact, with an availability marker so "feature off" differs from "no events".
+     * Probes for the table first: legacy installs may lack it, and wpdb's print_error leaks HTML.
      */
     private static function buildActivityTimeline($subscriber)
     {
@@ -269,17 +225,8 @@ class ContactTools
     }
 
     /**
-     * Orders across every purchase-history integration active on this
-     * install — the same provider registry + per-provider filter chain the
-     * contact-profile "Purchase History" tab uses (FluentCart, WooCommerce,
-     * EDD, Paymattic, PMPro, plus Pro's SureCart/Voxel). The previous
-     * implementation asked `fluentcrm_commerce_provider` (Pro Woo/EDD
-     * commerce sync only, summary rows not orders), so FluentCart installs
-     * always got a silent [] — MCP feedback 2026-07, P1 #2.
-     *
-     * When no provider plugin is active the response says so explicitly:
-     * an empty array here reads as "never bought anything", which is
-     * actively misleading when the store lives on another install.
+     * Orders across every purchase-history provider, as on the contact-profile Purchase History tab.
+     * Reports explicitly when no provider is active.
      */
     private static function buildPurchaseHistory($subscriber)
     {
@@ -306,9 +253,7 @@ class ContactTools
                 'total' => 0,
             ], $subscriber);
 
-            // Producers return rows under 'data'; the REST controller's
-            // legacy seed used 'orders' — accept either for third-party
-            // providers built against that shape.
+            // Rows arrive under 'data', or 'orders' for legacy third-party providers.
             $orders = Arr::get($data, 'data', []) ?: Arr::get($data, 'orders', []);
 
             $out[$key] = [
@@ -325,12 +270,7 @@ class ContactTools
     }
 
     /**
-     * Tickets across every helpdesk integration, via the same provider
-     * registry the contact-profile "Support Tickets" tab uses. The previous
-     * implementation applied `fluentcrm_get_support_tickets`, a filter no
-     * plugin has ever hooked (Fluent Support hooks the per-provider
-     * `fluentcrm-get_support_tickets_{provider}`) — MCP feedback 2026-07,
-     * P1 #2.
+     * Tickets across every helpdesk provider, as on the contact-profile Support Tickets tab.
      */
     private static function buildSupportTickets($subscriber)
     {
@@ -371,15 +311,7 @@ class ContactTools
     }
 
     /**
-     * Sidebar widgets integrations push onto the contact profile (LMS
-     * enrollments, membership levels, form submissions, event tracking,
-     * FluentCart summary, etc.). Canonical filter is
-     * `fluent_crm/subscriber_info_widgets` — the previous implementation
-     * applied `fluent_crm/contact_info_widgets`, which nothing hooks.
-     *
-     * Widget content arrives as admin HTML; it is flattened to plain text
-     * for the agent. An empty list is ambiguous by design of the filter
-     * (no producers vs. no data for this contact), so the note says so.
+     * Contact-profile sidebar widgets from integrations, flattened to plain text.
      */
     private static function buildInfoWidgets($subscriber)
     {
@@ -408,9 +340,7 @@ class ContactTools
     }
 
     /**
-     * Flatten the admin-list HTML rows the integration filters return
-     * (badge <span>s, action-link <svg>s) into plain-text cells an agent
-     * can read. Pure-UI cells (action buttons) are dropped entirely.
+     * Flatten integration HTML rows into plain-text cells, dropping action cells.
      */
     private static function normalizeIntegrationRows($rows, $limit = 10)
     {
@@ -443,9 +373,7 @@ class ContactTools
     }
 
     /**
-     * Strip markup but keep adjacent values readable — a space is injected
-     * at tag boundaries first so "<span>#12</span><span>May 5</span>"
-     * becomes "#12 May 5" instead of "#12May 5".
+     * Strip markup, inserting a space at tag boundaries so adjacent values stay separate.
      */
     private static function htmlToText($html)
     {
@@ -453,19 +381,12 @@ class ContactTools
             return '';
         }
         $text = wp_strip_all_tags(str_replace('<', ' <', $html));
-        // Currency signs etc. arrive as entities ("&#36;100.00") — decode so
-        // the agent reads "$100.00".
         $text = html_entity_decode($text, ENT_QUOTES | ENT_HTML5, 'UTF-8');
         return trim(preg_replace('/\s+/', ' ', $text));
     }
 
     /**
-     * The explicit top-level contact columns the MCP write contract accepts.
-     * Everything else in the Subscriber model's fillable list — user_id,
-     * company_id, ip, latitude/longitude,
-     * life_time_value, total_points, created_at/updated_at — is NOT an MCP
-     * input and must be dropped, never overposted (SEC-001). Single and bulk
-     * upsert share this list so their write contract can never diverge.
+     * Top-level contact columns the MCP write tools accept. Other fillable columns are never written.
      *
      * @return string[]
      */
@@ -487,19 +408,29 @@ class ContactTools
         $newEmail  = isset($params['new_email']) ? sanitize_email($params['new_email']) : '';
 
         if (!$contactId && !$email) {
-            return MCPHelper::error('invalid_param', __('Provide contact_id or email', 'fluent-crm'));
+            return MCPHelper::error('invalid_param', 'Provide contact_id or email');
         }
 
         $existing = null;
         if ($contactId) {
             $existing = Subscriber::find($contactId);
             if (!$existing) {
-                return MCPHelper::error('not_found', __('Contact not found', 'fluent-crm'), ['contact_id' => $contactId]);
+                return MCPHelper::error('not_found', 'Contact not found', ['contact_id' => $contactId]);
             }
-            // Lookup-by-id with email mismatch is fine — id wins.
+            // contact_id wins over email.
             $email = $existing->email;
         } else {
             $existing = Subscriber::where('email', $email)->first();
+        }
+
+        // new_email renames an existing contact. Without a match it was ignored and a new
+        // contact was created at the old address, the opposite of what the caller asked.
+        if (!$existing && $newEmail) {
+            return MCPHelper::error('not_found', 'No contact has this email, so there is nothing to rename. new_email only changes the address of an existing contact.', [
+                'email'     => $email,
+                'new_email' => $newEmail,
+                'next_step' => 'Find the contact with list-contacts emails=[...] or get-contact, then call again with its contact_id and new_email.',
+            ]);
         }
 
         $ifExists = $params['if_exists'] ?? 'merge';
@@ -512,73 +443,61 @@ class ContactTools
             ];
         }
         if ($existing && $ifExists === 'error') {
-            return MCPHelper::error('contact_exists', __('A contact with this email already exists', 'fluent-crm'), [
+            return MCPHelper::error('contact_exists', 'A contact with this email already exists', [
                 'id' => (int) $existing->id,
             ]);
         }
 
-        // Re-check the escalating capability if the agent asked us to create
-        // missing tags/lists — defense in depth, even though the
-        // permission_callback already enforced the base cap.
+        // Creating tags/lists needs an extra capability.
         $autoCreateTags  = !empty($params['auto_create_tags']);
         $autoCreateLists = !empty($params['auto_create_lists']);
         if (($autoCreateTags || $autoCreateLists)
             && !\FluentCrm\App\Services\PermissionManager::currentUserCan('fcrm_manage_contact_cats')) {
-            return MCPHelper::error('forbidden', __('Creating new tags/lists requires fcrm_manage_contact_cats', 'fluent-crm'));
+            return MCPHelper::error('forbidden', 'Creating new tags/lists requires fcrm_manage_contact_cats');
         }
 
-        // =================================================================
-        // VALIDATION PHASE — every check that can reject the request runs
-        // BEFORE any write. Nothing above this point mutates data, and nothing
-        // below the WRITE PHASE marker runs until all of these pass. This
-        // guarantees a late failure can never leave an orphaned tag or a
-        // half-renamed contact behind (TRC-001).
-        // =================================================================
+        // Validation phase: every rejecting check runs before any write.
 
-        // Invalid status is a hard error, not a silent drop. A single upsert
-        // that returned success while ignoring the requested status would make
-        // the agent believe the state changed (TRC-002). Bulk keeps a per-row
-        // warning instead because it is a partial-batch API.
+        // Invalid status is a hard error here; bulk upsert warns per row instead.
         if (array_key_exists('status', $params) && $params['status'] !== null && $params['status'] !== ''
-            && !in_array($params['status'], fluentcrm_subscriber_statuses(), true)) {
-            return MCPHelper::error('invalid_param', __('status is not a recognized contact status.', 'fluent-crm'), [
+            && Sanitize::contactStatus($params['status']) === null) {
+            return MCPHelper::error('invalid_param', 'status is not a recognized contact status.', [
                 'status'  => $params['status'],
                 'allowed' => array_values(fluentcrm_subscriber_statuses()),
             ]);
         }
 
-        // Validate custom-field slugs against the registered schema up-front.
-        // Unknown keys would otherwise be silently dropped (operator-test
-        // report 2026-05-07 #6) — fail closed so the agent can correct the
-        // slug or read the schema. Keep the known subset for the payload.
+        // Unknown custom-field slugs are rejected rather than silently dropped.
         $customValues = null;
         if (!empty($params['custom_fields']) && is_array($params['custom_fields'])) {
             $diff = MCPHelper::diffCustomFields($params['custom_fields']);
             if (!empty($diff['unknown'])) {
-                return MCPHelper::error('invalid_param', __('custom_fields contains slugs not in the contact custom-field schema. Refusing — silent-dropping makes the agent think the value persisted.', 'fluent-crm'), [
+                return MCPHelper::error('invalid_param', 'custom_fields contains slugs not in the contact custom-field schema. Refusing: silently dropping them would make the agent think the values persisted.', [
                     'unknown_custom_field_slugs' => $diff['unknown'],
                     'allowed_custom_field_slugs' => MCPHelper::knownContactCustomFieldSlugs(),
-                    'tip' => 'Call get-crm-context and read enums.custom_fields_schema (or call options for the live registry) before retrying.',
+                    'tip' => 'Call get-crm-context with include=["custom_fields"] and read the top-level custom_fields_schema before retrying.',
                 ]);
             }
             $customValues = $diff['known'];
         }
 
-        // Reject unrecognized address keys before any write (TRC-006). A typo
-        // like address.zip would otherwise be silently dropped by
-        // applyAddressShape. Present-but-non-object also hard-errors.
+        // Checked before any write: a malformed date would wipe the birthday or fail the call.
+        if (isset($params['date_of_birth']) && $params['date_of_birth'] !== '' && \FluentCrm\App\Services\Helper::normalizeDateOfBirth($params['date_of_birth']) === false) {
+            return MCPHelper::error('invalid_param', 'date_of_birth must be a real date in YYYY-MM-DD.', [
+                'received' => (string) $params['date_of_birth'],
+            ]);
+        }
+
         $addressError = MCPHelper::validateClosedShape($params, 'address', self::addressAllowedKeys());
         if (is_wp_error($addressError)) {
             return $addressError;
         }
 
-        // Email-rename target must be free. Read-only pre-check; the rename
-        // itself happens in the WRITE PHASE. Ruling this out here means a clash
-        // cannot strand auto-created tags.
+        // Email-rename target must be free.
         if ($existing && $newEmail && $newEmail !== $existing->email) {
             $clash = Subscriber::where('email', $newEmail)->where('id', '!=', $existing->id)->first();
             if ($clash) {
-                return MCPHelper::error('contact_exists', __('Another contact already uses the new_email — refusing to merge silently. Resolve manually or pick a different new_email.', 'fluent-crm'), [
+                return MCPHelper::error('contact_exists', 'Another contact already uses the new_email; refusing to merge silently. Resolve manually or pick a different new_email.', [
                     'new_email'   => $newEmail,
                     'conflict_id' => (int) $clash->id,
                     'subject_id'  => (int) $existing->id,
@@ -586,47 +505,29 @@ class ContactTools
             }
         }
 
-        // =================================================================
-        // WRITE PHASE — every mutation lives below this marker.
-        // =================================================================
+        if ($unknownError = self::unknownSegmentsError($params, $autoCreateTags, $autoCreateLists)) {
+            return $unknownError;
+        }
 
-        // Capture the pre-rename / pre-update snapshot fields BEFORE any
-        // mutation. The rename block below sets $existing->email to the new
-        // value, so reading $existing->email after that point would return the
-        // new email — operator-test report 2026-05-07 #9. The full snapshot
-        // also feeds diffFields() so fields_updated correctly reports 'email'.
+        // Write phase: every mutation lives below this point.
+
+        // Snapshot before the rename mutates $existing->email.
         $previousStatus   = $existing ? $existing->status : null;
         $previousEmail    = $existing ? $existing->email : null;
         $previousSnapshot = $existing ? self::snapshotCompareFields($existing) : null;
 
-        // One unit of work. Previously the rename and any auto-created
-        // tags/lists committed before the main upsert ran, so a failure after
-        // that point returned an error to a caller whose contact had already
-        // been renamed to an email the response said was never applied, and
-        // left orphan segments behind (review PR #2025).
         fluentCrmDb()->beginTransaction();
 
-        // Side effects that are not database writes are collected here and
-        // fired only after the commit succeeds, so a rollback cannot leave a
-        // listener — or a real opt-in email — acting on state that no longer
-        // exists. Residual worth knowing: attachTags()/attachLists() fire
-        // core's own contact_added_to_* hooks from inside the model, so those
-        // still run pre-commit; deferring them would mean changing core.
+        // Non-DB side effects run only after commit. attachTags()/attachLists() hooks still fire pre-commit.
         $deferredEffects = [];
 
         try {
-            // Resolve add/remove segment payloads. Auto-create (a write) runs
-            // here only after all validation above has passed.
             $addTags     = MCPHelper::resolveTagIds($params['add_tags'] ?? [], $autoCreateTags);
             $removeTags  = MCPHelper::resolveTagIds($params['remove_tags'] ?? [], false);
             $addLists    = MCPHelper::resolveListIds($params['add_lists'] ?? [], $autoCreateLists);
             $removeLists = MCPHelper::resolveListIds($params['remove_lists'] ?? [], false);
 
-            // Email rename: rename in-place on the existing row BEFORE
-            // delegating to createOrUpdate, which looks up by email — passing
-            // it the new_email would not find a row and would create a new
-            // contact (review B1 round 3). The clash was already ruled out in
-            // the validation phase.
+            // Rename in place first: createOrUpdate looks up by email and would create a new contact.
             if ($existing && $newEmail && $newEmail !== $existing->email) {
                 $oldEmail = $existing->email;
                 $existing->email = $newEmail;
@@ -638,9 +539,7 @@ class ContactTools
                 };
             }
 
-            // Build the upsert payload from an explicit allowlist — never the
-            // raw params — so model-fillable-but-not-MCP fields cannot be
-            // overposted (SEC-001). Lookup email is the post-rename value.
+            // Payload is built from an allowlist, never the raw params.
             $payload = [
                 'email' => $existing && $newEmail ? $newEmail : ($email ?: ($existing->email ?? null)),
             ];
@@ -657,35 +556,24 @@ class ContactTools
                 $payload['custom_values'] = $customValues;
             }
 
-            // Only stamp source='mcp' on creation. On update, omit the field
-            // entirely so the model preserves whatever signup source the
-            // contact already has ("web", "checkout", "import", etc.). The
-            // agent can still pass an explicit `source` to override this.
+            // source defaults to 'mcp' on creation only; updates keep the existing source.
             if (!$existing && (!isset($payload['source']) || $payload['source'] === '')) {
                 $payload['source'] = 'mcp';
             } elseif ($existing && (!isset($payload['source']) || $payload['source'] === '')) {
                 unset($payload['source']);
             }
 
-            // Force the status write only when the caller explicitly passed a
-            // (valid) status — an upsert that just edits fields must not count
-            // as consent to overwrite a suppressed contact. An explicit status
-            // IS the caller's decision and forced updates are honored
-            // unconditionally. (Status was validated in the VALIDATION PHASE;
-            // an invalid value cannot reach here.)
+            // Force the status write only for an explicit status, so a field edit cannot resubscribe a suppressed contact.
             $forceUpdate = !empty($payload['status']);
             $contact = FluentCrmApi('contacts')->createOrUpdate($payload, $forceUpdate, false);
 
             if (!$contact) {
-                // Discards the rename and any auto-created segments above, so
-                // the reported failure is the whole truth.
                 fluentCrmDb()->rollBack();
-                return MCPHelper::error('failed', __('Could not create or update the contact', 'fluent-crm'));
+                return MCPHelper::error('failed', 'Could not create or update the contact');
             }
 
             $action = !empty($contact->wasRecentlyCreated) ? 'created' : 'updated';
 
-            // Apply delta segment changes.
             $tagsAdded = [];
             $tagsRemoved = [];
             $listsAdded = [];
@@ -716,21 +604,16 @@ class ContactTools
                 }
             }
 
-            // Status-change reason: drop a system-style note for audit.
             if (!empty($params['status_change_reason']) && $previousStatus && $previousStatus !== $contact->status) {
                 \FluentCrm\App\Models\SubscriberNote::create([
                     'subscriber_id' => $contact->id,
                     'type'          => 'note',
-                    'title'         => __('Status changed via MCP', 'fluent-crm'),
+                    'title'         => 'Status changed via MCP',
                     'description'   => sanitize_text_field((string) $params['status_change_reason']),
                 ]);
             }
 
-            // Optional double opt-in trigger for newly-pending contacts.
-            // Deferred: this delivers a real email, and an email promising a
-            // confirmation link for a contact the rollback removed is not
-            // something we can take back.
-            if (!empty($params['double_optin']) && $contact->status !== 'subscribed') {
+            if (!empty($params['double_optin']) && $contact->status === 'pending') {
                 $optinContact = $contact;
                 $deferredEffects[] = function () use ($optinContact) {
                     $optinContact->sendDoubleOptinEmail();
@@ -738,8 +621,7 @@ class ContactTools
             }
         } catch (\Throwable $e) {
             fluentCrmDb()->rollBack();
-            // Rethrow so AbilitiesRegistrar::wrapExecuteCallback() logs the
-            // detail server-side and returns the generic error.
+            // AbilitiesRegistrar::wrapExecuteCallback() logs and returns the generic error.
             throw $e;
         }
 
@@ -780,12 +662,12 @@ class ContactTools
         $params = (array) $params;
         $noteId = (int) ($params['note_id'] ?? 0);
         if (!$noteId) {
-            return MCPHelper::error('invalid_param', __('note_id is required', 'fluent-crm'));
+            return MCPHelper::error('invalid_param', 'note_id is required');
         }
 
         $note = \FluentCrm\App\Models\SubscriberNote::find($noteId);
         if (!$note) {
-            return MCPHelper::error('not_found', __('Note not found', 'fluent-crm'), ['note_id' => $noteId]);
+            return MCPHelper::error('not_found', 'Note not found', ['note_id' => $noteId]);
         }
 
         $deletedId        = (int) $note->id;
@@ -801,15 +683,41 @@ class ContactTools
             'deleted_id'     => $deletedId,
             'subscriber_id'  => $subscriberId,
             'deleted_title'  => $title,
-            'note'           => __('Note row removed. The contact\'s other notes and email history are unaffected.', 'fluent-crm'),
+            'note'           => 'Note row removed. The contact\'s other notes and email history are unaffected.',
         ];
     }
 
     /**
-     * Compute the would-create list for a dry-run preview. Skips numeric
-     * inputs (those are id lookups, not creation candidates — review B3
-     * round 3) and only flags string names that have no existing match.
+     * Names a dry run would create. Numeric inputs are id lookups and are skipped.
      */
+    /**
+     * The unknown_segments error for tag/list references that match nothing, or null.
+     *
+     * Same rule as bulk-upsert-contacts: without auto-create an unknown name refuses the whole
+     * call before any write, so the agent never reports a tag as applied when it was dropped.
+     * Removals always need existing tags and lists; auto-create applies to adds only.
+     */
+    private static function unknownSegmentsError(array $params, $autoCreateTags, $autoCreateLists)
+    {
+        $unknownTags = array_merge(
+            $autoCreateTags ? [] : MCPHelper::unresolvedSegmentRefs((array) ($params['add_tags'] ?? []), 'tag'),
+            MCPHelper::unresolvedSegmentRefs((array) ($params['remove_tags'] ?? []), 'tag')
+        );
+        $unknownLists = array_merge(
+            $autoCreateLists ? [] : MCPHelper::unresolvedSegmentRefs((array) ($params['add_lists'] ?? []), 'list'),
+            MCPHelper::unresolvedSegmentRefs((array) ($params['remove_lists'] ?? []), 'list')
+        );
+        if (!$unknownTags && !$unknownLists) {
+            return null;
+        }
+
+        return MCPHelper::error('unknown_segments', 'Some tags or lists do not exist. Nothing was changed.', array_filter([
+            'unknown_tags'  => array_values($unknownTags),
+            'unknown_lists' => array_values($unknownLists),
+            'next_step'     => 'Check the names with list-tags / list-lists. Create the ones you need with manage-tag / manage-list action=create, or pass auto_create_tags / auto_create_lists = true to create the added ones.',
+        ]));
+    }
+
     private static function wouldCreateNames($items, $kind = 'tag')
     {
         $out = [];
@@ -832,9 +740,7 @@ class ContactTools
     }
 
     /**
-     * The address keys the MCP contact-write contract accepts. Shared by the
-     * strict single-upsert validation and the bulk per-row warning so both
-     * paths agree on what "unknown" means (TRC-006).
+     * Address keys the contact write tools accept.
      *
      * @return string[]
      */
@@ -844,11 +750,7 @@ class ContactTools
     }
 
     /**
-     * Map the agent-facing {line_1, line_2, city, state, postal_code,
-     * country} shape onto the column-named payload that Subscriber
-     * createOrUpdate consumes. Mutates $payload by reference. Shared
-     * between upsert-contact and bulk-upsert-contacts so both stay in
-     * lock-step (operator-test report 2026-05-07 #5).
+     * Map the agent-facing address shape onto column names in $payload (by reference).
      */
     private static function applyAddressShape(array &$payload, $address)
     {
@@ -871,10 +773,7 @@ class ContactTools
     }
 
     /**
-     * Snapshot the diff-relevant columns of a Subscriber before any
-     * in-place mutation (rename, save). diffFields() compares against
-     * this snapshot so fields_updated stays correct even after the row
-     * has been written.
+     * Snapshot the columns diffFields() compares, taken before any mutation.
      *
      * @return array<string,string>
      */
@@ -919,35 +818,31 @@ class ContactTools
         $params = (array) $params;
         $contacts = (array) ($params['contacts'] ?? []);
         if (!$contacts) {
-            return MCPHelper::error('invalid_param', __('contacts is required', 'fluent-crm'));
+            return MCPHelper::error('invalid_param', 'contacts is required');
         }
 
         $maxBatch = (int) apply_filters('fluent_crm/mcp_bulk_cap', 500, 'bulk-upsert-contacts');
         if (count($contacts) > $maxBatch) {
-            return MCPHelper::error('cap_reached', __('Too many contacts in a single call', 'fluent-crm'), [
+            return MCPHelper::error('cap_reached', 'Too many contacts in a single call', [
                 'max'    => $maxBatch,
                 'matched' => count($contacts),
             ]);
         }
 
-        $autoCreateTags  = isset($params['auto_create_tags']) ? (bool) $params['auto_create_tags'] : true;
-        $autoCreateLists = isset($params['auto_create_lists']) ? (bool) $params['auto_create_lists'] : true;
+        // Off by default, as in upsert-contact: free text must not grow the tag and list registries.
+        $autoCreateTags  = !empty($params['auto_create_tags']);
+        $autoCreateLists = !empty($params['auto_create_lists']);
         $ifExists        = $params['if_exists'] ?? 'merge';
         $doubleOptin     = !empty($params['double_optin']);
 
         if (($autoCreateTags || $autoCreateLists)
             && !\FluentCrm\App\Services\PermissionManager::currentUserCan('fcrm_manage_contact_cats')) {
-            return MCPHelper::error('forbidden', __('Creating new tags/lists requires fcrm_manage_contact_cats', 'fluent-crm'));
+            return MCPHelper::error('forbidden', 'Creating new tags/lists requires fcrm_manage_contact_cats');
         }
 
         $created = $updated = $skipped = $invalid = $warnings = [];
 
-        // Pre-resolve every valid address in one bounded query. This loop used
-        // to issue an indexed SELECT per row, so a full batch cost up to
-        // $maxBatch round trips before any write happened (review PR #2025).
-        // Keyed on the lowercased address because the email column's collation
-        // is case-insensitive — "A@x.com" and "a@x.com" are the same contact,
-        // and keying on the raw value would miss the match the DB would make.
+        // Pre-resolve existing contacts in one query, keyed by lowercased email (the column is case-insensitive).
         $lookupEmails = [];
         foreach ($contacts as $row) {
             if (is_array($row) && !empty($row['email']) && is_email($row['email'])) {
@@ -962,26 +857,15 @@ class ContactTools
             }
         }
 
-        // Same treatment for segments. Resolving each row's tags/lists inside
-        // the loop cost ~3 queries per row even when every tag already existed,
-        // and auto-create bypasses the resolver's memo entirely — so a 500-row
-        // batch issued well over a thousand avoidable queries. Resolve the
-        // UNION of every row's refs once (creating any missing ones here), then
-        // assign per row from the returned map with no further queries.
-        // The 500-contact cap does not bound segment work on its own: refs are
-        // per row, and auto-create defaults to TRUE here. An agent that maps a
-        // high-cardinality column (company, notes) into `tags` would silently
-        // mint a tag per distinct value, and junk tags are painful to undo —
-        // they surface in every tag picker, automation, and segment condition
-        // across the admin. Cap per row and in aggregate (review PR #2025).
+        // Resolve the union of every row's tag/list refs once, then map per row.
+        // Capped per row and in aggregate because auto-create defaults to true.
         $tagRefUnion  = [];
         $listRefUnion = [];
         foreach ($contacts as $row) {
             if (!is_array($row)) {
                 continue;
             }
-            // Over-sized rows are rejected in the loop below; skip their refs
-            // here so a bad row cannot create tags before being rejected.
+            // Skip over-sized rows so they cannot create tags before being rejected below.
             if (count((array) ($row['tags'] ?? [])) > self::MAX_SEGMENT_REFS_PER_ROW
                 || count((array) ($row['lists'] ?? [])) > self::MAX_SEGMENT_REFS_PER_ROW) {
                 continue;
@@ -998,21 +882,29 @@ class ContactTools
             }
         }
 
-        // Refuse the whole call rather than partially applying it: this many
-        // distinct segments across one batch is a mapping mistake, not intent,
-        // and with auto-create on the damage would already be done by the time
-        // the per-row results were read.
+        // Refuse the whole call before any segment is auto-created.
         $distinctRefs = count($tagRefUnion) + count($listRefUnion);
         if ($distinctRefs > self::MAX_BULK_SEGMENT_REFS) {
             return MCPHelper::error('cap_reached', sprintf(
-                /* translators: 1: distinct references received, 2: the cap */
-                __('This batch references %1$d distinct tags/lists; the limit is %2$d per call. That usually means a high-cardinality field was mapped into tags or lists. Split the batch, or set auto_create_tags/auto_create_lists to false and pre-create the segments you actually want.', 'fluent-crm'),
+                'This batch references %1$d distinct tags/lists; the limit is %2$d per call. That usually means a high-cardinality field was mapped into tags or lists. Split the batch, or set auto_create_tags/auto_create_lists to false and pre-create the segments you actually want.',
                 $distinctRefs,
                 self::MAX_BULK_SEGMENT_REFS
             ), [
                 'distinct_segment_refs' => $distinctRefs,
                 'max_segment_refs'      => self::MAX_BULK_SEGMENT_REFS,
             ]);
+        }
+
+        // Without auto_create, an unknown tag or list refuses the whole call before any write;
+        // dropping it per row would import contacts without the segment the caller asked for.
+        $unknownTags  = (!$autoCreateTags && $tagRefUnion) ? MCPHelper::unresolvedSegmentRefs(array_values($tagRefUnion), 'tag') : [];
+        $unknownLists = (!$autoCreateLists && $listRefUnion) ? MCPHelper::unresolvedSegmentRefs(array_values($listRefUnion), 'list') : [];
+        if ($unknownTags || $unknownLists) {
+            return MCPHelper::error('unknown_segments', 'Some tags or lists in this batch do not exist. Nothing was imported.', array_filter([
+                'unknown_tags'  => $unknownTags,
+                'unknown_lists' => $unknownLists,
+                'next_step'     => 'Check the names with list-tags / list-lists. Create the ones you need with manage-tag / manage-list action=create, or pass auto_create_tags / auto_create_lists = true to create them during the import.',
+            ]));
         }
 
         $tagMap  = $tagRefUnion
@@ -1049,14 +941,10 @@ class ContactTools
                 continue;
             }
 
-            // Per-row segments, read from the maps resolved above — no queries.
             $tagIds  = ['ids' => self::mapSegmentRefs($row['tags'] ?? [], $tagMap)];
             $listIds = ['ids' => self::mapSegmentRefs($row['lists'] ?? [], $listMap)];
 
-            // Build from the shared allowlist, never the raw row — otherwise
-            // model-fillable-but-not-MCP fields (user_id, company_id, ip,
-            // life_time_value, timestamps, …) would be overposted
-            // through the untyped bulk object (SEC-001). Mirrors single upsert.
+            // Payload is built from an allowlist, never the raw row.
             $payload = [
                 'email' => sanitize_email($row['email']),
             ];
@@ -1068,11 +956,7 @@ class ContactTools
             $payload['tags']  = $tagIds['ids'];
             $payload['lists'] = $listIds['ids'];
 
-            // Per-row TRC-006: warn on unknown/invalid address keys but still
-            // save the row without them (bulk partial semantics — never fail
-            // sibling rows). additionalProperties:false is deliberately NOT set
-            // on the bulk address schema so the adapter can't reject the whole
-            // call before this per-row handling runs.
+            // Unknown address keys are a per-row warning; the row still saves without them.
             if (array_key_exists('address', $row) && $row['address'] !== null) {
                 if (!is_array($row['address'])) {
                     $warnings[] = ['email' => $row['email'], 'reason' => 'invalid_address_not_object'];
@@ -1088,14 +972,9 @@ class ContactTools
                 }
             }
 
-            // Same address-shape mapping as single upsert. Without this,
-            // bulk silently dropped the {line_1,...,country} object —
-            // operator-test report 2026-05-07 #5.
             self::applyAddressShape($payload, $row['address'] ?? null);
 
-            // Same rule as upsert-contact: stamp source='mcp_bulk' only on
-            // creation. On update, preserve the original source unless the
-            // caller passed one explicitly.
+            // source defaults to 'mcp_bulk' on creation only.
             if (!$existing && (!isset($payload['source']) || $payload['source'] === '')) {
                 $payload['source'] = 'mcp_bulk';
             } elseif ($existing && (!isset($payload['source']) || $payload['source'] === '')) {
@@ -1103,10 +982,7 @@ class ContactTools
             }
 
             if (!empty($row['custom_fields']) && is_array($row['custom_fields'])) {
-                // Same diff-against-schema gate as single upsert, but
-                // surface unknown slugs as a per-row warning so one bad
-                // row doesn't fail the whole batch (operator-test report
-                // 2026-05-07 #6). Known keys still persist.
+                // Unknown slugs are a per-row warning; known keys still persist.
                 $diff = MCPHelper::diffCustomFields($row['custom_fields']);
                 if (!empty($diff['unknown'])) {
                     $warnings[] = [
@@ -1118,10 +994,18 @@ class ContactTools
                 $payload['custom_values'] = $diff['known'];
             }
 
-            // Same status semantics as the single upsert: unknown status strings are
-            // dropped (with a per-row warning), and only an explicitly supplied valid
-            // status may overwrite an existing (non-deliverability) suppressed status.
-            if (!empty($payload['status']) && !in_array($payload['status'], fluentcrm_subscriber_statuses())) {
+            // A malformed date of birth is dropped with a warning; the rest of the row saves.
+            if (isset($payload['date_of_birth']) && \FluentCrm\App\Services\Helper::normalizeDateOfBirth($payload['date_of_birth']) === false) {
+                $warnings[] = [
+                    'email'         => $row['email'],
+                    'reason'        => 'invalid_date_of_birth_ignored',
+                    'date_of_birth' => (string) $payload['date_of_birth'],
+                ];
+                unset($payload['date_of_birth']);
+            }
+
+            // Unknown statuses are dropped with a warning; only an explicit valid status forces the write.
+            if (!empty($payload['status']) && Sanitize::contactStatus($payload['status']) === null) {
                 $warnings[] = [
                     'email'  => $row['email'],
                     'reason' => 'unknown_status_ignored',
@@ -1136,12 +1020,10 @@ class ContactTools
                 continue;
             }
 
-            // Keep the map current so an address repeated later in the same
-            // batch is still seen as existing — the per-row lookup this
-            // replaced re-read the table every iteration and behaved that way.
+            // Keep the map current so a repeated address in the same batch counts as existing.
             $existingByEmail[strtolower($contact->email)] = $contact;
 
-            if ($doubleOptin && $contact->status !== 'subscribed') {
+            if ($doubleOptin && $contact->status === 'pending') {
                 $contact->sendDoubleOptinEmail();
             }
 
@@ -1175,10 +1057,7 @@ class ContactTools
     }
 
     /**
-     * Translate one row's tag/list refs into ids using a map produced by
-     * MCPHelper::resolveSegmentRefs(). Refs absent from the map resolved to
-     * nothing (and were not auto-created), so they are dropped — matching the
-     * per-row resolver this replaced, which also skipped unmatched refs.
+     * Translate one row's tag/list refs into ids via a resolveSegmentRefs() map. Unmatched refs are dropped.
      *
      * @param mixed $refs
      * @param array $map ref key => id
@@ -1214,27 +1093,23 @@ class ContactTools
         $contact = $resolved;
         $deletedId    = (int) $contact->id;
         $deletedEmail = (string) $contact->email;
-        $deleteEmails = !isset($params['delete_emails']) ? true : (bool) $params['delete_emails'];
-
-        if ($deleteEmails) {
-            \FluentCrm\App\Models\CampaignEmail::where('subscriber_id', $deletedId)->delete();
-        }
-
+        // The email log goes with the contact: Cleanup::deleteSubscribersAssets() removes it on
+        // fluentcrm_after_subscribers_deleted, so a keep-the-log option cannot be honoured.
         $ok = \FluentCrm\App\Services\Helper::deleteContacts([$deletedId]);
         if (!$ok) {
-            return MCPHelper::error('failed', __('Could not delete the contact', 'fluent-crm'));
+            return MCPHelper::error('failed', 'Could not delete the contact');
         }
 
         return [
             'ok'             => true,
             'deleted_id'     => $deletedId,
             'deleted_email'  => $deletedEmail,
-            'emails_purged'  => (bool) $deleteEmails,
+            'emails_purged'  => true,
         ];
     }
 
     // -----------------------------------------------------------------
-    // Write: apply-segments-to-contacts
+    // Write: apply-tags-lists-to-contacts
     // -----------------------------------------------------------------
 
     public static function applySegmentsToContacts($params)
@@ -1245,7 +1120,7 @@ class ContactTools
         $autoCreateLists = !empty($params['auto_create_lists']);
         if (($autoCreateTags || $autoCreateLists)
             && !\FluentCrm\App\Services\PermissionManager::currentUserCan('fcrm_manage_contact_cats')) {
-            return MCPHelper::error('forbidden', __('Creating new tags/lists requires fcrm_manage_contact_cats', 'fluent-crm'));
+            return MCPHelper::error('forbidden', 'Creating new tags/lists requires fcrm_manage_contact_cats');
         }
 
         $contactIds = isset($params['contact_ids']) ? array_filter(array_map('intval', (array) $params['contact_ids'])) : [];
@@ -1253,14 +1128,14 @@ class ContactTools
         $dryRun     = !empty($params['dry_run']);
 
         if (!$contactIds && empty($filter)) {
-            return MCPHelper::error('invalid_param', __('Provide contact_ids or filter', 'fluent-crm'));
+            return MCPHelper::error('invalid_param', 'Provide contact_ids or filter');
         }
 
         if ($contactIds && !empty($filter)) {
-            return MCPHelper::error('invalid_param', __('Provide contact_ids OR filter, not both', 'fluent-crm'));
+            return MCPHelper::error('invalid_param', 'Provide contact_ids OR filter, not both');
         }
 
-        $cap = (int) apply_filters('fluent_crm/mcp_bulk_cap', 5000, 'apply-segments-to-contacts');
+        $cap = (int) apply_filters('fluent_crm/mcp_bulk_cap', 5000, 'apply-tags-lists-to-contacts');
 
         if (!$contactIds) {
             $validation = MCPHelper::validateUniversalFilter((array) $filter);
@@ -1274,23 +1149,20 @@ class ContactTools
             $query = $cq->getModel();
 
             $matched = (int) $query->count();
-            // During a dry run, expose the matched count even when it
-            // exceeds the cap — knowing the size is the whole point of a
-            // preview. The agent can then batch.
+            // A dry run reports the matched count even above the cap.
             if ($matched > $cap && !$dryRun) {
-                return MCPHelper::error('cap_reached', __('Too many contacts match the filter', 'fluent-crm'), [
+                return MCPHelper::error('cap_reached', 'Too many contacts match the filter', [
                     'max'     => $cap,
                     'matched' => $matched,
                 ]);
             }
 
             $contactIds = array_map('intval', $query->limit($cap)->pluck('id')->toArray());
-            // Stash the true matched count so dry_run can echo it (the
-            // pluck call above only returns up to $cap rows).
+            // pluck() above returns at most $cap rows; keep the true count for dry runs.
             $matchedTotal = $matched;
         } else {
             if (count($contactIds) > $cap && !$dryRun) {
-                return MCPHelper::error('cap_reached', __('Too many contact_ids in a single call', 'fluent-crm'), [
+                return MCPHelper::error('cap_reached', 'Too many contact_ids in a single call', [
                     'max'     => $cap,
                     'matched' => count($contactIds),
                 ]);
@@ -1298,26 +1170,26 @@ class ContactTools
             $matchedTotal = count($contactIds);
         }
 
-        // Resolve segment refs. Auto-create is suppressed during dry runs so
-        // a preview never leaves orphan tags/lists behind.
+        // A dry run refuses unknown names too, so it predicts the real call.
+        if ($unknownError = self::unknownSegmentsError($params, $autoCreateTags, $autoCreateLists)) {
+            return $unknownError;
+        }
+
+        // Dry runs never auto-create.
         $addTags    = MCPHelper::resolveTagIds((array) ($params['add_tags'] ?? []), $autoCreateTags && !$dryRun);
         $removeTags = MCPHelper::resolveTagIds((array) ($params['remove_tags'] ?? []), false);
         $addLists   = MCPHelper::resolveListIds((array) ($params['add_lists'] ?? []), $autoCreateLists && !$dryRun);
         $removeLists = MCPHelper::resolveListIds((array) ($params['remove_lists'] ?? []), false);
 
-        // Compute the would-create set: name strings the agent supplied that
-        // don't resolve to an existing tag/list. Numeric inputs are id
-        // lookups, never creation candidates (review B3 round 3).
-        $tagsWouldCreate  = self::wouldCreateNames((array) ($params['add_tags'] ?? []), 'tag');
-        $listsWouldCreate = self::wouldCreateNames((array) ($params['add_lists'] ?? []), 'list');
+        $tagsWouldCreate  = $autoCreateTags ? self::wouldCreateNames((array) ($params['add_tags'] ?? []), 'tag') : [];
+        $listsWouldCreate = $autoCreateLists ? self::wouldCreateNames((array) ($params['add_lists'] ?? []), 'list') : [];
 
-        // The "at least one" guard considers what would actually happen — if
-        // dry_run with names that would create, that IS work, so don't bail.
+        // In a dry run, would-create names count as work.
         $hasAnyWork = $addTags['ids'] || $removeTags['ids']
             || $addLists['ids'] || $removeLists['ids']
             || ($dryRun && ($tagsWouldCreate || $listsWouldCreate));
         if (!$hasAnyWork) {
-            return MCPHelper::error('invalid_param', __('Provide at least one of add_tags, remove_tags, add_lists, remove_lists', 'fluent-crm'));
+            return MCPHelper::error('invalid_param', 'Provide at least one of add_tags, remove_tags, add_lists, remove_lists');
         }
 
         if ($dryRun) {
@@ -1344,16 +1216,12 @@ class ContactTools
                 'tags_would_create'   => $tagsWouldCreate,
                 'lists_would_create'  => $listsWouldCreate,
                 'note'                => $exceedsCap
-                    ? __('Dry run — match exceeds the per-call cap. Apply by passing contact_ids in batches.', 'fluent-crm')
-                    : __('Dry run — nothing was applied. Re-run without dry_run=true to commit.', 'fluent-crm'),
+                    ? 'Dry run: match exceeds the per-call cap. Apply by passing contact_ids in batches.'
+                    : 'Dry run: nothing was applied. Re-run without dry_run=true to commit.',
             ];
         }
 
-        // Process in chunks so attach/detach don't load thousands of rows at
-        // once. Each Subscriber attach/detach already de-dupes internally.
-        // Track the actual touched ids (review P2 #10) so an agent can
-        // reverse precisely without re-running the original filter — which
-        // may match a different set after time passes.
+        // Touched ids are returned so the agent can reverse precisely.
         $chunkSize = 200;
         $applied = 0;
         $appliedIds = [];
@@ -1396,7 +1264,7 @@ class ContactTools
             'lists_removed'       => $formatRefs($removeLists['ids']),
             'tags_created'        => $addTags['created'],
             'lists_created'       => $addLists['created'],
-            'reverse_with'        => __('To reverse: re-call apply-segments-to-contacts with contact_ids=applied_contact_ids and add_*/remove_* swapped.', 'fluent-crm'),
+            'reverse_with'        => 'To reverse: re-call apply-tags-lists-to-contacts with contact_ids=applied_contact_ids and add_*/remove_* swapped.',
         ];
     }
 
@@ -1418,18 +1286,23 @@ class ContactTools
         $description = (string) ($params['description'] ?? '');
         $allowedTypes = ['note', 'call', 'email', 'meeting', 'quote'];
         $type         = sanitize_key($params['type'] ?? 'note');
-        // Unknown note type is a hard error, not a silent coercion to 'note'
-        // (TRC-002) — silently rewriting the caller's type misreports what was
-        // saved.
+        // Unknown note type is a hard error, not a silent coercion to 'note'.
         if (array_key_exists('type', $params) && $params['type'] !== '' && !in_array($type, $allowedTypes, true)) {
-            return MCPHelper::error('invalid_param', __('type is not a recognized note type.', 'fluent-crm'), [
+            return MCPHelper::error('invalid_param', 'type is not a recognized note type.', [
                 'type'    => $params['type'],
                 'allowed' => $allowedTypes,
             ]);
         }
 
         if ($title === '' || $description === '') {
-            return MCPHelper::error('invalid_param', __('title and description are required', 'fluent-crm'));
+            return MCPHelper::error('invalid_param', 'title and description are required');
+        }
+
+        // Same parsing as the other MCP dates: an offset is converted to site time, a naive
+        // value is site time (as the admin's date picker sends), anything else is refused.
+        $createdAt = MCPHelper::normalizeDateBoundary($params['created_at'] ?? '', 'created_at');
+        if (is_wp_error($createdAt)) {
+            return $createdAt;
         }
 
         $noteData = [
@@ -1437,11 +1310,11 @@ class ContactTools
             'type'          => $type,
             'title'         => $title,
             'description'   => $description,
-            'created_at'    => !empty($params['created_at']) ? sanitize_text_field($params['created_at']) : current_time('mysql'),
+            'created_at'    => $createdAt ?: current_time('mysql'),
         ];
 
-        // Run through the same filter the controller does so smartcodes resolve.
-        $noteData['description'] = apply_filters('fluent_crm/parse_campaign_email_text', $noteData['description'], $subscriber);
+        // Same filter the controller applies, so smartcodes resolve.
+        $noteData['description'] = apply_filters('fluent_crm/parse_contact_note_text', $noteData['description'], $subscriber);
         $noteData = \FluentCrm\App\Services\Sanitize::contactNote($noteData);
 
         $note = \FluentCrm\App\Models\SubscriberNote::create(wp_unslash($noteData));

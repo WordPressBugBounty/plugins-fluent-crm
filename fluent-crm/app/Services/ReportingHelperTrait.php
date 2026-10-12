@@ -44,20 +44,27 @@ trait ReportingHelperTrait
         return static::$daily;
     }
 
+    /**
+     * SELECT columns for a chart query: a row count plus the date the row is keyed by.
+     *
+     * Daily and weekly charts select per-day counts (weekly days are summed into their buckets in
+     * getResult()). Monthly charts group by year-month, so every other column is aggregated to stay
+     * valid under ONLY_FULL_GROUP_BY (MySQL 8 default).
+     */
     protected function prepareSelect($frequency, $dateField = 'created_at')
     {
         $select = [
-            fluentCrmDb()->raw('COUNT(id) AS count'),
-            fluentCrmDb()->raw('DATE(' . $dateField . ') AS date')
+            fluentCrmDb()->raw('COUNT(id) AS count')
         ];
 
-        if ($frequency == static::$weekly) {
-            $select[] = fluentCrmDb()->raw('WEEK(' . $dateField . ') week');
-        } else if ($frequency == static::$monthly) {
+        if ($frequency == static::$monthly) {
+            $select[] = fluentCrmDb()->raw('MIN(DATE(' . $dateField . ')) AS date');
             // Keep existing month for backward compatibility
-            $select[] = fluentCrmDb()->raw('MONTH(' . $dateField . ') AS month');
-            // Correct quoting and add year-month key to disambiguate months across years
+            $select[] = fluentCrmDb()->raw('MIN(MONTH(' . $dateField . ')) AS month');
+            // Year-month key to disambiguate months across years
             $select[] = fluentCrmDb()->raw("DATE_FORMAT($dateField, '%Y-%m') AS ym");
+        } else {
+            $select[] = fluentCrmDb()->raw('DATE(' . $dateField . ') AS date');
         }
 
         return $select;
@@ -67,9 +74,7 @@ trait ReportingHelperTrait
     {
         $orderBy = $groupBy = 'date';
 
-        if ($frequency == static::$weekly) {
-            $orderBy = $groupBy = 'week';
-        } else if ($frequency == static::$monthly) {
+        if ($frequency == static::$monthly) {
             $orderBy = $groupBy = 'ym';
         }
 
@@ -104,12 +109,44 @@ trait ReportingHelperTrait
             $formatter = 'monYearFormatter';
         }
 
+        if ($this->isWeekly($period)) {
+            return $this->sumIntoWeeks($period, $range, $items);
+        }
+
         foreach ($items as $item) {
             $date = $this->{$formatter}($item->date);
             $range[$date] = (int)$item->count;
         }
 
         return $range;
+    }
+
+    /**
+     * Add per-day counts into weekly buckets that start on the period's first day.
+     *
+     * The bucket keys are the period dates (from, from + 7 days, ...), so a day belongs to the bucket
+     * floor(days since from / 7). Days outside the range are ignored.
+     */
+    protected function sumIntoWeeks($period, $range, $items)
+    {
+        $start = new \DateTime($period->getStartDate()->format('Y-m-d'));
+        $keys = array_keys($range);
+
+        foreach ($items as $item) {
+            $days = (int)$start->diff(new \DateTime($this->basicFormatter($item->date)))->format('%r%a');
+            $index = (int)floor($days / 7);
+            if ($days < 0 || !isset($keys[$index])) {
+                continue;
+            }
+            $range[$keys[$index]] += (int)$item->count;
+        }
+
+        return $range;
+    }
+
+    protected function isWeekly($period)
+    {
+        return $period->getDateInterval()->d == 7;
     }
 
     protected function isMonthly($period)

@@ -96,7 +96,7 @@ class ImporterController extends Controller
         $response = apply_filters('fluent_crm/get_import_driver_' . $driver, false, $request);
 
         if (!$response || is_wp_error($response)) {
-            $message = __('Sorry no driver found for this import', 'fluent-crm');
+            $message = __('Sorry, no driver found for this import', 'fluent-crm');
             if (is_wp_error($response)) {
                 $message = $response->get_error_message();
             }
@@ -132,7 +132,7 @@ class ImporterController extends Controller
         $response = apply_filters('fluent_crm/post_import_driver_' . $driver, false, $config, $page);
 
         if (!$response || is_wp_error($response)) {
-            $message = __('Sorry no driver found for this import', 'fluent-crm');
+            $message = __('Sorry, no driver found for this import', 'fluent-crm');
             if (is_wp_error($response)) {
                 $message = $response->get_error_message();
             }
@@ -207,7 +207,7 @@ class ImporterController extends Controller
             'fields' => [
                 'roles' => [
                     'label'              => __('Select User Roles', 'fluent-crm'),
-                    'inline_help'        => $infoSvg . ' ' . __('Please check the user roles that you want to import as contact', 'fluent-crm'),
+                    'inline_help'        => $infoSvg . ' ' . __('Select the user roles you want to import as contacts', 'fluent-crm'),
                     'type'               => 'checkbox-group',
                     'options'            => $formattedRoles,
                     'has_all_selector'   => true,
@@ -304,7 +304,7 @@ class ImporterController extends Controller
                 'label'            => __('LifterLMS', 'fluent-crm'),
                 'logo'             => fluentCrmMix('images/lifterlms.png'),
                 'disabled'         => true,
-                'disabled_message' => __('Import LifterLMS students by course and groups then segment by associate tags. This is a pro feature. Please upgrade to activate this feature', 'fluent-crm')
+                'disabled_message' => __('Import LifterLMS students by course and group, then segment them with tags. This is a Pro feature. Please upgrade to activate it.', 'fluent-crm')
             ];
         }
 
@@ -313,34 +313,34 @@ class ImporterController extends Controller
                 'label'            => __('LearnDash', 'fluent-crm'),
                 'logo'             => fluentCrmMix('images/learndash.png'),
                 'disabled'         => true,
-                'disabled_message' => __('Import LearnDash students by course and groups then segment by associate tags. This is a pro feature. Please upgrade to activate this feature', 'fluent-crm')
+                'disabled_message' => __('Import LearnDash students by course and group, then segment them with tags. This is a Pro feature. Please upgrade to activate it.', 'fluent-crm')
             ];
         }
 
         if (defined('TUTOR_VERSION')) {
             $drivers['tutorlms'] = [
-                'label'            => __('TutorLMS', 'fluent-crm'),
+                'label'            => __('Tutor LMS', 'fluent-crm'),
                 'logo'             => fluentCrmMix('images/tutorlms.jpg'),
                 'disabled'         => true,
-                'disabled_message' => __('Import TutorLMS students by course then segment by associate tags. This is a pro feature. Please upgrade to activate this feature', 'fluent-crm')
+                'disabled_message' => __('Import Tutor LMS students by course, then segment them with tags. This is a Pro feature. Please upgrade to activate it.', 'fluent-crm')
             ];
         }
 
         if (defined('PMPRO_VERSION')) {
             $drivers['pmpro'] = [
-                'label'            => __('Paid Membership Pro', 'fluent-crm'),
+                'label'            => __('Paid Memberships Pro', 'fluent-crm'),
                 'logo'             => fluentCrmMix('images/pmpro.png'),
                 'disabled'         => true,
-                'disabled_message' => __('Import Paid Membership Pro members by membership levels then segment by associate tags. This is a pro feature. Please upgrade to activate this feature', 'fluent-crm')
+                'disabled_message' => __('Import Paid Memberships Pro members by membership level, then segment them with tags. This is a Pro feature. Please upgrade to activate it.', 'fluent-crm')
             ];
         }
 
         if (defined('WLM3_PLUGIN_VERSION')) {
             $drivers['wishlist_member'] = [
-                'label'            => __('Wishlist member', 'fluent-crm'),
+                'label'            => __('Wishlist Member', 'fluent-crm'),
                 'logo'             => fluentCrmMix('images/wishlist_member.png'),
                 'disabled'         => true,
-                'disabled_message' => __('Import Wishlist members by membership levels then segment by associate tags. This is a pro feature. Please upgrade to activate this feature', 'fluent-crm')
+                'disabled_message' => __('Import Wishlist Member members by membership level, then segment them with tags. This is a Pro feature. Please upgrade to activate it.', 'fluent-crm')
             ];
         }
 
@@ -349,7 +349,7 @@ class ImporterController extends Controller
                 'label'            => __('Restrict Content Pro', 'fluent-crm'),
                 'logo'             => fluentCrmMix('images/rcp.png'),
                 'disabled'         => true,
-                'disabled_message' => __('Import Restrict Content Pro members by membership levels then segment by associate tags. This is a pro feature. Please upgrade to activate this feature', 'fluent-crm')
+                'disabled_message' => __('Import Restrict Content Pro members by membership level, then segment them with tags. This is a Pro feature. Please upgrade to activate it.', 'fluent-crm')
             ];
         }
 
@@ -368,7 +368,7 @@ class ImporterController extends Controller
                 'logo'             => $logo,
                 'disabled'         => true,
                 /* translators: %s: plugin name */
-                'disabled_message' => sprintf(__('Import %s members by member groups and member types then segment by associate tags. This is a pro feature. Please upgrade to activate this feature', 'fluent-crm'), $pluginName)
+                'disabled_message' => sprintf(__('Import %s members by member group and member type, then segment them with tags. This is a Pro feature. Please upgrade to activate it.', 'fluent-crm'), $pluginName)
             ];
         }
 
@@ -377,7 +377,7 @@ class ImporterController extends Controller
                 'label'            => __('LearnPress', 'fluent-crm'),
                 'logo'             => fluentCrmMix('images/learnpress.png'),
                 'disabled'         => true,
-                'disabled_message' => __('Import LearnPress students by course then segment by associate tags. This is a pro feature. Please upgrade to activate this feature', 'fluent-crm')
+                'disabled_message' => __('Import LearnPress students by course, then segment them with tags. This is a Pro feature. Please upgrade to activate it.', 'fluent-crm')
             ];
         }
 

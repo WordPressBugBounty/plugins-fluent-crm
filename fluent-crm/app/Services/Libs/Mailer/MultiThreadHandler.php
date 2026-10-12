@@ -68,9 +68,7 @@ class MultiThreadHandler extends BaseHandler
                 return true;
             }
         } catch (\Throwable $e) {
-            // \Throwable, not \Exception: a TypeError from a third-party filter
-            // in the render pipeline must still fall through to releaseLock()
-            // below, or the sender lock sits orphaned for its ~80s TTL.
+            // Catch \Throwable so a third-party TypeError still reaches releaseLock().
             Helper::debugLog('Exception at ' . $this->runnerTitle, $e->getMessage(), 'error');
         }
 
@@ -83,7 +81,6 @@ class MultiThreadHandler extends BaseHandler
     {
         $this->calledFrom = Arr::get($_REQUEST, 'action') == 'fluentcrm-post-multi-thread-send-now' ? 'ajax' : 'cron';
 
-        // Cheap guards first — in-process re-entrancy and the hard kill-switch.
         if (
             did_action('fluent_crm/sending_multi_threading_email') ||
             apply_filters('fluent_crm/disable_email_processing', false)
@@ -106,20 +103,12 @@ class MultiThreadHandler extends BaseHandler
             $this->maximumProcessingTime = $systemMaxProcessingTime;
         }
 
-        // Acquire the lock before the willMultiThreadEmail() COUNT(*). The
-        // atomic lock is the authoritative guard against concurrent runners, so
-        // a losing racer bails here after a single atomic op instead of paying
-        // for the count query. (memoryExceeded above runs before this, so it
-        // has no lock to release.)
+        // Acquire the lock before the willMultiThreadEmail() count query.
         if (!$this->acquireLock()) {
             return false;
         }
 
-        // The lock is now held, and handle() calls isSystemOk() OUTSIDE its
-        // try/catch. Guard every path below so a thrown error (the
-        // willMultiThreadEmail() count, the cancel scheduling, or the
-        // _last_called write) releases the lock instead of orphaning it until
-        // the ~80s TTL.
+        // handle() calls this outside its try/catch, so release the held lock on any error.
         try {
             if (!Helper::willMultiThreadEmail(300)) {
                 as_schedule_single_action(time() + 1, 'fluent_crm_cancel_multi_thread_mailing', [], 'fluent-crm', true);
@@ -127,7 +116,6 @@ class MultiThreadHandler extends BaseHandler
                 return false;
             }
 
-            // Record the start of an actual (lock-winning) send cycle.
             // callBackGround() reads this to keep the loopback continuation alive.
             fluentcrm_update_option($this->optionKey . '_last_called', time());
 
@@ -150,17 +138,7 @@ class MultiThreadHandler extends BaseHandler
 
         $wpdb->query('START TRANSACTION');
 
-        // Claim ODD ids only, newest first. (The cron Handler claims everything
-        // ASC; the CLI sender defaults to even ids DESC.) Modulo partitioning
-        // replaces the old OFFSET-250 skip: OFFSET inside SELECT ... FOR UPDATE
-        // locked every scanned row (~270 per claim), and two handlers scanning
-        // the index in opposite directions toward each other was a
-        // deadlock-shaped pattern near queue drain. Secondary partitions stay
-        // disjoint as long as CLI workers partition within the even id space
-        // (see the cli_send doc-block) — and the unpartitioned primary Handler
-        // can still drain the entire queue alone if this worker dies, so no
-        // rows can strand. One locking SELECT per status ('pending' first) —
-        // see BaseHandler::lockClaimableIds() for why.
+        // Claim odd ids only, newest first. The cron Handler claims all ids, CLI workers the even ids.
         $ids = $this->lockClaimableIds('pending', $currentTime, $this->sendingPerChunk, 'DESC', 2, 1);
         if (count($ids) < $this->sendingPerChunk) {
             $ids = array_merge($ids, $this->lockClaimableIds('scheduled', $currentTime, $this->sendingPerChunk - count($ids), 'DESC', 2, 1));

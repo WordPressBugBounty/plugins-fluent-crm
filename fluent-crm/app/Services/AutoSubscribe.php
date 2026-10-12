@@ -27,14 +27,14 @@ class AutoSubscribe
     public function getRegistrationFields()
     {
         return [
-            'title'     => __('User Signup Optin Settings', 'fluent-crm'),
-            'sub_title' => __('Automatically add your new user signups as subscriber in FluentCRM', 'fluent-crm'),
+            'title'     => __('User Signup Opt-in Settings', 'fluent-crm'),
+            'sub_title' => __('Automatically add new user signups as contacts in FluentCRM', 'fluent-crm'),
             'fields'    => [
                 'status'       => [
                     'type'           => 'inline-checkbox',
                     'label'          => '',
-                    'checkbox_label' => __('Enable Create new contacts in FluentCRM when users register in WordPress', 'fluent-crm'),
-                    'checkbox_description' => __('Automatically add your new user signups as subscriber in FluentCRM', 'fluent-crm'),
+                    'checkbox_label' => __('Create new contacts in FluentCRM when users register in WordPress', 'fluent-crm'),
+                    'checkbox_description' => __('Automatically add new user signups as contacts in FluentCRM', 'fluent-crm'),
                     'true_label'     => 'yes',
                     'false_label'    => 'no'
                 ],
@@ -44,8 +44,8 @@ class AutoSubscribe
                     'option_key'  => 'lists',
                     'is_multiple' => false,
                     'creatable'   => true,
-                    'placeholder' => __('Select Assign List', 'fluent-crm'),
-                    'inline_help' => __('Select the list that will be assigned for new user registration in your site', 'fluent-crm'),
+                    'placeholder' => __('Select a List', 'fluent-crm'),
+                    'inline_help' => __('Select the list to assign to new users who register on your site', 'fluent-crm'),
                     'dependency'  => [
                         'depends_on' => 'status',
                         'operator'   => '=',
@@ -58,8 +58,8 @@ class AutoSubscribe
                     'option_key'  => 'tags',
                     'is_multiple' => true,
                     'creatable'   => true,
-                    'placeholder' => __('Select Assign Tag', 'fluent-crm'),
-                    'inline_help' => __('Select the tags that will be assigned for new user registration in your site', 'fluent-crm'),
+                    'placeholder' => __('Select tags', 'fluent-crm'),
+                    'inline_help' => __('Select the tags to assign to new users who register on your site', 'fluent-crm'),
                     'dependency'  => [
                         'depends_on' => 'status',
                         'operator'   => '=',
@@ -68,8 +68,8 @@ class AutoSubscribe
                 ],
                 'double_optin' => [
                     'type'           => 'inline-checkbox',
-                    'label'          => __('Double Opt-In', 'fluent-crm'),
-                    'checkbox_label' => __('Enable Double-Optin Email Confirmation', 'fluent-crm'),
+                    'label'          => __('Double Opt-in', 'fluent-crm'),
+                    'checkbox_label' => __('Enable double opt-in email confirmation', 'fluent-crm'),
                     'true_label'     => 'yes',
                     'false_label'    => 'no',
                     'dependency'     => [
@@ -107,15 +107,15 @@ class AutoSubscribe
     {
         return [
             'title'     => __('Comment Form Subscription Settings', 'fluent-crm'),
-            'sub_title' => __('Automatically add your site commenter as a subscriber in FluentCRM', 'fluent-crm'),
+            'sub_title' => __('Automatically add people who comment on your site as contacts in FluentCRM', 'fluent-crm'),
             'fields'    => [
                 'status'         => [
                     'type'           => 'inline-checkbox',
                     'label'          => '',
                     'true_label'     => 'yes',
                     'false_label'    => 'no',
-                    'checkbox_label' => __('Enable Create new contacts in FluentCRM when a visitor add a comment in your comment form', 'fluent-crm'),
-                    'checkbox_description' => __('Automatically add your site commenter as subscriber in FluentCRM', 'fluent-crm'),
+                    'checkbox_label' => __('Create new contacts in FluentCRM when a visitor adds a comment', 'fluent-crm'),
+                    'checkbox_description' => __('Automatically add people who comment on your site as contacts in FluentCRM', 'fluent-crm'),
                 ],
                 'checkbox_label' => [
                     'label'       => __('Checkbox Label for Comment Form', 'fluent-crm'),
@@ -132,8 +132,8 @@ class AutoSubscribe
                     'label'       => __('Assign List', 'fluent-crm'),
                     'option_key'  => 'lists',
                     'is_multiple' => false,
-                    'placeholder' => __('Select Assign List', 'fluent-crm'),
-                    'inline_help' => __('Select the list that will be assigned for comment will be made in comment forms', 'fluent-crm'),
+                    'placeholder' => __('Select a List', 'fluent-crm'),
+                    'inline_help' => __('Select the list to assign when a visitor comments', 'fluent-crm'),
                     'dependency'  => [
                         'depends_on' => 'status',
                         'operator'   => '=',
@@ -145,8 +145,8 @@ class AutoSubscribe
                     'label'       => __('Assign Tags', 'fluent-crm'),
                     'option_key'  => 'tags',
                     'is_multiple' => true,
-                    'placeholder' => __('Select Assign Tag', 'fluent-crm'),
-                    'inline_help' => __('Select the tags that will be assigned for new comment will be made in comment forms', 'fluent-crm'),
+                    'placeholder' => __('Select tags', 'fluent-crm'),
+                    'inline_help' => __('Select the tags to assign when a visitor comments', 'fluent-crm'),
                     'dependency'  => [
                         'depends_on' => 'status',
                         'operator'   => '=',
@@ -156,7 +156,7 @@ class AutoSubscribe
                 'auto_checked'   => [
                     'type'           => 'inline-checkbox',
                     'label'          => '',
-                    'checkbox_label' => __('Enable auto checked status on Comment Form subscription', 'fluent-crm'),
+                    'checkbox_label' => __('Check the subscription checkbox on the comment form by default', 'fluent-crm'),
                     'true_label'     => 'yes',
                     'false_label'    => 'no',
                     'dependency'     => [
@@ -168,7 +168,7 @@ class AutoSubscribe
                 'show_only_new'  => [
                     'type'           => 'inline-checkbox',
                     'label'          => '',
-                    'checkbox_label' => __('Do not show the checkbox if current user already subscribed state', 'fluent-crm'),
+                    'checkbox_label' => __('Do not show the checkbox if the current user is already subscribed', 'fluent-crm'),
                     'true_label'     => 'yes',
                     'false_label'    => 'no',
                     'dependency'     => [
@@ -179,8 +179,8 @@ class AutoSubscribe
                 ],
                 'double_optin'   => [
                     'type'           => 'inline-checkbox',
-                    'label'          => __('Double Opt-In', 'fluent-crm'),
-                    'checkbox_label' => __('Enable Double-Optin Email Confirmation', 'fluent-crm'),
+                    'label'          => __('Double Opt-in', 'fluent-crm'),
+                    'checkbox_label' => __('Enable double opt-in email confirmation', 'fluent-crm'),
                     'true_label'     => 'yes',
                     'false_label'    => 'no',
                     'dependency'     => [
@@ -213,14 +213,14 @@ class AutoSubscribe
     {
         return [
             'title'     => __('Auto Sync User Data and Contact Data', 'fluent-crm'),
-            'sub_title' => __('Automatically Sync your WP User Data and FluentCRM Contact Data', 'fluent-crm'),
+            'sub_title' => __('Automatically sync WordPress user data with FluentCRM contact data', 'fluent-crm'),
             'fields'    => [
                 'status'                        => [
                     'type'           => 'inline-checkbox',
                     'label'          => '',
                     'true_label'     => 'yes',
                     'false_label'    => 'no',
-                    'checkbox_label' => __('Enable Sync between WP User Data and FluentCRM Contact Data', 'fluent-crm'),
+                    'checkbox_label' => __('Enable sync between WordPress user data and FluentCRM contact data', 'fluent-crm'),
                     'checkbox_description' => __('When enabled, changes to WordPress user profile fields (name, email) will be automatically synced to the corresponding FluentCRM contact', 'fluent-crm')
                 ],
                 'delete_contact_on_user_delete' => [
@@ -228,7 +228,7 @@ class AutoSubscribe
                     'label'          => '',
                     'true_label'     => 'yes',
                     'false_label'    => 'no',
-                    'checkbox_label' => __('Delete FluentCRM contact on WP User delete', 'fluent-crm'),
+                    'checkbox_label' => __('Delete the FluentCRM contact when the WordPress user is deleted', 'fluent-crm'),
                     'checkbox_description' => __('When enabled, deleting a WordPress user will also permanently delete the associated FluentCRM contact record', 'fluent-crm')
                 ]
             ]
@@ -260,27 +260,27 @@ class AutoSubscribe
     public function getWooCheckoutFields()
     {
         return [
-            'title'     => __('Woocommerce Checkout Subscription Field', 'fluent-crm'),
-            'sub_title' => __('Add a subscription box to WooCommerce Checkout Form', 'fluent-crm'),
+            'title'     => __('WooCommerce Checkout Subscription Field', 'fluent-crm'),
+            'sub_title' => __('Let customers subscribe to your emails when they check out', 'fluent-crm'),
             'fields'    => [
                 'auto_checkout_fill' => [
                     'type'           => 'inline-checkbox',
                     'label'          => '',
                     'true_label'     => 'yes',
                     'false_label'    => 'no',
-                    'checkbox_label' => __('Automatically fill WooCommerce Checkout field value with current contact data', 'fluent-crm')
+                    'checkbox_label' => __('Automatically fill checkout fields with the current contact\'s details', 'fluent-crm')
                 ],
                 'status'             => [
                     'type'           => 'inline-checkbox',
                     'label'          => '',
                     'true_label'     => 'yes',
                     'false_label'    => 'no',
-                    'checkbox_label' => __('Enable Subscription Checkbox to WooCommerce Checkout Page', 'fluent-crm')
+                    'checkbox_label' => __('Add a subscription checkbox to the WooCommerce checkout page', 'fluent-crm')
                 ],
                 'checkbox_label'     => [
-                    'label'       => __('Checkbox Label for Checkout checkbox', 'fluent-crm'),
+                    'label'       => __('Checkout Checkbox Label', 'fluent-crm'),
                     'type'        => 'input-text',
-                    'placeholder' => __('Checkbox Label for Checkout checkbox', 'fluent-crm'),
+                    'placeholder' => __('Checkout Checkbox Label', 'fluent-crm'),
                     'dependency'  => [
                         'depends_on' => 'status',
                         'operator'   => '=',
@@ -292,8 +292,8 @@ class AutoSubscribe
                     'label'       => __('Assign List', 'fluent-crm'),
                     'option_key'  => 'lists',
                     'is_multiple' => false,
-                    'placeholder' => __('Select Assign List', 'fluent-crm'),
-                    'inline_help' => __('Select the list that will be assigned when checkbox checked', 'fluent-crm'),
+                    'placeholder' => __('Select a List', 'fluent-crm'),
+                    'inline_help' => __('Select the list to assign when the checkbox is checked', 'fluent-crm'),
                     'dependency'  => [
                         'depends_on' => 'status',
                         'operator'   => '=',
@@ -305,8 +305,8 @@ class AutoSubscribe
                     'label'       => __('Assign Tags', 'fluent-crm'),
                     'option_key'  => 'tags',
                     'is_multiple' => true,
-                    'placeholder' => __('Select Assign Tag', 'fluent-crm'),
-                    'inline_help' => __('Select the tags that will be assigned when checkbox checked', 'fluent-crm'),
+                    'placeholder' => __('Select tags', 'fluent-crm'),
+                    'inline_help' => __('Select the tags to assign when the checkbox is checked', 'fluent-crm'),
                     'dependency'  => [
                         'depends_on' => 'status',
                         'operator'   => '=',
@@ -316,7 +316,7 @@ class AutoSubscribe
                 'auto_checked'       => [
                     'type'           => 'inline-checkbox',
                     'label'          => '',
-                    'checkbox_label' => __('Enable auto checked status on checkout page checkbox', 'fluent-crm'),
+                    'checkbox_label' => __('Check the checkout page checkbox by default', 'fluent-crm'),
                     'true_label'     => 'yes',
                     'false_label'    => 'no',
                     'dependency'     => [
@@ -328,7 +328,7 @@ class AutoSubscribe
                 'show_only_new'      => [
                     'type'           => 'inline-checkbox',
                     'label'          => '',
-                    'checkbox_label' => __('Do not show the checkbox if current user already in subscribed state', 'fluent-crm'),
+                    'checkbox_label' => __('Do not show the checkbox if the current user is already subscribed', 'fluent-crm'),
                     'true_label'     => 'yes',
                     'false_label'    => 'no',
                     'dependency'     => [
@@ -339,8 +339,8 @@ class AutoSubscribe
                 ],
                 'double_optin'       => [
                     'type'           => 'inline-checkbox',
-                    'label'          => __('Double Opt-In', 'fluent-crm'),
-                    'checkbox_label' => __('Enable Double-Optin Email Confirmation', 'fluent-crm'),
+                    'label'          => __('Double Opt-in', 'fluent-crm'),
+                    'checkbox_label' => __('Enable double opt-in email confirmation', 'fluent-crm'),
                     'true_label'     => 'yes',
                     'false_label'    => 'no',
                     'dependency'     => [
@@ -355,9 +355,7 @@ class AutoSubscribe
 
     /**
      * Get the saved FluentCart checkout subscription settings merged with defaults.
-     *
-     * Unlike the WooCommerce equivalent, there is no 'auto_checkout_fill'
-     * option — only the opt-in checkbox feature is supported for FluentCart.
+     * FluentCart has no 'auto_checkout_fill' option.
      */
     public function getFluentCartCheckoutSettings()
     {
@@ -379,8 +377,7 @@ class AutoSubscribe
 
         $settings = wp_parse_args($settings, $defaults);
 
-        // Ensure target_list is always a string so it matches the string option
-        // values emitted by the _OptionSelector.vue component (String(option.id))
+        // String to match _OptionSelector.vue option values.
         if ($settings['target_list']) {
             $settings['target_list'] = (string) $settings['target_list'];
         }
@@ -389,10 +386,7 @@ class AutoSubscribe
     }
 
     /**
-     * Normalize and whitelist FluentCart checkout subscription settings before
-     * persisting. Guards the stored option against malformed client payloads:
-     * yes/no flags are forced to valid values, list/tag IDs are coerced to
-     * strings (validated as integer IDs) and the label is plain text.
+     * Normalize and whitelist FluentCart checkout subscription settings before persisting.
      */
     public function sanitizeFluentCartCheckoutSettings($settings)
     {
@@ -420,8 +414,7 @@ class AutoSubscribe
     }
 
     /**
-     * Field definitions for the FluentCart checkout subscription settings panel,
-     * rendered by the shared form-builder component in _GeneralSettings.vue.
+     * Field definitions for the FluentCart checkout subscription settings panel.
      */
     public function getFluentCartCheckoutFields()
     {
@@ -434,12 +427,12 @@ class AutoSubscribe
                     'label'          => '',
                     'true_label'     => 'yes',
                     'false_label'    => 'no',
-                    'checkbox_label' => __('Enable Subscription Checkbox to FluentCart Checkout Page', 'fluent-crm')
+                    'checkbox_label' => __('Add a subscription checkbox to the FluentCart checkout page', 'fluent-crm')
                 ],
                 'checkbox_label' => [
-                    'label'       => __('Checkbox Label for Checkout checkbox', 'fluent-crm'),
+                    'label'       => __('Checkout Checkbox Label', 'fluent-crm'),
                     'type'        => 'input-text',
-                    'placeholder' => __('Checkbox Label for Checkout checkbox', 'fluent-crm'),
+                    'placeholder' => __('Checkout Checkbox Label', 'fluent-crm'),
                     'dependency'  => [
                         'depends_on' => 'status',
                         'operator'   => '=',
@@ -451,8 +444,8 @@ class AutoSubscribe
                     'label'       => __('Assign List', 'fluent-crm'),
                     'option_key'  => 'lists',
                     'is_multiple' => false,
-                    'placeholder' => __('Select Assign List', 'fluent-crm'),
-                    'inline_help' => __('Select the list that will be assigned when checkbox checked', 'fluent-crm'),
+                    'placeholder' => __('Select a List', 'fluent-crm'),
+                    'inline_help' => __('Select the list to assign when the checkbox is checked', 'fluent-crm'),
                     'dependency'  => [
                         'depends_on' => 'status',
                         'operator'   => '=',
@@ -464,8 +457,8 @@ class AutoSubscribe
                     'label'       => __('Assign Tags', 'fluent-crm'),
                     'option_key'  => 'tags',
                     'is_multiple' => true,
-                    'placeholder' => __('Select Assign Tag', 'fluent-crm'),
-                    'inline_help' => __('Select the tags that will be assigned when checkbox checked', 'fluent-crm'),
+                    'placeholder' => __('Select tags', 'fluent-crm'),
+                    'inline_help' => __('Select the tags to assign when the checkbox is checked', 'fluent-crm'),
                     'dependency'  => [
                         'depends_on' => 'status',
                         'operator'   => '=',
@@ -475,7 +468,7 @@ class AutoSubscribe
                 'auto_checked'   => [
                     'type'           => 'inline-checkbox',
                     'label'          => '',
-                    'checkbox_label' => __('Enable auto checked status on checkout page checkbox', 'fluent-crm'),
+                    'checkbox_label' => __('Check the checkout page checkbox by default', 'fluent-crm'),
                     'true_label'     => 'yes',
                     'false_label'    => 'no',
                     'dependency'     => [
@@ -487,7 +480,7 @@ class AutoSubscribe
                 'show_only_new'  => [
                     'type'           => 'inline-checkbox',
                     'label'          => '',
-                    'checkbox_label' => __('Do not show the checkbox if current user already in subscribed state', 'fluent-crm'),
+                    'checkbox_label' => __('Do not show the checkbox if the current user is already subscribed', 'fluent-crm'),
                     'true_label'     => 'yes',
                     'false_label'    => 'no',
                     'dependency'     => [
@@ -498,8 +491,8 @@ class AutoSubscribe
                 ],
                 'double_optin'   => [
                     'type'           => 'inline-checkbox',
-                    'label'          => __('Double Opt-In', 'fluent-crm'),
-                    'checkbox_label' => __('Enable Double-Optin Email Confirmation', 'fluent-crm'),
+                    'label'          => __('Double Opt-in', 'fluent-crm'),
+                    'checkbox_label' => __('Enable double opt-in email confirmation', 'fluent-crm'),
                     'true_label'     => 'yes',
                     'false_label'    => 'no',
                     'dependency'     => [

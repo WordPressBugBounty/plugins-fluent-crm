@@ -56,8 +56,7 @@ class SequencePoints
         $inWaitTimes = false;
         $this->classifySequences($sequences, $isInChild, $inWaitTimes);
 
-        // If we're inside a child block and exhausted all child sequences,
-        // transition back to the parent-level sequence flow
+        // An exhausted child block returns to the parent-level flow.
         if ($isInChild && !$this->nextSequence && !$this->hasEndSequence) {
             $this->handleChildToParentTransition($inWaitTimes);
         }
@@ -270,7 +269,6 @@ class SequencePoints
             return;
         }
 
-        // Classify the parent-level sequences using the same logic
         $this->classifySequences($sequences, false, $inWaitTimes);
     }
 

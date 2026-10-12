@@ -2,10 +2,13 @@
 
 namespace FluentCrm\App\Hooks\Handlers;
 
+use FluentCrm\App\Services\BlockParserHelper;
+
 use FluentCrm\App\Models\CampaignEmail;
 use FluentCrm\App\Models\CampaignUrlMetric;
 use FluentCrm\App\Models\Company;
 use FluentCrm\App\Models\CompanyNote;
+use FluentCrm\App\Models\EventTracker;
 use FluentCrm\App\Models\FunnelMetric;
 use FluentCrm\App\Models\FunnelSubscriber;
 use FluentCrm\App\Models\Subscriber;
@@ -47,6 +50,11 @@ class Cleanup
             \FluentCampaign\App\Models\SequenceTracker::whereIn('subscriber_id', $subscriberIds)->delete();
         }
 
+        // The tracked events table exists only once the experimental feature is enabled.
+        if (Helper::isExperimentalEnabled('event_tracking')) {
+            EventTracker::whereIn('subscriber_id', $subscriberIds)->delete();
+        }
+
         if (Helper::isExperimentalEnabled('company_module')) {
             Company::whereIn('owner_id', $subscriberIds)
                 ->update([
@@ -63,10 +71,7 @@ class Cleanup
      */
     public function deleteCampaignAssets($campaignId)
     {
-        // Idempotent backstop — Campaign::deleteCampaignData() already removes
-        // these in the normal delete flow, but we keep this here so any
-        // future caller that fires fluent_crm/campaign_deleted without
-        // running deleteCampaignData() first still gets a clean teardown.
+        // Idempotent backstop for callers that skip Campaign::deleteCampaignData().
         CampaignEmail::where('campaign_id', $campaignId)->delete();
         CampaignUrlMetric::where('campaign_id', $campaignId)->delete();
     }
@@ -98,10 +103,7 @@ class Cleanup
      */
     public function handleUnsubscribe($subscriber)
     {
-        // Per-statement try/catch: a row-lock deadlock against the mailer
-        // workers on the CampaignEmail update should not also block the
-        // FunnelSubscriber / SequenceTracker cancellations. The next status
-        // transition (or a manual retry) will reconcile any rows we miss.
+        // Per-statement try/catch so a deadlock on one table does not block the others.
         try {
             CampaignEmail::where('subscriber_id', $subscriber->id)
                 ->whereIn('status', ['pending', 'scheduled', 'draft', 'processing', 'scheduling'])
@@ -151,18 +153,14 @@ class Cleanup
                 'email_address' => $subscriber->email
             ]);
 
-        // A new address has no bounce history — the accumulated soft-bounce strikes
-        // belong to the old mailbox and must not carry over toward the bounce flip.
+        // Soft-bounce strikes belong to the old address.
         $this->resetSoftBounceCount($subscriber);
     }
 
     /**
      * Clear the accumulated soft-bounce strike counter.
-     *
-     * Wired to email changes and double-opt-in confirmations — both are positive
-     * deliverability/consent signals. Without a reset the counter accumulates
-     * across years until the Nth soft bounce silently flips the contact to
-     * `bounced`.
+     * Runs on email changes, double opt-in confirmations, any change to subscribed, and tracked
+     * clicks, so old transient bounces do not suppress a contact who is reachable again.
      *
      * @param \FluentCrm\App\Models\Subscriber $subscriber
      */
@@ -319,7 +317,10 @@ class Cleanup
         if (in_array($campaign->design_template, $rawTemplates)) {
             $emailBody = $campaign->email_body;
         } else {
-            $emailBody = (new BlockParser())->parse($campaign->email_body);
+            // The cached body is what the public share link and the archive show to anyone.
+            $emailBody = BlockParserHelper::renderForAnonymousViewer(function () use ($campaign) {
+                return (new BlockParser())->parse($campaign->email_body);
+            });
         }
 
         fluentcrm_update_campaign_meta($campaign->id, '_cached_email_body', $emailBody);
@@ -346,11 +347,7 @@ class Cleanup
             return false; // Group not found
         }
 
-        // Delete old actions and their associated logs in bounded batches. FluentCRM
-        // produces a very large number of scheduled actions (email sends, funnels,
-        // sequences), so a single unbounded multi-table DELETE could hold a large lock
-        // and bloat the transaction on busy sites. We loop while batches stay full and
-        // we are still within a safe time budget.
+        // Delete old actions and their logs in bounded batches within a time budget.
         $batchSize = 500;
         $totalDeleted = 0;
 
@@ -369,7 +366,7 @@ class Cleanup
                 break;
             }
 
-            // Safe to interpolate: every id is cast to an integer.
+            // Every id is cast to an integer.
             $ids = implode(',', array_map('intval', $actionIds));
 
             // Remove the associated logs first, then the actions themselves.

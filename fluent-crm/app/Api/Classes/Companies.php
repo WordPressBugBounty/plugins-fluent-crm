@@ -73,9 +73,7 @@ class Companies
             if (isset($data['custom_values'])) {
                 $existingMeta = $exist->meta;
                 $values = Arr::get($data, 'custom_values', []);
-                // formatCustomFieldValues() only coerces types; sanitize here, at the
-                // single point every company custom-value write passes through, so the
-                // values cannot reach the meta column as live markup.
+                // formatCustomFieldValues() only coerces types; every company custom-value write is sanitized here.
                 $values = Sanitize::companyCustomValues(
                     (new CustomCompanyField())->formatCustomFieldValues($values)
                 );

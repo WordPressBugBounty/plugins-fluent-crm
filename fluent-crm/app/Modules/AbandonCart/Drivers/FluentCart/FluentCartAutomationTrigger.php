@@ -20,7 +20,7 @@ class FluentCartAutomationTrigger extends BaseTrigger
         return [
             'category'    => __('FluentCart', 'fluent-crm'),
             'label'       => __('Cart Abandoned - FluentCart', 'fluent-crm'),
-            'description' => __('This Funnel will be initiated when a cart has been abandoned in FluentCart', 'fluent-crm'),
+            'description' => __('This automation will start when a cart is abandoned in FluentCart', 'fluent-crm'),
             'svg' => '<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="24px" height="24px" viewBox="0 0 24 24" version="1.1"><g id="surface1"><path style=" stroke:none;fill-rule:nonzero;fill:rgb(100%,100%,100%);fill-opacity:1;" d="M 2.398438 0 L 21.601562 0 C 22.925781 0 24 1.074219 24 2.398438 L 24 21.601562 C 24 22.925781 22.925781 24 21.601562 24 L 2.398438 24 C 1.074219 24 0 22.925781 0 21.601562 L 0 2.398438 C 0 1.074219 1.074219 0 2.398438 0 Z M 2.398438 0 "/><path style=" stroke:none;fill-rule:nonzero;fill:rgb(0%,0%,62.352943%);fill-opacity:1;" d="M 10.925781 16.476562 L 3.769531 16.476562 L 4.894531 13.878906 C 5.222656 13.117188 5.972656 12.625 6.804688 12.625 L 15.328125 12.625 L 14.746094 13.964844 C 14.085938 15.488281 12.585938 16.476562 10.925781 16.476562 Z M 10.925781 16.476562 "/><path style=" stroke:none;fill-rule:nonzero;fill:rgb(0%,0%,62.352943%);fill-opacity:1;" d="M 16.851562 11.394531 L 6.789062 11.394531 L 7.367188 10.054688 C 8.027344 8.53125 9.53125 7.542969 11.191406 7.542969 L 19.886719 7.542969 L 18.761719 10.140625 C 18.433594 10.902344 17.683594 11.394531 16.851562 11.394531 Z M 16.851562 11.394531 "/></g></svg>'
         ];
     }
@@ -29,13 +29,13 @@ class FluentCartAutomationTrigger extends BaseTrigger
     {
         return [
             'title'     => __('Cart Abandoned - FluentCart', 'fluent-crm'),
-            'sub_title' => __('This Funnel will be initiated when a cart has been abandoned in FluentCart', 'fluent-crm'),
+            'sub_title' => __('This automation will start when a cart is abandoned in FluentCart', 'fluent-crm'),
             'fields'    => [
                 'priority' => [
-                    'label'       => __('Priority of this abandon cart automation trigger', 'fluent-crm'),
+                    'label'       => __('Priority of this abandoned cart automation trigger', 'fluent-crm'),
                     'type'        => 'input-number',
                     'placeholder' => __('Automation Priority', 'fluent-crm'),
-                    'inline_help' => __('If you have multiple automations for abandoned cart, you can set the priority. The higher the priority means it will match earlier. Only one abandoned cart automation will run per abandonment depending on your conditional logic.', 'fluent-crm')
+                    'inline_help' => __('If you have multiple abandoned cart automations, you can set their priority. Higher-priority automations are matched first. Only one abandoned cart automation runs per abandoned cart, based on your conditional logic.', 'fluent-crm')
                 ]
             ]
         ];
@@ -73,12 +73,12 @@ class FluentCartAutomationTrigger extends BaseTrigger
                 'labels'      => [
                     'match_type_all_label' => __('True if all conditions match', 'fluent-crm'),
                     'match_type_any_label' => __('True if any of the conditions match', 'fluent-crm'),
-                    'data_key_label'       => __('Contact Data', 'fluent-crm'),
+                    'data_key_label'       => __('Contact data', 'fluent-crm'),
                     'condition_label'      => __('Condition', 'fluent-crm'),
                     'data_value_label'     => __('Match Value', 'fluent-crm')
                 ],
                 'groups'      => $this->getConditionGroups($funnel),
-                'add_label'   => __('Add Condition to check your contact\'s properties', 'fluent-crm'),
+                'add_label'   => __('Add a condition to check your contact\'s properties', 'fluent-crm'),
             ];
         }
 
@@ -87,14 +87,14 @@ class FluentCartAutomationTrigger extends BaseTrigger
             'active_once'        => [
                 'type'        => 'yes_no_check',
                 'label'       => '',
-                'check_label' => __('Skip this automation if the contact is already in active state.', 'fluent-crm'),
+                'check_label' => __('Skip this automation if the contact is already active in it', 'fluent-crm'),
                 'inline_help' => __('Enable this to prevent the automation from running multiple times for the same contact if it is currently active in this automation', 'fluent-crm')
             ],
             'require_subscribed' => [
                 'type'        => 'yes_no_check',
                 'label'       => '',
                 'check_label' => __('Only run this automation for subscribed contacts', 'fluent-crm'),
-                'inline_help' => __('If you enable, then it will only run this automation for subscribed contacts', 'fluent-crm')
+                'inline_help' => __('When enabled, this automation runs only for subscribed contacts', 'fluent-crm')
             ]
         ];
 
@@ -131,7 +131,7 @@ class FluentCartAutomationTrigger extends BaseTrigger
                         'component'   => 'ajax_selector',
                         'option_key'  => 'fluent_cart_products',
                         'is_multiple' => true,
-                        'help'        => __('Match the products on the cart', 'fluent-crm')
+                        'help'        => __('Match the products in the cart', 'fluent-crm')
                     ],
                     [
                         'label'       => __('Cart Items Categories', 'fluent-crm'),
@@ -140,7 +140,7 @@ class FluentCartAutomationTrigger extends BaseTrigger
                         'component'   => 'tax_selector',
                         'taxonomy'    => 'product-categories',
                         'is_multiple' => true,
-                        'help'        => __('Match the product categories on the cart', 'fluent-crm')
+                        'help'        => __('Match the product categories in the cart', 'fluent-crm')
                     ],
                 ]
             ],
@@ -149,12 +149,12 @@ class FluentCartAutomationTrigger extends BaseTrigger
                 'value'    => 'subscriber',
                 'children' => [
                     [
-                        'label' => __('First Name', 'fluent-crm'),
+                        'label' => __('First name', 'fluent-crm'),
                         'value' => 'first_name',
                         'type'  => 'nullable_text'
                     ],
                     [
-                        'label' => __('Last Name', 'fluent-crm'),
+                        'label' => __('Last name', 'fluent-crm'),
                         'value' => 'last_name',
                         'type'  => 'nullable_text'
                     ],
@@ -257,7 +257,7 @@ class FluentCartAutomationTrigger extends BaseTrigger
             }
 
             $groups['custom_fields'] = [
-                'label'    => __('Custom Fields', 'fluent-crm'),
+                'label'    => __('Custom fields', 'fluent-crm'),
                 'value'    => 'custom_fields',
                 'children' => $children
             ];

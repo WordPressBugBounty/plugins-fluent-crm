@@ -5,6 +5,7 @@ namespace FluentCrm\App\Modules\AbandonCart;
 use FluentCrm\App\Modules\AbandonCart\Drivers\DriverManager;
 use FluentCrm\App\Models\FunnelMetric;
 use FluentCrm\App\Models\FunnelSubscriber;
+use FluentCrm\App\Models\Subscriber;
 use FluentCrm\App\Services\Funnel\FunnelProcessor;
 use FluentCrm\App\Services\Libs\ConditionAssessor;
 use FluentCrm\Framework\Support\Arr;
@@ -109,6 +110,7 @@ class AbandonCartRunner
         }
 
         $items = Arr::get($abandonCart->cart, 'cart_contents', []);
+        $itemsCount = count($items);
 
         // Use driver for provider-specific condition data extraction
         $driver = DriverManager::getDriver($abandonCart->provider);
@@ -117,6 +119,9 @@ class AbandonCartRunner
             $conditionData = $driver->extractCartConditionData($abandonCart);
             $productIds = $conditionData['product_ids'];
             $categoryIds = $conditionData['category_ids'];
+            if (isset($conditionData['items_count'])) {
+                $itemsCount = (int)$conditionData['items_count'];
+            }
         } else {
             $productIds = [];
             $categoryIds = [];
@@ -127,7 +132,7 @@ class AbandonCartRunner
 
         $cartData = [
             'cart_total'            => $abandonCart->total,
-            'cart_items_count'      => count($items),
+            'cart_items_count'      => $itemsCount,
             'cart_items'            => $productIds,
             'cart_items_categories' => $categoryIds,
         ];
@@ -162,11 +167,14 @@ class AbandonCartRunner
                 ];
             }
 
-            if (!$contact && $this->hasContactConditions($cartConditions)) {
-                $contact = $this->createContactFromCart($abandonCart);
+            // Contact conditions on a guest cart are checked against an unsaved contact; the
+            // real one is created only for the automation that matches (runAbandonCart()).
+            $conditionContact = $contact;
+            if (!$conditionContact && $this->hasContactConditions($cartConditions)) {
+                $conditionContact = $this->makeUnsavedContactFromCart($abandonCart);
             }
 
-            if ($this->assessConditionGroups($cartConditions, $contact, $cartData)) {
+            if ($this->assessConditionGroups($cartConditions, $conditionContact, $cartData)) {
                 return [
                     'automation' => $automation,
                     'contact'    => $contact
@@ -177,7 +185,36 @@ class AbandonCartRunner
         return new \WP_Error('no_automation', 'No automation found for this cart based on condition match');
     }
 
+    /**
+     * A contact built from the cart, not saved, for checking an automation's contact conditions.
+     *
+     * Creating the contact here made every guest cart a CRM contact tagged "abandoned", even when
+     * no automation matched and the cart was skipped.
+     *
+     * @param AbandonCartModel $abandonCart
+     * @return Subscriber
+     */
+    protected function makeUnsavedContactFromCart(AbandonCartModel $abandonCart)
+    {
+        $data = Arr::except($this->contactDataFromCart($abandonCart), ['tags', 'lists', 'full_name']);
+        $contact = new Subscriber();
+        $contact->fill(Arr::only($data, $contact->getFillable()));
+
+        return $contact;
+    }
+
     protected function createContactFromCart(AbandonCartModel $abandonCart)
+    {
+        return fluentCrmApi('contacts')->createOrUpdate($this->contactDataFromCart($abandonCart));
+    }
+
+    /**
+     * Contact fields from the cart's billing data, plus the abandoned-cart status, tags and lists.
+     *
+     * @param AbandonCartModel $abandonCart
+     * @return array
+     */
+    protected function contactDataFromCart(AbandonCartModel $abandonCart)
     {
         $customData = Arr::get($abandonCart->cart, 'customer_data', []);
         $cartSettings = AbCartHelper::getSettings();
@@ -199,8 +236,7 @@ class AbandonCartRunner
             'lists'          => Arr::get($cartSettings, 'lists_on_cart_abandoned', [])
         ]);
 
-
-        return fluentCrmApi('contacts')->createOrUpdate($contactData);
+        return $contactData;
     }
 
     protected function hasContactConditions($conditions)

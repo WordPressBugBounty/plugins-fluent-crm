@@ -9,63 +9,35 @@ use FluentCrm\App\Modules\MCP\Helpers\MCPHelper;
 use FluentCrm\App\Services\PermissionManager;
 
 /**
- * Tag/list read + management tools.
- *
- * Read: `list-tags` and `list-lists` enumerate the registries with search,
- * pagination, and opt-in size/recency metrics. Before these existed, tags and
- * lists reached an agent only through `get-crm-context`'s `segments` section,
- * which is hard-capped at 50 rows with no paging — so a site with more than 50
- * tags could not be enumerated at all, and `manage-tag`'s merge (up to 100
- * sources) had no matching read surface to plan against.
- *
- * Write: `manage-tag` and `manage-list` cover create, update, delete, and merge
- * operations. Splitting create/update/delete into separate tools would
- * triple the surface; the action enum keeps it compact while the
- * `destructive` annotation tells MCP clients to confirm delete + merge.
- *
- * Merge semantics: re-pivot every subscriber attached to a `from` tag/list
- * onto the `to` target, then delete the `from` rows. Idempotent — running
- * the same merge twice no-ops on the second call (subscribers are already
- * pivoted, sources already deleted).
- *
- * Note the naming: these are deliberately NOT called "segments" on the agent
- * surface. "Segments" is a distinct FluentCRM feature (Contacts > Segments,
- * `sending_filter = 'dynamic_segment'`) supplied by FluentCampaign Pro, and
- * reusing the word here would make an agent conflate the two.
+ * Tag/list read and management tools (list-tags, list-lists, manage-tag, manage-list).
+ * Merge moves every subscriber from the source rows onto the target, then deletes the sources.
+ * Not called "segments" on the agent surface: that is the separate Pro dynamic-segment feature.
  */
 class SegmentTools
 {
     /**
-     * Bound the ref list `list-tags`/`list-lists` will resolve in one call.
-     * Matches the 100-ref ceiling used by list-contacts' `emails`.
+     * Max refs `list-tags`/`list-lists` resolve in one call.
      */
     const MAX_LOOKUP_REFS = 100;
 
     /**
-     * Bound synchronous merge work by source pivot rows. A subscriber attached
-     * to two source segments accounts for two rows because both must be
-     * detached. Operators can deliberately raise this through the documented
-     * filter when their environment can sustain a larger synchronous job.
+     * Max source pivot rows a synchronous merge processes. Filterable.
      */
     const DEFAULT_MERGE_MAX_PIVOT_ROWS = 5000;
 
     /**
-     * Bound the SQL IN list even for direct Ability/REST callers that bypass
-     * the MCP adapter's input-schema validation.
+     * Max merge source ids, enforced for direct Ability/REST callers too.
      */
     const MAX_MERGE_SOURCE_IDS = 100;
 
     /**
-     * Keep model hydration and native hook dispatch bounded per query.
+     * Rows hydrated per merge batch.
      */
     const MERGE_BATCH_SIZE = 200;
 
     /**
-     * How many follow-up passes actionMerge() makes to catch memberships
-     * created while it was running. Bounded so a site attaching to a source
-     * faster than the merge drains it cannot keep the request alive; anything
-     * still outstanding after the last pass is re-pointed by
-     * mergeRepointStragglers() instead of being lost.
+     * Follow-up passes actionMerge() makes for memberships created mid-merge.
+     * Anything left after the last pass is handled by mergeRepointStragglers().
      */
     const MERGE_MAX_SWEEPS = 3;
 
@@ -84,25 +56,8 @@ class SegmentTools
     }
 
     /**
-     * Paginated tag/list registry with optional size + recency metrics.
-     *
-     * Both metrics are opt-in because both cost a pass over fc_subscriber_pivot,
-     * which is the largest table on most installs:
-     *
-     *  - `include_counts` uses withCount() so the aggregate happens in SQL
-     *    before the LIMIT, which is what makes sort_by=subscribers_count
-     *    possible at all.
-     *  - `include_last_used` runs ONE grouped query over just the ids on the
-     *    current page (the same bounded pattern FunnelTools::listAutomations
-     *    uses for its subscriber counts) rather than a correlated subquery per
-     *    row. The pivot is indexed on object_id alone, not (object_id,
-     *    created_at), so MAX(created_at) still walks each tag's rows — keeping
-     *    it to one page's worth is the difference between bounded and brutal.
-     *
-     * The consequence of computing last_used_at after the LIMIT is that it
-     * cannot be a sort key; `sort_by` deliberately omits it. With per_page=100
-     * an agent sorts a page itself, and most installs hold well under a page
-     * of tags.
+     * Paginated tag/list registry with opt-in size and recency metrics.
+     * last_used_at is computed for the current page only, so it cannot be a sort key.
      *
      * @param array  $params Tool arguments.
      * @param string $kind   'tag' or 'list'.
@@ -117,25 +72,18 @@ class SegmentTools
         $modelClass = $kind === 'list' ? Lists::class : Tag::class;
         $query      = $modelClass::query();
 
-        // Reuse the model's own scope: it escapes LIKE wildcards via
-        // $wpdb->esc_like() and spans title/slug/description, so search here
-        // behaves exactly like the admin list it mirrors.
         $search = sanitize_text_field((string) ($params['search'] ?? ''));
         if ($search !== '') {
             $query->searchBy($search);
         }
 
-        // Direct ref lookup. Unresolvable refs are REPORTED, not ignored — an
-        // agent that asked for 5 tags and silently got 4 would draw wrong
-        // conclusions about which ones exist. Same contract as list-contacts'
-        // `emails`/`not_found`.
+        // Unresolvable refs are reported in not_found.
         $notFoundRefs = [];
         if (!empty($params['ids'])) {
             $refs = (array) $params['ids'];
             if (count($refs) > self::MAX_LOOKUP_REFS) {
                 return MCPHelper::error('invalid_param', sprintf(
-                    /* translators: 1: maximum refs per call, 2: number received */
-                    __('ids accepts at most %1$d refs per call; received %2$d. Page through with search instead.', 'fluent-crm'),
+                    'ids accepts at most %1$d refs per call; received %2$d. Page through with search instead.',
                     self::MAX_LOOKUP_REFS,
                     count($refs)
                 ), ['max_refs' => self::MAX_LOOKUP_REFS, 'received' => count($refs)]);
@@ -144,8 +92,7 @@ class SegmentTools
             $resolved     = self::resolveRefs($refs, $kind);
             $notFoundRefs = $resolved['not_found'];
 
-            // Fail CLOSED. An empty IN list would drop the filter entirely and
-            // return the whole registry — the opposite of what was asked for.
+            // Fail closed: an empty IN list would return the whole registry.
             $query->whereIn('id', $resolved['ids'] ?: [0]);
         }
 
@@ -157,8 +104,6 @@ class SegmentTools
         $sortType = strtoupper(sanitize_text_field((string) ($params['sort_type'] ?? 'ASC')));
         $sortType = in_array($sortType, ['ASC', 'DESC'], true) ? $sortType : 'ASC';
 
-        // Sorting by size implies wanting the size — otherwise the agent gets
-        // rows ordered by a number the response never shows.
         $withCounts = !empty($params['include_counts']) || $sortBy === 'subscribers_count';
         if ($withCounts) {
             $query->withCount('subscribers');
@@ -192,11 +137,7 @@ class SegmentTools
                 $stats = $lastUsed[(int) $row->id] ?? ['last_used_at' => null, 'pivot_rows' => 0];
                 $item['last_used_at'] = MCPHelper::toIso8601($stats['last_used_at']);
 
-                // Distinguish "nobody has this tag" from "contacts have it but
-                // the pivot rows predate timestamp stamping". Both surface as a
-                // null last_used_at, and a cleanup agent that treats the second
-                // case as "unused" would delete a live tag with thousands of
-                // contacts on it. Emitted only when it applies.
+                // Rows exist but predate timestamp stamping: not the same as unused.
                 if (!$item['last_used_at'] && $stats['pivot_rows'] > 0) {
                     $item['last_used_at_unknown'] = true;
                 }
@@ -248,8 +189,6 @@ class SegmentTools
             return ['ids' => [], 'not_found' => []];
         }
 
-        // One query for the whole batch — a per-ref find() would be N round
-        // trips for what is a single indexed lookup.
         $slugs = array_map('sanitize_title', $textRefs);
         $rows  = $modelClass::query()
             ->where(function ($q) use ($numericIds, $textRefs, $slugs) {
@@ -293,15 +232,8 @@ class SegmentTools
     }
 
     /**
-     * Last-application timestamp + attached row count for the given tag/list
-     * ids, in one grouped query.
-     *
-     * `last_used_at` reads the pivot's created_at, which attachTags()/
-     * attachLists() stamp at attach time. Because those use INSERT IGNORE
-     * against a unique key, re-attaching a tag a contact already has does NOT
-     * bump the timestamp — so this is "the most recent time this tag was newly
-     * applied to some contact", which is exactly the stale-tag signal, not
-     * "the last time it was touched".
+     * Most recent attach time and pivot row count per tag/list id.
+     * Re-attaching an existing tag does not bump the pivot's created_at.
      *
      * @param int[]  $ids  Ids on the current page.
      * @param string $kind 'tag' or 'list'.
@@ -319,9 +251,7 @@ class SegmentTools
         $objectType   = self::segmentObjectType($kind);
         $placeholders = implode(',', array_fill(0, count($ids), '%d'));
 
-        // object_type discriminator is mandatory: fc_subscriber_pivot is shared
-        // by tags, lists, AND companies, so omitting it would blend a tag's
-        // rows with the list row that happens to share its id.
+        // fc_subscriber_pivot is shared by tags, lists and companies.
         $rows = $wpdb->get_results($wpdb->prepare(
             "SELECT object_id, COUNT(*) AS pivot_rows, MAX(created_at) AS last_used_at
              FROM {$pivotTable}
@@ -365,16 +295,15 @@ class SegmentTools
         $action = sanitize_key((string) ($params['action'] ?? ''));
 
         if (!in_array($action, ['create', 'update', 'delete', 'merge'], true)) {
-            return MCPHelper::error('invalid_param', __('action must be one of: create, update, delete, merge', 'fluent-crm'));
+            return MCPHelper::error('invalid_param', 'action must be one of: create, update, delete, merge');
         }
 
-        // Permission gate. create/update need _cats; delete needs _cats_delete.
+        // delete and merge need the delete capability.
         $needsDeleteCap = in_array($action, ['delete', 'merge'], true);
         $cap = $needsDeleteCap ? 'fcrm_manage_contact_cats_delete' : 'fcrm_manage_contact_cats';
         if (!PermissionManager::currentUserCan($cap)) {
             return MCPHelper::error('forbidden', sprintf(
-                /* translators: %s: required capability */
-                __('This action requires the %s capability.', 'fluent-crm'),
+                'This action requires the %s capability.',
                 $cap
             ), ['required' => $cap]);
         }
@@ -390,14 +319,14 @@ class SegmentTools
                 return self::actionMerge($params, $kind);
         }
 
-        return MCPHelper::error('invalid_param', __('Unhandled action', 'fluent-crm'));
+        return MCPHelper::error('invalid_param', 'Unhandled action');
     }
 
     private static function actionCreate($params, $kind)
     {
         $title = trim((string) ($params['title'] ?? ''));
         if ($title === '') {
-            return MCPHelper::error('invalid_param', __('title is required for create', 'fluent-crm'));
+            return MCPHelper::error('invalid_param', 'title is required for create');
         }
         $slug = isset($params['slug']) && $params['slug'] !== ''
             ? sanitize_title((string) $params['slug'])
@@ -407,8 +336,7 @@ class SegmentTools
         $existing = self::lookupByTitleOrSlug($title, $slug, $kind);
         if ($existing) {
             return MCPHelper::error('contact_exists', sprintf(
-                /* translators: 1: kind (tag/list), 2: matched id */
-                __('A %1$s with that title or slug already exists (id %2$d). Use update or merge to change it.', 'fluent-crm'),
+                'A %1$s with that title or slug already exists (id %2$d). Use update or merge to change it.',
                 $kind,
                 (int) $existing->id
             ), ['existing_id' => (int) $existing->id]);
@@ -423,7 +351,6 @@ class SegmentTools
 
         do_action(self::createdHook($kind), $row);
 
-        // A new row invalidates memoized "unknown ref" verdicts.
         MCPHelper::flushSegmentRefCache();
 
         return [
@@ -432,8 +359,7 @@ class SegmentTools
             'kind'    => $kind,
             $kind     => self::format($row),
             'note'    => sprintf(
-                /* translators: 1: kind, 2: title */
-                __('%1$s "%2$s" created. No subscribers are attached yet.', 'fluent-crm'),
+                '%1$s "%2$s" created. No subscribers are attached yet.',
                 ucfirst($kind),
                 $row->title
             ),
@@ -445,7 +371,7 @@ class SegmentTools
         $id = (int) ($params[$kind . '_id'] ?? 0);
         $row = $id ? self::find($id, $kind) : null;
         if (!$row) {
-            return MCPHelper::error('not_found', sprintf(__('%s not found', 'fluent-crm'), ucfirst($kind)), [$kind . '_id' => $id]);
+            return MCPHelper::error('not_found', sprintf('%s not found', ucfirst($kind)), [$kind . '_id' => $id]);
         }
 
         $changes = [];
@@ -474,16 +400,11 @@ class SegmentTools
                 'action' => 'update',
                 'kind'   => $kind,
                 $kind    => self::format($row),
-                'note'   => __('No changes — provided fields matched the current values.', 'fluent-crm'),
+                'note'   => 'No changes: provided fields matched the current values.',
             ];
         }
 
-        // Identity conflict: title/slug resolution is first-match everywhere
-        // (MCPHelper::resolveSegmentRefs, lookupByTitleOrSlug), so letting an
-        // update take a title or slug that another row already holds makes
-        // every later reference to it ambiguous. actionCreate() already
-        // refuses this; update did not, which left the same inconsistent state
-        // reachable through the back door (review PR #2025).
+        // A title or slug held by another row would make later references ambiguous.
         if (isset($changes['title']) || isset($changes['slug'])) {
             $conflict = self::identityConflict($row, $kind);
             if (is_wp_error($conflict)) {
@@ -493,7 +414,6 @@ class SegmentTools
 
         $row->save();
 
-        // A renamed row invalidates memoized title/slug lookups.
         MCPHelper::flushSegmentRefCache();
 
         return [
@@ -506,15 +426,10 @@ class SegmentTools
     }
 
     /**
-     * Refuse a title or slug that already belongs to a DIFFERENT tag/list.
+     * Refuse a title or slug that already belongs to a different tag/list.
+     * No unique index exists: existing installs may already hold duplicates.
      *
-     * Enforced in application code rather than with a unique index: the
-     * fc_tags / fc_lists schemas allow duplicates today and existing installs
-     * may already hold some, so adding the constraint would fail the upgrade
-     * on exactly the sites that need it most. Core's create paths take the
-     * same check-then-create approach (Helper::createNewTags()).
-     *
-     * @param object $row  Tag/Lists model carrying the PROPOSED title + slug
+     * @param object $row  Tag/Lists model carrying the proposed title + slug
      * @param string $kind 'tag' or 'list'
      * @return true|\WP_Error
      */
@@ -533,8 +448,7 @@ class SegmentTools
         }
 
         return MCPHelper::error('contact_exists', sprintf(
-            /* translators: 1: kind (tag/list), 2: conflicting id */
-            __('Another %1$s (id %2$d) already uses that title or slug. Pick a different one, or merge the two.', 'fluent-crm'),
+            'Another %1$s (id %2$d) already uses that title or slug. Pick a different one, or merge the two.',
             $kind,
             (int) $clash->id
         ), [
@@ -549,7 +463,7 @@ class SegmentTools
         $id = (int) ($params[$kind . '_id'] ?? 0);
         $row = $id ? self::find($id, $kind) : null;
         if (!$row) {
-            return MCPHelper::error('not_found', sprintf(__('%s not found', 'fluent-crm'), ucfirst($kind)), [$kind . '_id' => $id]);
+            return MCPHelper::error('not_found', sprintf('%s not found', ucfirst($kind)), [$kind . '_id' => $id]);
         }
 
         $force = !empty($params['force']);
@@ -557,8 +471,7 @@ class SegmentTools
 
         if ($attachedCount > 0 && !$force) {
             return MCPHelper::error('not_supported', sprintf(
-                /* translators: 1: kind, 2: count */
-                __('%1$s has %2$d subscribers attached. Pass force=true to delete anyway, or merge into another %1$s first.', 'fluent-crm'),
+                '%1$s has %2$d subscribers attached. Pass force=true to delete anyway, or merge into another %1$s first.',
                 ucfirst($kind),
                 $attachedCount
             ), [
@@ -570,13 +483,7 @@ class SegmentTools
         $deletedId    = (int) $row->id;
         $deletedTitle = (string) $row->title;
 
-        // The count above and the delete below are separate statements, and
-        // deleting fires Cleanup::deleteTagAssets(), which hard-deletes every
-        // pivot row for this segment. A contact attached in between would be
-        // dropped from a segment the caller was told was empty, without ever
-        // passing force=true. A force delete accepts that loss by definition;
-        // a non-force one must not, so re-assert emptiness as the first read
-        // of the transaction that performs the delete (review PR #2025).
+        // A non-force delete re-checks emptiness inside the transaction: the delete hook purges all pivot rows.
         fluentCrmDb()->beginTransaction();
 
         try {
@@ -586,8 +493,7 @@ class SegmentTools
                     fluentCrmDb()->rollBack();
 
                     return MCPHelper::error('not_supported', sprintf(
-                        /* translators: 1: kind, 2: count */
-                        __('%1$s gained %2$d subscriber(s) while the delete was being processed. Nothing was deleted — re-check and retry, or pass force=true.', 'fluent-crm'),
+                        '%1$s gained %2$d subscriber(s) while the delete was being processed. Nothing was deleted. Re-check and retry, or pass force=true.',
                         ucfirst($kind),
                         $recount
                     ), [
@@ -606,12 +512,9 @@ class SegmentTools
 
         fluentCrmDb()->commit();
 
-        // Fired after commit so listeners never act on a delete that rolled
-        // back. Cleanup::deleteTagAssets() runs here; for the non-force path
-        // the assertion above means it has nothing left to purge.
+        // Fired after commit so listeners never act on a rolled-back delete.
         do_action(self::deletedHook($kind), $deletedId);
 
-        // A deleted row invalidates memoized id/title/slug resolutions.
         MCPHelper::flushSegmentRefCache();
 
         return [
@@ -622,8 +525,8 @@ class SegmentTools
             'deleted_title'      => $deletedTitle,
             'detached_subscribers' => $attachedCount,
             'note'               => $attachedCount > 0
-                ? __('Deleted with subscribers attached — pivot rows are orphaned and cleaned up by the cleanup hook.', 'fluent-crm')
-                : __('Deleted. No subscribers were attached.', 'fluent-crm'),
+                ? 'Deleted with subscribers attached. Pivot rows are orphaned and cleaned up by the cleanup hook.'
+                : 'Deleted. No subscribers were attached.',
         ];
     }
 
@@ -634,15 +537,14 @@ class SegmentTools
         $toId    = (int) ($params['to_' . $kind . '_id'] ?? 0);
 
         if (!$toId) {
-            return MCPHelper::error('invalid_param', __('to_*_id is required for merge', 'fluent-crm'));
+            return MCPHelper::error('invalid_param', 'to_*_id is required for merge');
         }
         if (!$fromIds) {
-            return MCPHelper::error('invalid_param', __('from_*_ids must be a non-empty array of ids', 'fluent-crm'));
+            return MCPHelper::error('invalid_param', 'from_*_ids must be a non-empty array of ids');
         }
         if (count($fromIds) > self::MAX_MERGE_SOURCE_IDS) {
             return MCPHelper::error('invalid_param', sprintf(
-                /* translators: %d: maximum source tag/list ids per merge */
-                __('from_*_ids accepts at most %d unique ids per merge.', 'fluent-crm'),
+                'from_*_ids accepts at most %d unique ids per merge.',
                 self::MAX_MERGE_SOURCE_IDS
             ), [
                 'max_source_ids' => self::MAX_MERGE_SOURCE_IDS,
@@ -650,12 +552,12 @@ class SegmentTools
             ]);
         }
         if (in_array($toId, $fromIds, true)) {
-            return MCPHelper::error('invalid_param', __('to_*_id cannot also be in from_*_ids', 'fluent-crm'));
+            return MCPHelper::error('invalid_param', 'to_*_id cannot also be in from_*_ids');
         }
 
         $to = self::find($toId, $kind);
         if (!$to) {
-            return MCPHelper::error('not_found', sprintf(__('Target %s not found', 'fluent-crm'), $kind), ['to_id' => $toId]);
+            return MCPHelper::error('not_found', sprintf('Target %s not found', $kind), ['to_id' => $toId]);
         }
 
         $modelClass = $kind === 'list' ? Lists::class : Tag::class;
@@ -683,7 +585,11 @@ class SegmentTools
                 'would_merge_into' => self::format($to),
                 'preflight'        => $preflight,
                 'over_cap'         => $preflight['source_pivot_rows'] > $maxPivotRows,
-                'note'             => __('Dry run only — no subscriber memberships or source rows were changed. Actual merges are synchronous and are not wrapped in a database transaction.', 'fluent-crm'),
+                // A merge does not rewrite these; each still names a source that will be deleted.
+                'automations_using_sources' => PermissionManager::currentUserCan('fcrm_read_funnels')
+                    ? self::automationsUsing($kind, $foundFromIds)
+                    : 'Not shown: needs the fcrm_read_funnels permission.',
+                'note'             => 'Dry run only. No subscriber memberships or source rows were changed. Actual merges are synchronous and are not wrapped in a database transaction.',
             ];
         }
 
@@ -691,8 +597,7 @@ class SegmentTools
             $overBy = $preflight['source_pivot_rows'] - $maxPivotRows;
 
             return MCPHelper::error('limit_exceeded', sprintf(
-                /* translators: 1: source pivot rows, 2: unique subscribers, 3: cap, 4: rows over cap, 5: segment kind */
-                __('Merge would process %1$d source pivot rows across %2$d unique subscribers; the synchronous cap is %3$d (%4$d rows over). Split from_%5$s_ids into smaller requests whose source_pivot_rows stay within the cap. If one source alone exceeds the cap, use the wp-admin/manual bulk workflow or deliberately raise fluent_crm/mcp_segment_merge_max_pivot_rows.', 'fluent-crm'),
+                'Merge would process %1$d source pivot rows across %2$d unique subscribers; the synchronous cap is %3$d (%4$d rows over). Split from_%5$s_ids into smaller requests whose source_pivot_rows stay within the cap. If one source alone exceeds the cap, use the wp-admin/manual bulk workflow or deliberately raise fluent_crm/mcp_segment_merge_max_pivot_rows.',
                 $preflight['source_pivot_rows'],
                 $preflight['unique_subscribers'],
                 $maxPivotRows,
@@ -707,10 +612,6 @@ class SegmentTools
             ]);
         }
 
-        // Fetch only the bounded work set, then preserve the native
-        // attach/detach methods so integration hooks still fire. A subscriber
-        // attached to several source segments is loaded once, attached to the
-        // target once, and detached from all sources in one call.
         $subscriberWork = self::mergeSubscriberWork($foundFromIds, $kind);
         $totals = self::mergeRepivot($subscriberWork, $foundFromIds, $to, $kind);
 
@@ -718,15 +619,7 @@ class SegmentTools
         $uniqueRepivoted  = $totals['unique'];
         $batchesProcessed = $totals['batches'];
 
-        // Converging sweeps. The work set above is a point-in-time read, and
-        // segment attachment is one of the highest-frequency writes in the CRM
-        // (forms, funnel actions, imports, purchase hooks, other MCP calls).
-        // Anything attached to a source AFTER that read is invisible to the
-        // loop, and the source delete below would take its pivot row with it —
-        // Cleanup::deleteTagAssets() hard-deletes every pivot row for the
-        // deleted segment — leaving the contact in neither segment with no
-        // error raised. Re-read until nothing new appears, bounded so a site
-        // attaching faster than we drain cannot spin here (review PR #2025).
+        // Re-read for memberships attached mid-merge; deleting the sources would drop them.
         $sweeps = 0;
         for ($i = 0; $i < self::MERGE_MAX_SWEEPS; $i++) {
             $fresh = self::mergeSubscriberWork($foundFromIds, $kind);
@@ -740,11 +633,7 @@ class SegmentTools
             $batchesProcessed += $sweptTotals['batches'];
         }
 
-        // Final phase is atomic. Anything attached during the last sweep still
-        // holds a source pivot row, so re-point those onto the target before
-        // deleting the sources rather than letting the cleanup handler drop
-        // them. Deletes are deferred-hook style: the rows go inside the
-        // transaction, the actions fire only once it commits.
+        // Final phase is atomic: re-point leftover source rows, delete sources, fire hooks after commit.
         fluentCrmDb()->beginTransaction();
 
         $deferredDeletedIds = [];
@@ -769,7 +658,6 @@ class SegmentTools
             do_action(self::deletedHook($kind), $fromId);
         }
 
-        // The merged-away rows invalidate memoized id/title/slug resolutions.
         MCPHelper::flushSegmentRefCache();
 
         return [
@@ -786,17 +674,12 @@ class SegmentTools
             'stragglers_repivoted'  => $stragglers,
             'preflight'             => $preflight,
             'missing_from_ids'      => $missingFromIds,
-            'note'                  => __('Each subscriber attached to a "from" target is now attached to "to" and the "from" rows are deleted. Re-running this merge with the same ids is a safe no-op. Memberships created while the merge was running are picked up by follow-up sweeps, and those still outstanding when the final phase begins are moved to the target directly — preserving the membership but not firing the per-contact attach hooks (see stragglers_repivoted). A write landing inside that final transaction is not covered: FluentCRM has no lock shared with the attach paths, so avoid merging a segment that is actively being written to.', 'fluent-crm'),
+            'note'                  => 'Each subscriber attached to a "from" target is now attached to "to" and the "from" rows are deleted. Re-running this merge with the same ids is a safe no-op. Memberships created while the merge was running are picked up by follow-up sweeps, and those still outstanding when the final phase begins are moved to the target directly, preserving the membership but not firing the per-contact attach hooks (see stragglers_repivoted). A write landing inside that final transaction is not covered: FluentCRM has no lock shared with the attach paths, so avoid merging a segment that is actively being written to.',
         ];
     }
 
     /**
-     * Re-pivot one work set onto the merge target.
-     *
-     * Uses the native attach/detach methods rather than bulk pivot SQL so the
-     * per-contact integration hooks (fluentcrm_contact_added_to_tags and
-     * friends) still fire — automations subscribe to those, and a bulk insert
-     * would silently stop them mid-merge.
+     * Re-pivot one work set onto the merge target via attach/detach, so per-contact hooks fire.
      *
      * @param array  $work      subscriber_id => count of source pivot rows
      * @param array  $sourceIds
@@ -830,13 +713,8 @@ class SegmentTools
     }
 
     /**
-     * Move any source pivot rows still present onto the merge target.
-     *
-     * These arrived after the last sweep read, so they never went through
-     * attachTags()/attachLists() and their integration hooks do not fire. That
-     * is the deliberate trade: the alternative is deleting the source rows and
-     * letting Cleanup::deleteTagAssets() take the membership with them, which
-     * drops the contact from both segments silently.
+     * Move any source pivot rows still present onto the merge target with raw SQL.
+     * Attach hooks do not fire for these rows.
      *
      * @param array  $sourceIds
      * @param int    $toId
@@ -865,8 +743,6 @@ class SegmentTools
             return 0;
         }
 
-        // Subscribers already carrying the target membership only need their
-        // leftover source rows dropped — re-pointing would duplicate the pair.
         $alreadyOnTarget = [];
         foreach (array_chunk($subscriberIds, self::MERGE_BATCH_SIZE) as $chunk) {
             $chunkPlaceholders = implode(',', array_fill(0, count($chunk), '%d'));
@@ -880,8 +756,6 @@ class SegmentTools
             }
         }
 
-        // Clear every remaining source row in one statement, then grant the
-        // target membership to those who did not already have it.
         $wpdb->query($wpdb->prepare(
             "DELETE FROM {$pivotTable} WHERE object_type = %s AND object_id IN ({$placeholders})",
             array_merge([$objectType], $sourceIds)
@@ -895,8 +769,7 @@ class SegmentTools
             return 0;
         }
 
-        // Mirrors Subscriber::attachTags()'s insert shape so the rescued rows
-        // are indistinguishable from natively attached ones.
+        // Same insert shape as Subscriber::attachTags().
         $now = current_time('mysql');
         foreach (array_chunk($needTarget, self::MERGE_BATCH_SIZE) as $chunk) {
             $values = [];
@@ -917,6 +790,29 @@ class SegmentTools
     // -----------------------------------------------------------------
     // helpers
     // -----------------------------------------------------------------
+
+    /**
+     * Automations that name any of these tags or lists, as {id, title, status, uses}.
+     */
+    private static function automationsUsing($kind, array $ids)
+    {
+        $usage = FunnelTools::automationsUsingSegments([$kind => $ids]);
+        if (!$usage) {
+            return [];
+        }
+
+        $out = [];
+        foreach (\FluentCrm\App\Models\Funnel::whereIn('id', array_keys($usage))->orderBy('id', 'ASC')->get() as $funnel) {
+            $out[] = [
+                'id'     => (int) $funnel->id,
+                'title'  => $funnel->title,
+                'status' => $funnel->status,
+                'uses'   => $usage[(int) $funnel->id],
+            ];
+        }
+
+        return $out;
+    }
 
     private static function find($id, $kind)
     {
@@ -1006,9 +902,7 @@ class SegmentTools
     }
 
     /**
-     * Map subscriber id to its number of source pivot rows. This preserves the
-     * legacy subscribers_repivoted/source-row count while hydrating every
-     * subscriber at most once.
+     * Map subscriber id to its number of source pivot rows.
      */
     private static function mergeSubscriberWork($sourceIds, $kind)
     {

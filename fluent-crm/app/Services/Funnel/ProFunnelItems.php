@@ -84,9 +84,9 @@ class ProFunnelItems
 
             $triggers['woocommerce_subscription_status_cancelled'] = [
                 'category'    => 'WooCommerce',
-                'label'       => 'WooCommerce Subscription Cancelled',
+                'label'       => 'WooCommerce Subscription Canceled',
                 'icon'        => 'fc-icon-woo_refund',
-                'description' => 'This funnel will start when a WooCommerce subscription is cancelled.',
+                'description' => 'This funnel will start when a WooCommerce subscription is canceled.',
                 'disabled'    => true
             ];
         }
@@ -146,9 +146,9 @@ class ProFunnelItems
 
             $triggers['rcp_membership_post_cancel'] = [
                 'category'    => 'Restrict Content Pro',
-                'label'       => 'Membership Cancelled',
+                'label'       => 'Membership Canceled',
                 'icon'        => 'fc-icon-rcp_membership_cancle',
-                'description' => 'This funnel runs when a membership is cancelled',
+                'description' => 'This funnel runs when a membership is canceled',
                 'disabled'    => true
             ];
         }
@@ -524,7 +524,7 @@ class ProFunnelItems
                 'type'        => 'action',
                 'category'    => 'LearnDash',
                 'title'       => 'Enroll To Course',
-                'description' => 'Enroll the contact to a specific LMS Course',
+                'description' => 'Enroll the contact in a specific LMS course',
                 'icon'        => 'fc-icon-learndash_enroll_course',
             ];
             $blocks['fcrm_learndhash_add_to_group'] = [
@@ -532,7 +532,7 @@ class ProFunnelItems
                 'type'        => 'action',
                 'category'    => 'LearnDash',
                 'title'       => 'Enroll To Group',
-                'description' => 'Enroll the contact to a specific LMS Group',
+                'description' => 'Enroll the contact in a specific LMS group',
                 'icon'        => '',
             ];
         }
@@ -557,7 +557,7 @@ class ProFunnelItems
                 'type'        => 'action',
                 'category'    => 'LifterLMS',
                 'title'       => 'Enroll To Course',
-                'description' => 'Enroll the contact to a specific LMS Course',
+                'description' => 'Enroll the contact in a specific LMS course',
                 'icon'        => '',
             ];
             $blocks['fcrm_lifterlms_add_to_group'] = [
@@ -565,7 +565,7 @@ class ProFunnelItems
                 'type'        => 'action',
                 'category'    => 'LifterLMS',
                 'title'       => 'Enroll To Membership',
-                'description' => 'Enroll the contact to a specific LMS Membership',
+                'description' => 'Enroll the contact in a specific LMS membership',
                 'icon'        => '',
             ];
         }
@@ -599,9 +599,9 @@ class ProFunnelItems
         return [
             'fluentcrm_contact_added_to_lists'     => [
                 'category'    => 'CRM',
-                'label'       => 'List Applied',
+                'label'       => 'Contact Added to List',
                 'icon'        => 'fc-icon-list_applied_2',
-                'description' => 'This will run when selected lists have been applied to a contact',
+                'description' => 'This runs when the contact is added to the selected lists.',
                 'disabled'    => true
             ],
 
@@ -647,9 +647,9 @@ class ProFunnelItems
 
             'fluentcrm_contact_added_to_companies'      => [
                 'category'    => 'CRM',
-                'label'       => 'Company Applied',
+                'label'       => 'Contact Added to Company',
                 'icon'        => '', // 'fc-icon-tag_applied',
-                'description' => 'This will run when selected companies have been applied to a contact',
+                'description' => 'This runs when the contact is added to the selected companies.',
                 'disabled'    => true
             ],
 

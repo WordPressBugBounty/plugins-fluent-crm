@@ -25,7 +25,7 @@ class CampaignGuard
         $status = $campaign->status;
 
         if (!in_array($status, ['draft', 'pending', 'incomplete', 'purged', 'scheduled'])) {
-            $message = __('The campaign has been locked and not modifiable due to it\'s current status', 'fluent-crm');
+            $message = __('This campaign is locked and cannot be modified because of its current status', 'fluent-crm');
             $message .= ": <strong>{$status}</strong>.";
             $this->send($message);
         }
@@ -42,7 +42,7 @@ class CampaignGuard
         $status = $campaign->status;
 
         if ($status == 'working') {
-            $message = __("The campaign has been locked and not deletable due to it's current status", "fluent-crm");
+            $message = __('This campaign is locked and cannot be deleted because of its current status', "fluent-crm");
             $message .= ": <strong>{$status}</strong>.";
             $this->send($message);
         }

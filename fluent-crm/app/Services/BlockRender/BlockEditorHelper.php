@@ -258,8 +258,7 @@ class BlockEditorHelper
             $cssProps .= '--wp--preset--spacing--' . $item['slug'] . ': ' . $item['size'] . ';';
         }
 
-        // Keep core color preset variables available inside the editor canvas.
-        // Without these, Gutenberg's link color styles can resolve to empty values.
+        // Core color presets, so Gutenberg link color styles do not resolve to empty values.
         foreach ($defaults['color'] as $item) {
             $cssProps .= '--wp--preset--color--' . $item['slug'] . ': ' . $item['color'] . ';';
         }
@@ -312,9 +311,8 @@ class BlockEditorHelper
             $replaces['var(--wp--preset--font-size--' . $themeFontSize['slug'] . ')'] = $size;
         }
 
-        // Include active theme palette colors (classic or block theme) so theme-color
-        // slugs resolve to concrete values in the final email instead of leaking var() tokens.
-        $themeColors = \FluentCrm\App\Services\Helper::getThemeColorPalette();
+        // Theme and custom palette colors, so palette slugs resolve to concrete values instead of var() tokens.
+        $themeColors = \FluentCrm\App\Services\Helper::getEmailColorPalette();
         foreach ((array)$themeColors as $themeColor) {
             if (!is_array($themeColor) || empty($themeColor['slug']) || empty($themeColor['color'])) {
                 continue;

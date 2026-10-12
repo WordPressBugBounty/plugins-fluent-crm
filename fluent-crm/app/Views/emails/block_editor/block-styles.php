@@ -66,6 +66,25 @@ $sanitizeFontStack = function ($fontStack) {
 $hFontCss = $sanitizeFontStack($hFont);
 $mainFontCss = $sanitizeFontStack($mainFont);
 
+/*
+ * Side padding for the content column on phones: the configured value, capped
+ * at 16px so a roomy desktop layout does not squeeze the text on a narrow
+ * screen. A smaller value (including 0 for edge-to-edge designs) is kept.
+ * Returns null when no padding is configured, so no rule is printed.
+ */
+$mobileSidePadding = function ($padding) {
+    $padding = trim((string)$padding);
+    if ($padding === '') {
+        return null;
+    }
+    if (preg_match('/^(\d+(?:\.\d+)?)(px)?$/', $padding, $matches)) {
+        return min((float)$matches[1], 16) . 'px';
+    }
+    return '16px';
+};
+$mobilePaddingLeft = $mobileSidePadding($paddingLeft);
+$mobilePaddingRight = $mobileSidePadding($paddingRight);
+
 $alignLeft = 'left';
 $alignRight = 'right';
 if (fluentcrm_is_rtl()) {
@@ -90,11 +109,6 @@ if (fluentcrm_is_rtl()) {
         background: <?php echo esc_attr($bodBgyColor); ?>;
         background-color: <?php echo esc_attr($bodBgyColor); ?>;
     }
-    body.template_classic #bodyCell {
-        padding-left: 20px !important;
-        padding-right: 20px !important;
-    }
-
     .fc_block_template {
         background: <?php echo esc_attr($bodBgyColor); ?>;
         background-color: <?php echo esc_attr($bodBgyColor); ?>;
@@ -831,8 +845,6 @@ if (fluentcrm_is_rtl()) {
             /*padding-right: 10px !important;*/
             padding-bottom: 10px !important;
             /*padding-left: 10px !important;*/
-            padding-left: <?php echo esc_attr($contentPadding); ?>px !important;
-            padding-right: <?php echo esc_attr($contentPadding); ?>px !important;
         }
 
         .fc_column_content {
@@ -1202,10 +1214,12 @@ if (fluentcrm_is_rtl()) {
         flex: none;
     }
 
+    <?php if (!empty($is_double_optin)): ?>
     body.template_classic .fc_email_body {
         padding-left: 10px !important;
         padding-right: 10px !important;
     }
+    <?php endif; ?>
 
     @media only screen and (max-width: 480px) {
         body {
@@ -1293,6 +1307,36 @@ if (fluentcrm_is_rtl()) {
         td#templateFooter td.fcTextContent, td#templateFooter td.fcTextContent p {
             font-size: 14px !important;
             line-height: 160% !important;
+        }
+    }
+
+    /* Phones: give the text the width. Outer gutters go, the content column keeps a small inset. */
+    @media only screen and (max-width: 480px) {
+        body.fc_block_template_body #bodyCell {
+            padding-left: 0 !important;
+            padding-right: 0 !important;
+        }
+
+        .fc_email_body {
+            padding-left: 0 !important;
+            padding-right: 0 !important;
+        }
+
+        <?php if ($mobilePaddingLeft !== null): ?>
+        .la-default td.la-root-column {
+            padding-left: <?php echo esc_attr($mobilePaddingLeft); ?> !important;
+        }
+        <?php endif; ?>
+
+        <?php if ($mobilePaddingRight !== null): ?>
+        .la-default td.la-root-column {
+            padding-right: <?php echo esc_attr($mobilePaddingRight); ?> !important;
+        }
+        <?php endif; ?>
+
+        .fc_list_item {
+            padding-inline-start: 24px !important;
+            padding-inline-end: 0 !important;
         }
     }
 </style>

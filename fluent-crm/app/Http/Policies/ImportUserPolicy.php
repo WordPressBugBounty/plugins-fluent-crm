@@ -23,8 +23,7 @@ class ImportUserPolicy extends BasePolicy {
     }
 
     /**
-     * WordPress-user imports expose user records, so they require both CRM
-     * contact management and WordPress user-list access.
+     * WordPress-user imports require both contact management and WordPress user-list access.
      */
     public function importUsers(Request $request)
     {
@@ -33,11 +32,7 @@ class ImportUserPolicy extends BasePolicy {
 
     /**
      * Apply the WordPress-user boundary only to the built-in users driver.
-     *
-     * `driver` is a URL path segment, not a query/body field, so it never
-     * reaches the Request object. The router substitutes route parameters by
-     * name into the policy call the same way it does for the controller
-     * action, so it must be declared in the signature to be seen at all.
+     * `driver` is a route parameter, so it arrives as an argument, not on the Request.
      */
     public function getDriver(Request $request, $driver = null)
     {

@@ -8,13 +8,8 @@ use FluentCrm\App\Services\Funnel\BaseAction;
 use FluentCrm\Framework\Support\Arr;
 
 /**
- * Free FluentCart automation action: generate a unique per-contact coupon code.
- *
- * Mirrors the WooCommerce Pro "Create Coupon" action. On execution it does NOT create a
- * FluentCart coupon record; it only generates a unique code and stores it on the funnel
- * metric. The real coupon is created lazily by DynamicCouponService when the dynamic
- * {{cart_coupon.*}} smartcode is parsed (FluentCart exposes no checkout-time coupon
- * resolution hook, so parse-time creation is the pragmatic equivalent).
+ * FluentCart automation action: generate a unique per-contact coupon code and store it on the funnel metric.
+ * DynamicCouponService creates the real coupon when {{cart_coupon.*}} is parsed.
  */
 class CreateCouponAction extends BaseAction
 {
@@ -42,9 +37,7 @@ class CreateCouponAction extends BaseAction
                     'code_type'                  => 'masked',
                     'code_prefix'                => '',
                     'amount'                     => 0,
-                    // UI value-space (shared _AdvancedCouponSettings.vue el-select): percent | fixed_cart | fixed_product.
-                    // Must be 'percent' (NOT 'percentage') so the dropdown shows a selection and the % suffix renders.
-                    // DynamicCouponService::mapDiscountType() converts this to FluentCart's percentage|fixed at write time.
+                    // Shared UI value (percent | fixed_cart | fixed_product); mapDiscountType() converts it.
                     'discount_type'              => 'percent',
                     'product_ids'                => [],
                     'exclude_product_ids'        => [],
@@ -75,16 +68,11 @@ class CreateCouponAction extends BaseAction
                 'code_settings' => [
                     'type'                => 'advanced_coupon_settings',
                     'label'               => '',
-                    // Point each ajax selector in the shared UI at FluentCart's option providers
-                    // instead of the Woo defaults (woo_coupons / woo_products / woo_categories).
+                    // FluentCart option providers instead of the Woo defaults.
                     'option_key'          => 'fluent_cart_coupons',
-                    // Product restrictions must store VARIATION ids: FluentCart matches coupon
-                    // included_products / excluded_products against the cart item's object_id, which
-                    // is the product variation id (not the product post id). See CartHelper.
+                    // Product restrictions store variation ids, which FluentCart matches against cart items.
                     'product_option_key'  => 'fluent_cart_product_variations',
                     'category_option_key' => 'fluent_cart_product_categories',
-                    // Show FluentCart's store currency symbol on the amount/min/max inputs so the
-                    // UI is correct even when WooCommerce (which sets woo_currency_sign) is inactive.
                     'currency_sign'       => $this->getCurrencySign(),
                     // FluentCart's coupon editor supports fixed and percentage discounts only.
                     'supports_free_shipping' => false,
@@ -127,9 +115,7 @@ class CreateCouponAction extends BaseAction
 
     /**
      * Build a collision-free coupon code, optionally personalising the prefix with smartcodes.
-     *
-     * The subscriber is only passed on the first attempt so the smartcode-parsed prefix is not
-     * re-parsed on retry; retries just regenerate the random suffix.
+     * Retries reuse the parsed prefix and only regenerate the suffix.
      */
     private function getFreshCoupon($codePrefix, $subscriber = null)
     {
@@ -141,13 +127,12 @@ class CreateCouponAction extends BaseAction
             $codePrefix = (string) apply_filters('fluent_crm/parse_campaign_email_text', $codePrefix, $subscriber);
         }
 
-        // Cap at 43 chars so the full code (prefix + '-' + 6-char suffix) stays within FluentCart's 50-character coupon code limit.
+        // 43 + '-' + 6-char suffix fits FluentCart's 50-character code limit.
         $codePrefix = substr(sanitize_text_field($codePrefix), 0, 43);
         $randomSuffix = $this->randomString(6);
         $code = $codePrefix . '-' . $randomSuffix;
 
-        // Also check staged (unmaterialised) codes in funnel metrics so two contacts
-        // cannot receive the same generated code before either coupon is created.
+        // Staged codes in funnel metrics count as taken.
         $existInCoupon = Coupon::query()->where('code', $code)->first();
         $existInMetric = FunnelMetric::where('notes', $code)->first();
 
@@ -173,9 +158,7 @@ class CreateCouponAction extends BaseAction
     }
 
     /**
-     * Resolve FluentCart's configured store currency symbol for the coupon amount inputs.
-     *
-     * Guarded so a missing/partial FluentCart config never breaks the funnel block fields request.
+     * Resolve FluentCart's store currency symbol for the coupon amount inputs, safely.
      */
     private function getCurrencySign()
     {

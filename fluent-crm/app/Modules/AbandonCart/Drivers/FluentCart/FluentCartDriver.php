@@ -133,7 +133,8 @@ class FluentCartDriver extends AbstractCartDriver
 
         return [
             'product_ids'  => $productIds,
-            'category_ids' => $categoryIds
+            'category_ids' => $categoryIds,
+            'items_count'  => is_array($items) ? count($items) : 0
         ];
     }
 

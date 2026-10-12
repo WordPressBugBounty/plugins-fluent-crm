@@ -64,18 +64,19 @@ class FunnelCampaign extends Campaign
                 continue;
             }
 
-            // check if the email has any subscriber
             $subscriber = Subscriber::where('email', $address)->first();
             if ($subscriber && $subscriber->status != 'subscribed') {
                 continue;
             }
 
-            // We have to handle manually
             $emailBody = (new BlockParser($refSubscriber))->parse($this->email_body);
 
             $emailSubject = $this->email_subject;
 
             if ($refSubscriber) {
+                // A custom address that is the contact's own email gets their access links; any other inbox does not.
+                $level = ($refSubscriber->email && strtolower(trim($address)) === strtolower($refSubscriber->email)) ? 'credential' : 'private';
+
                 /**
                  * Filter the campaign email body content.
                  *
@@ -86,7 +87,7 @@ class FunnelCampaign extends Campaign
                  * @since 2.7.0
                  *
                  */
-                $emailBody = apply_filters('fluent_crm/parse_campaign_email_text', $emailBody, $refSubscriber);
+                $emailBody = apply_filters('fluent_crm/parse_campaign_email_text', $emailBody, $refSubscriber, $level);
                 /**
                  * Filter the email subject text for a campaign.
                  *
@@ -110,7 +111,7 @@ class FunnelCampaign extends Campaign
                 'created_at'    => $time,
                 'updated_at'    => $time,
                 'is_parsed'     => 1,
-                'note'          => __('Email Sent From Funnel', 'fluent-crm')
+                'note'          => __('Email Sent From Automation', 'fluent-crm')
             ];
 
             if ($subscriber) {
@@ -173,7 +174,6 @@ class FunnelCampaign extends Campaign
             $subjectItem = $this->guessEmailSubject();
             $emailSubject = $this->email_subject;
 
-            // Let's create the email body here
             $rawTemplates = [
                 'raw_html',
                 'visual_builder',
@@ -184,6 +184,11 @@ class FunnelCampaign extends Campaign
                 $emailBody = (new BlockParser($subscriber))->parse($emailBody);
             }
             $emailBody = str_replace(['https://fonts.googleapis.com/css2', 'https://fonts.googleapis.com/css'], 'https://fonts.bunny.net/css', $emailBody);
+
+            // Access-token smartcodes resolve only when this email goes to the contact's own address.
+            $recipient = (string)Arr::get((array)$emailArgs, 'email_address', $subscriber->email);
+            $level = (strtolower($recipient) === strtolower((string)$subscriber->email)) ? 'credential' : 'private';
+
             /**
              * Filter the email body content for a campaign.
              *
@@ -196,8 +201,7 @@ class FunnelCampaign extends Campaign
              * @since 2.8.44
              *
              */
-            $emailBody = apply_filters('fluent_crm/parse_campaign_email_text', $emailBody, $subscriber);
-            // email body creation done
+            $emailBody = apply_filters('fluent_crm/parse_campaign_email_text', $emailBody, $subscriber, $level);
 
             if ($subjectItem && !empty($subjectItem->value)) {
                 $emailSubject = $subjectItem->value;
@@ -222,18 +226,7 @@ class FunnelCampaign extends Campaign
                 $email = wp_parse_args($emailArgs, $email);
             }
 
-            /*
-             * Create the queue row and count it in the same transaction, so an
-             * interruption can never leave a row persisted but uncounted. The
-             * increment has no self-healing recount behind it the way the old
-             * exact COUNT(*) did, so a row that misses its increment would stay
-             * uncounted permanently.
-             *
-             * Deliberately tight: only these two statements are inside. The
-             * parsing filters below run arbitrary third-party code, and holding
-             * the fc_campaigns row lock across that would serialise concurrent
-             * funnel workers on the very row this method writes.
-             */
+            // Insert and count in one transaction; the filters below stay outside to avoid holding the row lock.
             fluentCrmDb()->beginTransaction();
             try {
                 $inserted = CampaignEmail::create($email);
@@ -266,7 +259,7 @@ class FunnelCampaign extends Campaign
              * @since 2.8.44
              *
              */
-            $emailBody = apply_filters('fluent_crm/parse_campaign_email_text', $emailBody, $subscriber);
+            $emailBody = apply_filters('fluent_crm/parse_campaign_email_text', $emailBody, $subscriber, $level);
 
 
             $trackingType = fluentcrmTrackClicking();
@@ -293,16 +286,7 @@ class FunnelCampaign extends Campaign
             $updateIds[] = $inserted->id;
         }
 
-        // recipients_count is maintained per row above. This only mirrors the
-        // committed total onto the in-memory model, without marking the column
-        // dirty, so a later unrelated save() can't write a stale total back.
-        //
-        // The counter was previously derived from an exact COUNT(*) over the
-        // step's entire send history, once per enrolled contact. That count is
-        // O(rows-ever-sent), so an automation's email step got steadily slower
-        // as it aged. DB-side increments are also atomic, where the old
-        // read-modify-write lost updates between concurrent funnel workers
-        // enrolling into the same reference campaign.
+        // Mirror the committed total in memory without marking the column dirty.
         if ($insertedCount) {
             $this->recipients_count = absint($this->recipients_count) + $insertedCount;
             $this->syncOriginalAttribute('recipients_count');
@@ -316,16 +300,6 @@ class FunnelCampaign extends Campaign
         foreach ($refData as $refKey => $data) {
             $subscriber->{$refKey} = $data;
         }
-
-        /*
-         * Note: We are not using the parse_campaign_email_text filter here
-         * Have a plan to remove this below commented code
-         */
-        // We have to handle manually
-        //  $emailBody = (new BlockParser($this->subscriber))->parse($this->email_body);
-        // $args['email_body'] = apply_filters('fluent_crm/parse_campaign_email_text', $emailBody, $subscriber);
-        //  $args['email_subject'] = apply_filters('fluent_crm/parse_campaign_email_text', $this->email_subject, $subscriber);
-        // $args['is_parsed'] = 1;
 
         return $this->subscribe([$subscriber], $args, true);
     }

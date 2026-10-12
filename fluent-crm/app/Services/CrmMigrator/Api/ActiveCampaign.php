@@ -105,6 +105,35 @@ class ActiveCampaign
         return $this->make_request('list_field_view', array('ids' => 'all'));
     }
 
+    /**
+     * One FluentCRM status from a contact's ActiveCampaign list statuses.
+     *
+     * ActiveCampaign keeps a status per list (1 active, 2 unsubscribed, 3 bounced, 0 unconfirmed);
+     * FluentCRM has one per contact. A bounce is about the address, so it wins; then active on
+     * any list; then unsubscribed; anything else (unconfirmed, or on no list) is pending.
+     *
+     * @param array $lists [['listid' => ..., 'status' => int], ...]
+     * @return string subscribed | unsubscribed | bounced | pending
+     */
+    public static function contactStatusFromLists(array $lists)
+    {
+        $statuses = array_map( function ( $list ) {
+            return (int) ( is_array( $list ) ? ( $list['status'] ?? 0 ) : 0 );
+        }, $lists );
+
+        if ( in_array( 3, $statuses, true ) ) {
+            return 'bounced';
+        }
+        if ( in_array( 1, $statuses, true ) ) {
+            return 'subscribed';
+        }
+        if ( in_array( 2, $statuses, true ) ) {
+            return 'unsubscribed';
+        }
+
+        return 'pending';
+    }
+
     public function getContacts($args = ['offset' => 0, 'status' => -1])
     {
 
@@ -144,7 +173,7 @@ class ActiveCampaign
                     'phone'      => $contact->{'phone'},
                     'cdate'      => $contact->{'cdate'},
                     'ip'         => $contact->{'ip'},
-                    'status'     => 1, // @todo this should be checked based on the list membership.
+                    'status'     => 'pending', // Set from the contact's list statuses below.
                     'tags'       => array(),
                     'lists'      => array(),
                     'fields'     => array(),
@@ -187,7 +216,13 @@ class ActiveCampaign
             if ( ! empty( $response->{'contactLists'} ) ) {
 
                 foreach ( $response->{'contactLists'} as $list ) {
-                    $subscribers[ $list->contact ]['lists'][] = array( 'listid' => $list->list );
+                    $subscribers[ $list->contact ]['lists'][] = array( 'listid' => $list->list, 'status' => isset( $list->status ) ? (int) $list->status : 0 );
+                }
+            }
+
+            foreach ( $subscribers as $contactId => $subscriber ) {
+                if ( isset( $subscriber['email'] ) ) {
+                    $subscribers[ $contactId ]['status'] = self::contactStatusFromLists( (array) $subscriber['lists'] );
                 }
             }
         }

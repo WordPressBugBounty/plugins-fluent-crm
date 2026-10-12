@@ -89,7 +89,7 @@
                                                     <td valign="top" class="fcTextContent" style="padding-top: 0;padding-right: 18px;padding-bottom: 9px;padding-left: 18px;mso-line-height-rule: exactly;-ms-text-size-adjust: 100%;-webkit-text-size-adjust: 100%;word-break: break-word;font-size: 12px;line-height: 150%;text-align: left;">
                                                         <?php echo $footer_text; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
                                                         <?php if(!defined('FLUENTCAMPAIGN')): ?>
-                                                            <p><?php esc_html_e('Powered By', 'fluent-crm'); ?> <a href="http://fluentcrm.com/?utm_source=wp&utm_medium=wp_mail&utm_campaign=footer"><?php esc_html_e('FluentCRM', 'fluent-crm'); ?></a></p>
+                                                            <p><?php esc_html_e('Powered by', 'fluent-crm'); ?> <a href="http://fluentcrm.com/?utm_source=wp&utm_medium=wp_mail&utm_campaign=footer"><?php esc_html_e('FluentCRM', 'fluent-crm'); ?></a></p>
                                                         <?php endif; ?>
                                                     </td>
                                                 </tr>

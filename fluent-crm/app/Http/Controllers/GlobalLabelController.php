@@ -33,7 +33,6 @@ class GlobalLabelController extends Controller
     {
         $data = Arr::get($request->all(), 'label');
 
-        // sanitize the data
         $labelData = [
             'slug' => sanitize_text_field($data['slug']),
             'title' => sanitize_text_field($data['title']),
@@ -48,7 +47,7 @@ class GlobalLabelController extends Controller
 
         return [
             'label' => $label,
-            'message' => __('Label has been created successfully', 'fluent-crm')
+            'message' => __('The label has been created.', 'fluent-crm')
         ];
     }
 
@@ -58,7 +57,6 @@ class GlobalLabelController extends Controller
 
         $label = Label::findOrFail($id);
 
-        // sanitize the data
         $labelData = [
             'slug' => sanitize_text_field($data['slug']),
             'title' => sanitize_text_field($data['title']),
@@ -73,7 +71,7 @@ class GlobalLabelController extends Controller
 
         return [
             'label' => $label,
-            'message' => __('Labels have been updated successfully', 'fluent-crm')
+            'message' => __('The label has been updated.', 'fluent-crm')
         ];
     }
 
@@ -86,7 +84,7 @@ class GlobalLabelController extends Controller
         }
 
         return [
-            'message' => __('Label has been deleted successfully', 'fluent-crm')
+            'message' => __('The label has been deleted.', 'fluent-crm')
         ];
     }
 
@@ -106,16 +104,16 @@ class GlobalLabelController extends Controller
             case 'delete_from_funnel':
                 $this->deleteLabelFromFunnel($funnelId, $labelSlug);
                 return [
-                    'message' => __('Removed from funnel successfully', 'fluent-crm')
+                    'message' => __('The label has been removed from the automation.', 'fluent-crm')
                 ];
             case 'delete_from_funnel_label':
                 $this->deleteLabelFromFunnelLabel($labelSlug);
                 return [
-                    'message' => __('Label has been deleted successfully', 'fluent-crm')
+                    'message' => __('The label has been deleted.', 'fluent-crm')
                 ];
             default:
                 return [
-                    'message' => __('Invalid Action', 'fluent-crm')
+                    'message' => __('Invalid action', 'fluent-crm')
                 ];
         }
     }

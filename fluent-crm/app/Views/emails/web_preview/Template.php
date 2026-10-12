@@ -11,7 +11,7 @@
                 <div style="margin-top: 80px; text-align: left;">
                     <?php echo $footer_text; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
                     <?php if (!defined('FLUENTCAMPAIGN')): ?>
-                        <p><?php esc_html_e('Powered By', 'fluent-crm'); ?> <a href="http://fluentcrm.com/?utm_source=wp&utm_medium=wp_mail&utm_campaign=footer"><?php esc_html_e('FluentCRM', 'fluent-crm'); ?></a></p>
+                        <p><?php esc_html_e('Powered by', 'fluent-crm'); ?> <a href="http://fluentcrm.com/?utm_source=wp&utm_medium=wp_mail&utm_campaign=footer"><?php esc_html_e('FluentCRM', 'fluent-crm'); ?></a></p>
                     <?php endif; ?>
                 </div>
             </td>

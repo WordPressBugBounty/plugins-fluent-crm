@@ -21,7 +21,7 @@ use FluentForm\App\Modules\Acl\Acl;
 class FormsController extends Controller
 {
     /**
-     * Get all of the lists
+     * List Fluent Forms connected to FluentCRM through a feed or a funnel.
      *
      * @param \FluentCrm\Framework\Http\Request\Request $request
      * @return \WP_REST_Response|array
@@ -39,20 +39,7 @@ class FormsController extends Controller
             ];
         }
 
-        /*
-         * A form can hold more than one FluentCRM feed, and this listing shows at
-         * most one entry per form. That collapsing used to be done with
-         * GROUP BY form_id while selecting the non-aggregated id and value, which
-         * MySQL rejects under ONLY_FULL_GROUP_BY — on by default in MySQL 8, so
-         * this endpoint returned a 500 on most managed hosting.
-         *
-         * The de-duplication is done in PHP instead of in SQL, because both
-         * structures built below already collapse by form_id anyway ($formIds via
-         * the array_unique() further down, $connectedFormIds via its keys). An
-         * aggregate would have been the other option, but MIN(id)/ANY_VALUE(value)
-         * are evaluated independently and could pair an id with a value from a
-         * different feed row.
-         */
+        // One entry per form, de-duplicated in PHP; GROUP BY here breaks under ONLY_FULL_GROUP_BY.
         $connectFeedForms = fluentCrmDb()->table('fluentform_form_meta')
             ->where('meta_key', 'fluentcrm_feeds')
             ->select(['form_id', 'id', 'value'])
@@ -65,8 +52,7 @@ class FormsController extends Controller
         foreach ($connectFeedForms as $form) {
             $formIds[] = $form->form_id;
 
-            // Lowest feed id wins, matching what the grouped query returned in
-            // practice, and it is deterministic rather than left to the planner.
+            // Lowest feed id wins.
             if (isset($connectedFormIds[$form->form_id])) {
                 continue;
             }
@@ -77,7 +63,6 @@ class FormsController extends Controller
                 'settings' => $settings
             ];
         }
-        // Now let's get forms ids from funnel
         $fluentFormFunnels = Funnel::where('trigger_name', 'fluentform_submission_inserted')
             ->get();
 
@@ -107,7 +92,6 @@ class FormsController extends Controller
                 ->whereIn('id', $formIds);
 
             if ($search) {
-                // Escape LIKE wildcards (%, _) so the term matches literally, not as wildcards.
                 global $wpdb;
                 $allFormsQuery->where('title', 'LIKE', '%' . $wpdb->esc_like($search) . '%');
             }
@@ -203,9 +187,9 @@ class FormsController extends Controller
         $defaultSettings = (new \FluentForm\App\Modules\Form\Form(wpFluentForm()))->getFormsDefaultSettings();
 
         if ($form['double_optin']) {
-            $defaultSettings['confirmation']['messageToShow'] = __('Please check your inbox to confirm your subscription', 'fluent-crm');
+            $defaultSettings['confirmation']['messageToShow'] = __('Please check your inbox to confirm your subscription.', 'fluent-crm');
         } else {
-            $defaultSettings['confirmation']['messageToShow'] = __('You are successfully subscribed to our email list', 'fluent-crm');
+            $defaultSettings['confirmation']['messageToShow'] = __('You have been subscribed to our email list.', 'fluent-crm');
         }
         fluentCrmDb()->table('fluentform_form_meta')
             ->insert(array(
@@ -391,7 +375,6 @@ class FormsController extends Controller
             ]);
         }
 
-        // Check if form exists
         $form = fluentCrmDb()->table('fluentform_forms')
             ->where('id', $id)
             ->first();
@@ -408,12 +391,10 @@ class FormsController extends Controller
         $offset = ($page - 1) * $limit;
         $search = sanitize_text_field($request->get('search', ''));
         if ($search) {
-            // Escape LIKE wildcards (%, _) so the term matches literally, not as wildcards.
             global $wpdb;
             $search = $wpdb->esc_like($search);
         }
 
-        // Get total count
         $totalQuery = fluentCrmDb()->table('fluentform_submissions')
             ->where('form_id', $id);
 
@@ -424,7 +405,6 @@ class FormsController extends Controller
             });
         }
 
-        // Get entries
         $entriesQuery = fluentCrmDb()->table('fluentform_submissions')
             ->where('form_id', $id);
 
@@ -442,7 +422,6 @@ class FormsController extends Controller
             ->offset($offset)
             ->get();
 
-        // Format entries
         $formattedEntries = [];
         foreach ($entries as $entry) {
             $response = json_decode($entry->response, true);
@@ -478,8 +457,7 @@ class FormsController extends Controller
 
     public function getEntry(Request $request, $formId, $id)
     {
-        // Guard the Acl call: the Acl class ships with Fluent Forms, so it must not be
-        // referenced when Fluent Forms is inactive (would otherwise be a fatal error).
+        // Acl ships with Fluent Forms and fatals when it is inactive.
         if (!defined('FLUENTFORM')) {
             return $this->sendError([
                 'message' => __('Fluent Forms is not installed', 'fluent-crm'),
@@ -487,14 +465,25 @@ class FormsController extends Controller
             ]);
         }
 
-        // Mirror the entry-viewer ACL enforced on the list view (getEntries): a manager
-        // without Fluent Forms' entry-viewer permission for this form must not be able to
-        // read an individual submission by id (contains PII).
+        // Same entry-viewer ACL as getEntries(); submissions contain PII.
         if (!Acl::hasPermission('fluentform_entries_viewer', $formId)) {
             return $this->sendError([
                 'message' => __('You do not have permission to view this entry', 'fluent-crm'),
                 'entry'   => []
             ]);
+        }
+
+        // The permission above is scoped to $formId, so the entry must belong to that form.
+        $belongsToForm = fluentCrmDb()->table('fluentform_submissions')
+            ->where('id', (int) $id)
+            ->where('form_id', (int) $formId)
+            ->exists();
+
+        if (!$belongsToForm) {
+            return $this->sendError([
+                'message' => __('No submission found', 'fluent-crm'),
+                'entry'   => []
+            ], 404);
         }
 
         $dataView = apply_filters('fluent_crm/dynamic_contact_item_view_fluentform', [

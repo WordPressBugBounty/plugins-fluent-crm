@@ -119,7 +119,8 @@ class Reporting
         $query = fluentCrmDb()->table('fc_campaign_emails')
             ->select($this->prepareSelect($frequency, 'scheduled_at'))
             ->whereBetween('scheduled_at', [$from->format('Y-m-d'), $to->format('Y-m-d 23:59:59')])
-            ->where('status', $status);
+            // "sent" counts every email that went out, bounced ones included.
+            ->whereIn('status', $status === 'sent' ? CampaignEmail::SENT_STATUSES : [$status]);
 
         if ($campaignId) {
             $query->where('campaign_id', $campaignId);
@@ -172,20 +173,8 @@ class Reporting
             ->count('subscriber_id');
 
         /*
-         * COUNT per sequence is this query's primary output, so the two benchmark
-         * columns must be aggregated rather than added to the GROUP BY: grouping
-         * by them as well would split one sequence across several rows and make
-         * every count wrong. Selecting them unaggregated — as this did — is
-         * rejected outright under ONLY_FULL_GROUP_BY, which MySQL 8 enables by
-         * default, so the automation step report returned a 500 on most managed
-         * hosting.
-         *
-         * MAX() suits how both values are actually consumed below: benchmark_value
-         * is only tested for being greater than zero ("did this step earn
-         * anything"), and benchmark_currency only supplies a display label for the
-         * report. MAX(benchmark_value) answers the first question correctly even
-         * when only some rows in the group carry revenue, which the previous
-         * planner-chosen row did not.
+         * Benchmark columns are aggregated, not grouped, for ONLY_FULL_GROUP_BY.
+         * benchmark_value is only tested for > 0 and benchmark_currency is a display label.
          */
         $items = FunnelMetric::select([
             'sequence_id',
@@ -311,9 +300,11 @@ class Reporting
         $opened = $totals ? (int)$totals->opened : 0;
         $clicked = $totals ? (int)$totals->clicked : 0;
 
-        $delivered = max(0, $sent - $bounced);
+        // Bounced emails carry their own status, so "sent" rows are the delivered ones.
+        $delivered = $sent;
+        $sent = $sent + $bounced;
 
-        $deliveryBase = $sent + $bounced;
+        $deliveryBase = $sent;
         $rateBase = $delivered;
 
         $deliveryPercent = $deliveryBase ? round(($delivered / $deliveryBase) * 100, 2) : 0;

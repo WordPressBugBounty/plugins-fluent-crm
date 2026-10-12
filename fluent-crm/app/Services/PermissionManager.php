@@ -30,64 +30,64 @@ class PermissionManager
                 'group'   => 'dashboard'
             ],
             'fcrm_read_contacts'              => [
-                'title'   => __('Contacts Read', 'fluent-crm'),
+                'title'   => __('View contacts', 'fluent-crm'),
                 'depends' => [],
                 'group'   => 'contacts'
             ],
             'fcrm_manage_contacts'            => [
-                'title'   => __('Contacts Add/Update/Import', 'fluent-crm'),
+                'title'   => __('Add, update and import contacts', 'fluent-crm'),
                 'depends' => [
                     'fcrm_read_contacts'
                 ],
                 'group'   => 'contacts'
             ],
             'fcrm_manage_contacts_delete'     => [
-                'title'   => __('Contacts Delete', 'fluent-crm'),
+                'title'   => __('Delete contacts', 'fluent-crm'),
                 'depends' => [
                     'fcrm_read_contacts'
                 ],
                 'group'   => 'contacts'
             ],
             'fcrm_manage_contacts_export'     => [
-                'title'   => __('Contacts Export', 'fluent-crm'),
+                'title'   => __('Export contacts', 'fluent-crm'),
                 'depends' => [
                     'fcrm_read_contacts'
                 ],
                 'group'   => 'contacts'
             ],
             'fcrm_manage_contact_cats'        => [
-                'title'   => __('Contact Tags/List/Companies/Segment Create or Update', 'fluent-crm'),
+                'title'   => __('Create and update tags, lists, companies and segments', 'fluent-crm'),
                 'depends' => [
                     'fcrm_read_contacts'
                 ],
                 'group'   => 'segments'
             ],
             'fcrm_manage_contact_cats_delete' => [
-                'title'   => __('Contact Tags/List/Companies/Segment Delete', 'fluent-crm'),
+                'title'   => __('Delete tags, lists, companies and segments', 'fluent-crm'),
                 'depends' => [
                     'fcrm_read_contacts'
                 ],
                 'group'   => 'segments'
             ],
             'fcrm_read_emails'                => [
-                'title'   => __('Emails Read', 'fluent-crm'),
+                'title'   => __('View emails', 'fluent-crm'),
                 'depends' => [],
                 'group'   => 'emailing'
             ],
             'fcrm_manage_emails'              => [
-                'title'   => __('Emails Write/Send', 'fluent-crm'),
+                'title'   => __('Write and send emails', 'fluent-crm'),
                 'depends' => [
                     'fcrm_read_emails'
                 ],
                 'group'   => 'emailing'
             ],
             'fcrm_manage_email_templates'     => [
-                'title'   => __('Email Templates Manage', 'fluent-crm'),
+                'title'   => __('Manage email templates', 'fluent-crm'),
                 'depends' => [],
                 'group'   => 'emailing'
             ],
             'fcrm_manage_email_delete'        => [
-                'title'   => __('Emails Delete', 'fluent-crm'),
+                'title'   => __('Delete emails', 'fluent-crm'),
                 'depends' => [],
                 'group'   => 'emailing'
             ],
@@ -97,19 +97,19 @@ class PermissionManager
                 'group'   => 'forms'
             ],
             'fcrm_read_funnels'               => [
-                'title'   => __('Automation Read', 'fluent-crm'),
+                'title'   => __('View automations', 'fluent-crm'),
                 'depends' => [],
                 'group'   => 'automations'
             ],
             'fcrm_write_funnels'              => [
-                'title'   => __('Automation Write/Edit/Delete', 'fluent-crm'),
+                'title'   => __('Create and edit automations', 'fluent-crm'),
                 'depends' => [
                     'fcrm_read_funnels'
                 ],
                 'group'   => 'automations'
             ],
             'fcrm_delete_funnels'             => [
-                'title'   => __('Automation Delete', 'fluent-crm'),
+                'title'   => __('Delete automations', 'fluent-crm'),
                 'depends' => [
                     'fcrm_read_funnels'
                 ],
@@ -285,17 +285,29 @@ class PermissionManager
         return $legacyPermissions;
     }
 
+    /**
+     * The current user's CRM permissions, cached per user id for the request.
+     *
+     * The cache is keyed by user because the current user can change mid-request: WordPress
+     * drops a REST request without a valid nonce to user 0 after `init`, and anything that read
+     * the cookie user's permissions before that must not lend them to user 0.
+     *
+     * @param bool $cached false to re-read the permissions from the database
+     * @return array
+     */
     public static function currentUserPermissions($cached = true)
     {
-        static $permissions = null;
+        static $permissions = [];
 
-        if ($cached && $permissions !== null) {
-            return $permissions;
+        $userId = get_current_user_id();
+
+        if ($cached && isset($permissions[$userId])) {
+            return $permissions[$userId];
         }
 
-        $permissions = self::getUserPermissions(get_current_user_id());
+        $permissions[$userId] = self::getUserPermissions($userId);
 
-        return $permissions;
+        return $permissions[$userId];
     }
 
     public static function currentUserCan($permission)

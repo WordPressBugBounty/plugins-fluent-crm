@@ -42,7 +42,7 @@ class DripMigrator extends BaseMigrator
                     'placeholder' => __('Drip Account ID', 'fluent-crm'),
                     'data_type'   => 'text',
                     'type'        => 'input-text',
-                    'inline_help' => $infoSvg . ' ' . __('You can find Account ID Settings -> General Info -> Account ID', 'fluent-crm')
+                    'inline_help' => $infoSvg . ' ' . __('You can find your Account ID in Drip under Settings -> General Info -> Account ID', 'fluent-crm')
                 ]
             ],
             'refresh_on_list_change' => false,
@@ -155,7 +155,8 @@ class DripMigrator extends BaseMigrator
 
         $meta = $members['meta'];
 
-        $message = __('Based on your selections ', 'fluent-crm') . $meta['total_count'] . __(' contacts will be imported', 'fluent-crm');
+        /* translators: %d: number of contacts that will be imported */
+        $message = sprintf(_n('Based on your selections, %d contact will be imported.', 'Based on your selections, %d contacts will be imported.', (int) $meta['total_count'], 'fluent-crm'), (int) $meta['total_count']);
 
         return [
             'subscribed_count'   => $meta['total_count'],
@@ -268,9 +269,7 @@ class DripMigrator extends BaseMigrator
 
             $contact = FluentCrmApi('contacts')->createOrUpdate($data);
 
-            // Never resurrect a locally suppressed contact (unsubscribed/bounced/complained/
-            // spammed) just because the remote system lists the address as active — a re-run
-            // of the migration must not undo an opt-out or bounce recorded here.
+            // Never resurrect a locally suppressed contact because the remote lists it as active.
             if ($status == 'subscribed' && $contact && $contact->status != 'subscribed' && !in_array($contact->status, fluentcrm_strict_statues())) {
                 $contact->updateStatus('subscribed');
             }

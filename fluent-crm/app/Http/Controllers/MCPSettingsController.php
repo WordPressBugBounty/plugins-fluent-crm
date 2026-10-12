@@ -7,14 +7,7 @@ use FluentCrm\App\Modules\MCP\MCPInit;
 use FluentCrm\Framework\Http\Request\Request;
 
 /**
- * Settings → MCP admin endpoints (MCP_PLAN.md § 13).
- *
- * Surfaces:
- *  - status: adapter detected? CRM count?  enabled toggle?
- *  - install-adapter: one-click install of the WP MCP Adapter plugin
- *  - toggle: enable/disable the entire MCP module without uninstalling
- *  - config-snippet: pre-filled JSON for Claude Desktop / Claude Code /
- *    Cursor / generic clients
+ * Settings > MCP endpoints: status, adapter install, enable toggle and client config snippets.
  */
 class MCPSettingsController extends Controller
 {
@@ -22,7 +15,7 @@ class MCPSettingsController extends Controller
     const TOOLKIT_PLUGIN_FILE = 'fluent-toolkit/fluent-toolkit.php';
 
     /**
-     * Status block — what the Settings page lights up with on load.
+     * Returns adapter, toolkit and ability status for the MCP settings page.
      */
     public function status()
     {
@@ -45,11 +38,6 @@ class MCPSettingsController extends Controller
 
         $currentUser = wp_get_current_user();
 
-        // Detect a local dev environment heuristically. Self-signed/local
-        // certs trip Node's TLS validation in the npx proxy that Claude
-        // Desktop uses; if we know the user is on dev, we pre-bake the
-        // workaround into the generated snippet. The Vue page also exposes
-        // a manual toggle for edge cases.
         $isLocalDev = self::detectLocalDevEnvironment();
 
         return [
@@ -78,8 +66,7 @@ class MCPSettingsController extends Controller
     }
 
     /**
-     * Toggle the kill-switch. Stored as a FluentCRM option so the lazy-register
-     * guard in app/Hooks/actions.php picks it up on the next request.
+     * Toggles the MCP kill switch (mcp_enabled option), applied on the next request.
      */
     public function toggle(Request $request)
     {
@@ -98,14 +85,13 @@ class MCPSettingsController extends Controller
     }
 
     /**
-     * One-click adapter install. Free can only explain the missing dependency;
-     * Pro may opt in to the FluentHub background installer via hooks.
+     * One-click FluentHub install, available only when fluent_toolkit/can_auto_install allows it.
      */
     public function installAdapter()
     {
         if (!current_user_can('install_plugins')) {
             return $this->sendError([
-                'message' => __('Sorry! you do not have permission to install plugins', 'fluent-crm'),
+                'message' => __('Sorry, you do not have permission to install plugins', 'fluent-crm'),
             ]);
         }
 
@@ -152,26 +138,14 @@ class MCPSettingsController extends Controller
     }
 
     /**
-     * Generate a copy-paste config snippet for the requested client.
-     *
-     * Every client uses WordPress Application Passwords — built into WP 5.6+,
-     * no extra plugin needed. Direct HTTP clients (Claude Code, Cursor,
-     * generic) carry credentials via Basic Auth header; the
-     * @automattic/mcp-wordpress-remote stdio bridge that Claude Desktop uses
-     * accepts the username/password directly via WP_API_USERNAME and
-     * WP_API_PASSWORD env vars and handles encoding itself.
-     *
-     * Placeholders used here are stable strings the Vue page substitutes via
-     * regex when the user fills the credentials inputs.
+     * Generates a copy-paste MCP config snippet for the requested client.
+     * All clients authenticate with WordPress Application Passwords.
      */
     public function getConfigSnippet(Request $request)
     {
         $client = sanitize_key((string) $request->get('client', 'claude-code'));
         $endpoint = MCPInit::getEndpointUrl();
-        // Optional override from the Settings UI checkbox. When the user
-        // explicitly says "I'm on local dev" we add the TLS-bypass env var to
-        // Claude Desktop's snippet; when they say "no" we omit it even if
-        // auto-detection thinks otherwise.
+        // local_dev overrides auto-detection in either direction.
         $forceLocalDev = $request->get('local_dev');
         if ($forceLocalDev === 'yes' || $forceLocalDev === '1' || $forceLocalDev === 'true') {
             $isLocalDev = true;
@@ -181,8 +155,7 @@ class MCPSettingsController extends Controller
             $isLocalDev = self::detectLocalDevEnvironment();
         }
 
-        // The Vue page replaces these tokens with the user's real values.
-        // Keep them stable + distinct so the regex stays simple.
+        // The Vue page substitutes these exact tokens with the user's credentials.
         $basicPlaceholder    = '<base64(your-username:application-password)>';
         $usernamePlaceholder = '<your-username>';
         $passwordPlaceholder = '<your-application-password>';
@@ -198,7 +171,7 @@ class MCPSettingsController extends Controller
                 );
                 $instructions = sprintf(
                     /* translators: %s: link to WP user profile application passwords section */
-                    __('Open OpenAI Codex → Settings → Connect to a custom MCP. Click the "Streamable HTTP" tab. Generate a WordPress Application Password from %s, then paste username + app password into the inputs above — the Value field will auto-fill with the encoded Basic auth string.', 'fluent-crm'),
+                    __('Open OpenAI Codex → Settings → Connect to a custom MCP. Click the "Streamable HTTP" tab. Generate a WordPress application password from %s, then paste your username and application password into the fields above. The Value field fills in automatically with the encoded Basic auth string.', 'fluent-crm'),
                     $appPasswordsUrl
                 );
                 break;
@@ -227,14 +200,11 @@ class MCPSettingsController extends Controller
                     $passwordPlaceholder,
                     $endpoint
                 );
-                $instructions = __('Use the URL + Basic Auth header with any HTTP MCP client. The endpoint speaks the standard MCP protocol — initialize, tools/list, tools/call — over JSON-RPC.', 'fluent-crm');
+                $instructions = __('Use the URL + Basic Auth header with any HTTP MCP client. The endpoint uses the standard MCP protocol (initialize, tools/list, tools/call) over JSON-RPC.', 'fluent-crm');
                 break;
 
             case 'claude-desktop':
-                // Claude Desktop cannot speak HTTP MCP directly yet — it
-                // routes through @automattic/mcp-wordpress-remote, which
-                // accepts WP_API_USERNAME / WP_API_PASSWORD plain (proxy
-                // does the encoding). No JWT plugin needed.
+                // Claude Desktop goes through the mcp-wordpress-remote stdio proxy, which takes plain credentials.
                 $env = [
                     'WP_API_URL'      => $endpoint,
                     'WP_API_USERNAME' => $usernamePlaceholder,
@@ -243,10 +213,7 @@ class MCPSettingsController extends Controller
                 ];
 
                 if ($isLocalDev) {
-                    // Self-signed certs trip Node's bundled CA store. Trust
-                    // the connection wholesale for local dev — the proxy
-                    // only ever talks to one URL the user explicitly chose,
-                    // so the practical risk is bounded.
+                    // Node rejects self-signed local dev certificates otherwise.
                     $env['NODE_TLS_REJECT_UNAUTHORIZED'] = '0';
                 }
 
@@ -261,7 +228,7 @@ class MCPSettingsController extends Controller
                 ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
 
                 $localDevNote = $isLocalDev
-                    ? ' ' . __('Local dev mode is on, so NODE_TLS_REJECT_UNAUTHORIZED is included — the npx proxy needs it to talk to self-signed Valet/MAMP/Local SSL.', 'fluent-crm')
+                    ? ' ' . __('Local dev mode is on, so NODE_TLS_REJECT_UNAUTHORIZED is included. The npx proxy needs it to connect to self-signed Valet/MAMP/Local SSL certificates.', 'fluent-crm')
                     : '';
                 $instructions = __('Paste into ~/Library/Application Support/Claude/claude_desktop_config.json (macOS) or %APPDATA%\\Claude\\claude_desktop_config.json (Windows), then restart Claude Desktop.', 'fluent-crm') . $localDevNote;
                 break;
@@ -289,16 +256,7 @@ class MCPSettingsController extends Controller
     }
 
     /**
-     * Heuristic check for "we're running on a local development install."
-     *
-     * Tested in order:
-     *   1. Hostname ends in a dev TLD (.test, .lab, .local, .localhost)
-     *   2. Hostname is literally `localhost`
-     *   3. Host resolves to a private/loopback IP range
-     *
-     * Filterable via `fluent_crm/mcp_is_local_dev` so operators can override
-     * detection on edge cases (a public-facing site on `.local`, an internal
-     * tool that needs the dev-mode behavior anyway, etc.).
+     * Guesses whether the site is a local dev install (dev TLD, localhost or private IP).
      *
      * @return bool
      */
@@ -323,7 +281,6 @@ class MCPSettingsController extends Controller
         }
 
         if (!$isDev && filter_var($host, FILTER_VALIDATE_IP)) {
-            // Private IP ranges per RFC 1918.
             $isPrivate = !filter_var($host, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE);
             if ($isPrivate) {
                 $isDev = true;
@@ -420,8 +377,7 @@ class MCPSettingsController extends Controller
     {
         $count = count(AbilitiesRegistrar::getDefinitions());
 
-        // Pro tools are pushed onto the names list via the
-        // `fluent_crm/mcp_ability_names` filter in MCPInit.
+        // Pro adds its tools through this filter.
         $names = apply_filters('fluent_crm/mcp_ability_names', array_keys(AbilitiesRegistrar::getDefinitions()));
         if (is_array($names)) {
             $count = count(array_unique($names));

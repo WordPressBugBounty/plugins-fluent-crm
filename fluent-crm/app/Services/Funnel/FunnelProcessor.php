@@ -70,18 +70,16 @@ class FunnelProcessor
         }
 
         if (!$subscriber) {
-            // it's new so let's create new subscriber
             $subscriber = FunnelHelper::createOrUpdateContact($subscriberData);
 
             if (!$subscriber) {
                 return false;
             }
+        } else if (isset($subscriberData['email']) && $this->updatesExistingContact($funnel)) {
+            $subscriber = $this->updateExistingContact($subscriberData) ?: $subscriber;
         }
 
-        // This trigger runs the double opt-in flow and the contact just took the
-        // triggering action, so re-invite them whatever their current status
-        // (unsubscribed, bounced, …). No status write — only the confirmation click
-        // makes them 'subscribed'.
+        // Opt-in triggers re-invite any non-subscribed contact; only the confirmation click changes status.
         $isOptinReinvite = Arr::get($subscriberData, 'status') === 'pending'
             && $subscriber->status != 'subscribed';
 
@@ -90,17 +88,9 @@ class FunnelProcessor
         }
 
         $args = [
-            // 'pending' parks the funnel row until the contact confirms (resumed via the
-            // fluentcrm_subscriber_status_to_subscribed hook); 'draft' enters it for
-            // processing. Suppressed contacts on normal (non-opt-in) triggers enter as
-            // 'draft' so non-email actions (tagging, notifications) still run — the
-            // send-time sendable-status guard blocks any actual email to them.
-            //
-            // An opt-in re-invite ALWAYS parks, whatever status the contact retains.
-            // We just asked them to confirm, so no automation step may run until they
-            // do — previously this was implicit because the flow wrote 'pending' onto
-            // the contact first; now that it deliberately does not, bounced and
-            // complained contacts would otherwise enter as 'draft' and start running.
+            // 'pending' parks the row until the contact confirms; 'draft' enters processing.
+            // An opt-in re-invite always parks. Suppressed contacts on other triggers enter as 'draft';
+            // the send-time status guard blocks their emails.
             'status' => ($isOptinReinvite
                 || $subscriber->status == 'pending'
                 || $subscriber->status == 'unsubscribed') ? 'pending' : 'draft'
@@ -113,9 +103,45 @@ class FunnelProcessor
         $this->startSequences($subscriber, $funnel, $args);
     }
 
+    /**
+     * Whether a trigger's data should be written onto a contact that already exists.
+     *
+     * Triggers that offer "Update if Exists" store it as conditions.update_type = 'update' (the
+     * default). Triggers without the option (WooCommerce among them) leave existing contacts alone.
+     *
+     * @param object $funnel
+     * @return bool
+     */
+    private function updatesExistingContact($funnel)
+    {
+        return Arr::get((array)$funnel->conditions, 'update_type') === 'update';
+    }
+
+    /**
+     * Refresh an existing contact's profile and custom fields from trigger data.
+     *
+     * Status, tags, lists and companies are dropped, so a trigger never changes consent or
+     * segmentation of an existing contact; empty values are dropped, so it never blanks a field.
+     *
+     * @param array $subscriberData trigger data (email required)
+     * @return \FluentCrm\App\Models\Subscriber|false|null the updated contact
+     */
+    private function updateExistingContact($subscriberData)
+    {
+        // source is how the contact arrived; trigger data always carries one (often 'web').
+        $data = Arr::except($subscriberData, ['status', 'tags', 'lists', 'companies', 'source']);
+
+        if (!empty($data['custom_values']) && is_array($data['custom_values'])) {
+            $data['custom_values'] = array_filter($data['custom_values'], function ($value) {
+                return $value !== '' && $value !== null && $value !== [];
+            });
+        }
+
+        return FunnelHelper::createOrUpdateContact($data);
+    }
+
     public function startSequences($subscriber, $funnel, $funnelSubArgs = [])
     {
-        // Check if already in funnel to prevent duplicate entries
         $existing = FunnelHelper::ifAlreadyInFunnel($funnel->id, $subscriber->id);
         if ($existing) {
             return;
@@ -161,8 +187,7 @@ class FunnelProcessor
             return;
         }
 
-        // Execute immediate sequences first (they may include conditionals
-        // that set their own next state via initChildSequences)
+        // Conditionals among these set their own next state via initChildSequences().
         $hasConditional = false;
         foreach ($sequencePoints->getCurrentSequences() as $sequence) {
             if ($sequence->type == 'conditional') {
@@ -176,18 +201,8 @@ class FunnelProcessor
             }
         }
 
-        // If a conditional was processed, initChildSequences() already
-        // handled the subscriber's next state — skip status update
         if ($hasConditional) {
-            /*
-             * The conditional's handler is Pro-only and may be absent (Pro deactivated,
-             * step imported into a free install) or may have thrown (swallowed in
-             * processSequence). In that case the row is left status=active with a NULL
-             * next_execution_time — invisible to the cron query forever. Verify a real
-             * transition happened; if not, schedule the row so the engine advances past
-             * the conditional block (last_sequence_id already points at it) on the next
-             * tick instead of stranding the subscriber.
-             */
+            // A missing (Pro-only) or failed handler leaves the row active with no execution time; schedule it.
             $freshSubscriber = FunnelSubscriber::where('id', $funnelSubscriber->id)->first();
             if ($freshSubscriber && $freshSubscriber->status == 'active' && !$freshSubscriber->next_execution_time) {
                 Helper::debugLog(
@@ -210,6 +225,19 @@ class FunnelProcessor
             if ($nextSequence->sequence < $requiredBenchMark->sequence) {
                 $requiredBenchMark = false;
             }
+        }
+
+        if ($requiredBenchMark && $this->isBenchmarkAlreadyMet($requiredBenchMark, $funnelSubscriber->id)) {
+            // A goal met before the contact reached it, or by a step of this very run, must not
+            // park the contact: nothing would ever fire it again. Same rule as initChildSequences().
+            $fresh = FunnelSubscriber::where('id', $funnelSubscriber->id)->first();
+            $lastSequence = $fresh && $fresh->last_sequence_id ? FunnelSequence::find($fresh->last_sequence_id) : null;
+            if ($lastSequence && $lastSequence->sequence >= $requiredBenchMark->sequence) {
+                // The goal's own handler already moved the contact on; keep its state.
+                return;
+            }
+            $this->startFunnelFromSequencePoint($requiredBenchMark, $subscriber);
+            return;
         }
 
         if ($requiredBenchMark) {
@@ -240,13 +268,46 @@ class FunnelProcessor
     }
 
 
+    /**
+     * Whether a goal already counts as met for this automation run.
+     *
+     * The goal's integration may say so through fluent_crm/benchmark_already_asserted_{action}
+     * (the contact already has the tag, the order already exists, ...), or the goal has already
+     * been recorded for the contact.
+     *
+     * @param FunnelSequence $benchmark
+     * @param int            $funnelSubscriberId
+     * @return bool
+     */
+    protected function isBenchmarkAlreadyMet($benchmark, $funnelSubscriberId)
+    {
+        $funnelSubscriber = FunnelSubscriber::where('id', $funnelSubscriberId)->first();
+        if (!$funnelSubscriber) {
+            return false;
+        }
+
+        $asserted = apply_filters(
+            'fluent_crm/benchmark_already_asserted_' . $benchmark->action_name,
+            false,
+            $benchmark,
+            $funnelSubscriber
+        );
+
+        if ($asserted) {
+            return true;
+        }
+
+        return FunnelMetric::where('funnel_id', $benchmark->funnel_id)
+            ->where('sequence_id', $benchmark->id)
+            ->where('subscriber_id', $funnelSubscriber->subscriber_id)
+            ->exists();
+    }
+
     public function processSequence($subscriber, $sequence, $funnelSubscriberId)
     {
         $funnelMetric = $this->recordFunnelMetric($subscriber, $sequence);
 
-        // Mark complete BEFORE execution by design: prevents double-execution if the process
-        // crashes mid-action. The FunnelMetric + wasRecentlyCreated check ensures each action
-        // runs at most once per subscriber per sequence. Failed actions are not retried.
+        // Marked complete before execution so a crash cannot double-run it; failed actions are not retried.
         FunnelHelper::changeFunnelSubSequenceStatus($funnelSubscriberId, $sequence->id, 'complete');
 
         if ($sequence->type == 'conditional' && $sequence->action_name != 'funnel_condition') {
@@ -257,9 +318,7 @@ class FunnelProcessor
             $handlerHook = 'fluentcrm_funnel_sequence_handle_' . $sequence->action_name;
 
             if (!has_action($handlerHook)) {
-                // No runtime handler registered (Pro deactivated mid-flight, or a Pro-only
-                // step imported into a free install). Treat as an explicit "skip step and
-                // advance" with a log — a silent no-op here strands the subscriber.
+                // No handler registered (for example a Pro-only step): log and skip the step.
                 Helper::debugLog(
                     'Missing funnel sequence handler "' . $sequence->action_name . '" for funnel ' . $sequence->funnel_id,
                     'Funnel Sub ID: ' . $funnelSubscriberId . ' — step skipped'
@@ -402,8 +461,6 @@ class FunnelProcessor
         $funnelSubscriber = FunnelHelper::ifAlreadyInFunnel($startSequence->funnel_id, $subscriber->id);
 
         if (!$funnelSubscriber && $startSequence->type == 'benchmark') {
-            // it's new starting point for a goal type sequence
-            // so if the can start is set to no then we will skip this
             if (Arr::get($startSequence->settings, 'can_enter') == 'no') {
                 return false;
             }
@@ -420,7 +477,6 @@ class FunnelProcessor
 
             $processableStatuses = ['subscribed', 'transactional'];
 
-            // we have to create a funnel subscriber
             $data = [
                 'funnel_id'            => $startSequence->funnel_id,
                 'subscriber_id'        => $subscriber->id,
@@ -448,7 +504,6 @@ class FunnelProcessor
                 return;
             }
         } else {
-            // We already have funnel subscriber. Now we have to update that
             $lastSequence = $funnelSubscriber->last_sequence;
 
             if (!$lastSequence || ($lastSequence->sequence <= $startSequence->sequence)) {
@@ -471,10 +526,8 @@ class FunnelProcessor
                 $funnelSubscriber->next_execution_time = current_time('mysql');  // we are auto advancing the funnel
                 $funnelSubscriber->save();
             } else {
-                // this already advanced than our target
-                // We have to check if we have to fire immediately
+                // Already past the target; fire now only if the target is the next step.
                 if ($funnelSubscriber->next_sequence - 1 == $startSequence->sequence) {
-                    // we are just make the time with current time if that had a timer for the target sequence
                     $funnelSubscriber->next_execution_time = current_time('mysql');
                     $funnelSubscriber->save();
                 } else {
@@ -570,11 +623,7 @@ class FunnelProcessor
                             $funnelSubscriber
                         );
 
-                        // A benchmark metric already recorded means the goal event fired
-                        // synchronously before this conditional was evaluated (e.g. a
-                        // single-email sequence completed inside the Set Sequence Emails
-                        // action). Parking now would rewind the enrollment to waiting with
-                        // no future event left to resume it.
+                        // A recorded metric means the goal already fired; parking would never resume.
                         if (!$isAlreadyAsserted) {
                             $isAlreadyAsserted = FunnelMetric::where('funnel_id', $immediateSequence->funnel_id)
                                 ->where('sequence_id', $immediateSequence->id)

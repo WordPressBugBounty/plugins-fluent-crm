@@ -48,11 +48,11 @@ class SubscriptionActivatedTrigger extends BaseTrigger
                     'options' => $statuses,
                     'is_multiple' => false,
                     'label' => __('Subscription Status', 'fluent-crm'),
-                    'placeholder' => __('Select Status', 'fluent-crm'),
+                    'placeholder' => __('Select status', 'fluent-crm'),
                 ],
                 'subscription_status_info' => [
                     'type'       => 'html',
-                    'info'       => '<b>' . __('An Automated double-optin email will be sent for new subscribers', 'fluent-crm') . '</b>',
+                    'info'       => '<b>' . __('An automated double opt-in email will be sent to new contacts', 'fluent-crm') . '</b>',
                     'dependency' => [
                         'depends_on' => 'subscription_status',
                         'operator'   => '=',
@@ -79,8 +79,8 @@ class SubscriptionActivatedTrigger extends BaseTrigger
             'run_multiple' => [
                 'type' => 'yes_no_check',
                 'label' => '',
-                'check_label' => __('Restart the Automation Multiple times for a contact for this event. (Only enable if you want to restart automation for the same contact)', 'fluent-crm'),
-                'inline_help' => __('If enabled, it will restart the automation for a contact if the contact is already in the automation. Otherwise, it will skip if it already exists', 'fluent-crm'),
+                'check_label' => __('Allow this event to restart the automation for the same contact', 'fluent-crm'),
+                'inline_help' => __('If enabled, it will restart the automation for a contact who is already in it. Otherwise, the contact will be skipped.', 'fluent-crm'),
             ],
 
         ];

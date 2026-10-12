@@ -15,10 +15,6 @@ class ActivityLogHandler
     public function register()
     {
         return;
-//        if (!$this->activityLogEnabled()) {
-//            return;
-//        }
-        // Contact created
         add_action('fluent_crm/contact_created', [$this, 'onContactCreated'], 10, 2);
 
         // Tags updated

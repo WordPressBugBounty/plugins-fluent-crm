@@ -21,7 +21,7 @@ class RemoveFromTagBenchmark extends BaseBenchMark
     {
         return [
             'title'       => __('Tag Removed', 'fluent-crm'),
-            'description' => __('This will run when selected Tags have been removed from a contact', 'fluent-crm'),
+            'description' => __('This will run when selected tags have been removed from a contact', 'fluent-crm'),
             'icon'        => 'fc-icon-tag_removed',//fluentCrmMix('images/funnel_icons/tag_removed.svg'),
             'settings'    => [
                 'tags'        => [],
@@ -46,13 +46,13 @@ class RemoveFromTagBenchmark extends BaseBenchMark
     {
         return [
             'title'     => __('Tag Removed From Contact', 'fluent-crm'),
-            'sub_title' => __('This will run when selected Tags have been removed from a contact', 'fluent-crm'),
+            'sub_title' => __('This will run when selected tags have been removed from a contact', 'fluent-crm'),
             'fields'    => [
                 'tags'        => [
                     'type'        => 'option_selectors',
                     'option_key'  => 'tags',
                     'is_multiple' => true,
-                    'label'       => __('Select Tags', 'fluent-crm'),
+                    'label'       => __('Select tags', 'fluent-crm'),
                     'placeholder' => __('Select a Tag', 'fluent-crm'),
                     'creatable' => true
                 ],
@@ -62,11 +62,11 @@ class RemoveFromTagBenchmark extends BaseBenchMark
                     'options'    => [
                         [
                             'id'    => 'any',
-                            'title' => __('Run if any selected tag removed from a contact', 'fluent-crm')
+                            'title' => __('Run if any selected tag is removed from the contact', 'fluent-crm')
                         ],
                         [
                             'id'    => 'all',
-                            'title' => __('Need all selected tags removed from the contact', 'fluent-crm')
+                            'title' => __('Run only when all selected tags are removed from the contact', 'fluent-crm')
                         ]
                     ],
                     'dependency' => [
@@ -139,7 +139,7 @@ class RemoveFromTagBenchmark extends BaseBenchMark
             return empty(array_intersect($benchmarkTags, $attachedTagIds));
         }
 
-        // 'any' — at least one benchmark tag is NOT in subscriber's tags
+        // 'any': at least one benchmark tag is NOT in subscriber's tags
         $removed = array_diff($benchmarkTags, $attachedTagIds);
         return !empty($removed);
     }

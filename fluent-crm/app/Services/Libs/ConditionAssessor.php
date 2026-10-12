@@ -67,6 +67,9 @@ class ConditionAssessor
             }
 
             switch ($conditional['operator']) {
+                case 'never':
+                    // Activity conditions ("Never Opened", "Never Clicked"): no such activity recorded.
+                    return !$sourceValue;
                 case '=':
                     if (is_array($sourceValue)) {
                         return in_array($dataValue, $sourceValue);
@@ -195,7 +198,10 @@ class ConditionAssessor
                     if (!$sourceValue || $sourceValue == '0000-00-00') {
                         return false;
                     }
-                    return strtotime($sourceValue) > strtotime("-{$dataValue} days", current_time('timestamp'));
+                    $timestamp = strtotime($sourceValue);
+                    // "Within the last X days" ends today, matching the contact filter in Subscriber.php.
+                    return $timestamp > strtotime("-{$dataValue} days", current_time('timestamp'))
+                        && $timestamp <= strtotime(gmdate('Y-m-d 23:59:59', current_time('timestamp')));
                 case 'is_null':
                     return !$sourceValue;
                 case 'not_null':

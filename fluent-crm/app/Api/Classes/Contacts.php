@@ -126,13 +126,7 @@ class Contacts
             return false;
         }
 
-        // $forceUpdate must come from the caller only. This method used to silently turn
-        // it on whenever the existing contact was not 'subscribed' and the payload carried
-        // a status, which let every status-bearing call (webhooks, migrators, user-sync,
-        // form submissions) resurrect unsubscribed/bounced/complained contacts by
-        // bypassing the strict-status guard in Subscriber::updateOrCreate. Do not
-        // reintroduce that escalation; callers that intend to overwrite a suppressed
-        // status must pass $forceUpdate explicitly.
+        // $forceUpdate comes from the caller only; never enable it implicitly, or suppressed contacts get resurrected.
 
         if (!isset($data['custom_values'])) {
             $customFieldKeys = [];
@@ -264,7 +258,6 @@ class Contacts
             return call_user_func_array([$this->instance, $method], $params);
         }
 
-        /* translators: %s: method name */
         throw new \Exception(sprintf('Method %s does not exist.', esc_html($method)));
     }
 }

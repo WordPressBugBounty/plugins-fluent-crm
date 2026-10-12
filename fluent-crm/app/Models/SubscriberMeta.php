@@ -47,8 +47,7 @@ class SubscriberMeta extends Model
 
     public function getValueAttribute($value)
     {
-        // Guard against PHP Object Injection: contact custom-field values are user-influenced,
-        // so never instantiate objects on read. Arrays/scalars are preserved.
+        // Values are user-influenced; never instantiate objects on read (PHP Object Injection).
         return Helper::safeUnserialize($value);
     }
 }

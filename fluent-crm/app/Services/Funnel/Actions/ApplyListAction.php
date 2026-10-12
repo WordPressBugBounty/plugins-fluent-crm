@@ -31,8 +31,8 @@ class ApplyListAction extends BaseAction
     public function getBlockFields()
     {
         return [
-            'title'     => __('Apply List to the contact', 'fluent-crm'),
-            'sub_title' => __('Select which list will be added to the contact', 'fluent-crm'),
+            'title'     => __('Add the contact to lists', 'fluent-crm'),
+            'sub_title' => __('Select the lists to add the contact to', 'fluent-crm'),
             'fields'    => [
                 'lists' => [
                     'type'        => 'option_selectors',

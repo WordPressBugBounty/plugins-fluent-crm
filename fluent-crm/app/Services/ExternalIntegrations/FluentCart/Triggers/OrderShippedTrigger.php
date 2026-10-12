@@ -46,11 +46,11 @@ class OrderShippedTrigger extends BaseTrigger
                     'option_key' => 'editable_statuses',
                     'is_multiple' => false,
                     'label' => __('Subscription Status', 'fluent-crm'),
-                    'placeholder' => __('Select Status', 'fluent-crm')
+                    'placeholder' => __('Select status', 'fluent-crm')
                 ],
                 'subscription_status_info' => [
                     'type'       => 'html',
-                    'info'       => '<b>' . __('An Automated double-optin email will be sent for new subscribers', 'fluent-crm') . '</b>',
+                    'info'       => '<b>' . __('An automated double opt-in email will be sent to new contacts', 'fluent-crm') . '</b>',
                     'dependency' => [
                         'depends_on' => 'subscription_status',
                         'operator'   => '=',
@@ -66,7 +66,6 @@ class OrderShippedTrigger extends BaseTrigger
         return [
             'product_ids'        => [],
             'product_categories' => [],
-//            'purchase_type'      => 'all',
             'run_multiple'       => 'no'
         ];
     }
@@ -74,20 +73,13 @@ class OrderShippedTrigger extends BaseTrigger
     public function getConditionFields($funnel)
     {
         return [
-//            'update_type' => [
-//                'type' => 'radio',
-//                'label' => __('If Contact Already Exist?', 'fluent-crm'),
-//                'help' => __('Please specify what will happen if the subscriber already exists in the database','fluent-crm'),
-//                'options' => FunnelHelper::getUpdateOptions()
-//            ],
-
             'product_ids' => [
                 'type' => 'rest_selector',
                 'label' => __('Target Products', 'fluent-crm'),
                 'option_key' => 'fluent_cart_products',
                 'is_multiple' => true,
-                'help'        => __('Select for which products this automation will run', 'fluent-crm'),
-                'inline_help' => __('Keep it blank to run to any product purchase', 'fluent-crm')
+                'help'        => __('Select the products this automation will run for', 'fluent-crm'),
+                'inline_help' => __('Leave blank to run for any product purchase', 'fluent-crm')
             ],
 
             'product_categories' => [
@@ -95,20 +87,15 @@ class OrderShippedTrigger extends BaseTrigger
                 'label' => __('Or Target Product Categories', 'fluent-crm'),
                 'option_key' => 'fluent_cart_product_categories',
                 'is_multiple' => true,
-                'help'        => __('Select for which product category the automation will run', 'fluent-crm'),
-                'inline_help' => __('Keep it blank to run to any category products', 'fluent-crm')
+                'help'        => __('Select the product categories this automation will run for', 'fluent-crm'),
+                'inline_help' => __('Leave blank to run for products in any category', 'fluent-crm')
             ],
 
-//            'run_only_if_coupon_applied' => [
-//                'type' => 'yes_no_check',
-//                'label' => '',
-//                'check_label' => __('Run automation only if a coupon is applied to the order', 'fluent-crm'),
-//            ],
             'run_multiple' => [
                 'type' => 'yes_no_check',
                 'label' => '',
-                'check_label' => __('Restart the Automation Multiple times for a contact for this event. (Only enable if you want to restart automation for the same contact)', 'fluent-crm'),
-                'inline_help' => __('If enabled, it will restart the automation for a contact if the contact is already in the automation. Otherwise, it will skip if it already exists', 'fluent-crm')
+                'check_label' => __('Allow this event to restart the automation for the same contact', 'fluent-crm'),
+                'inline_help' => __('If enabled, it will restart the automation for a contact who is already in it. Otherwise, the contact will be skipped.', 'fluent-crm')
             ]
         ];
     }
@@ -120,11 +107,9 @@ class OrderShippedTrigger extends BaseTrigger
 
         $order = Arr::get($orderData, 'order', []);
         $customer = Arr::get($order, 'customer', []);
-        // $transaction = Arr::get($orderData, 'transaction', []);
 
         $orderId = Arr::get($order, 'id', 0);
 
-        // Get the funnel settings and conditions
         $settings = Arr::get($funnel, 'settings', []);
 
         $subscriberData = CartHelper::prepareSubscriberData($customer);
@@ -163,7 +148,6 @@ class OrderShippedTrigger extends BaseTrigger
 
         $subscriber = FunnelHelper::getSubscriber($subscriberData['email']);
 
-        // check run_only_one
         if ($subscriber) {
             $funnelSub = FunnelHelper::ifAlreadyInFunnel($funnel->id, $subscriber->id);
             if ($funnelSub) {
@@ -200,17 +184,13 @@ class OrderShippedTrigger extends BaseTrigger
 
         $selectedProductCategories = Arr::get($conditions, 'product_categories', []);
 
-        // If no products or categories are selected, return true
         if (empty($selectedProductIds) && empty($selectedProductCategories)) {
             return true;
         }
 
-        // Check for matches in product IDs and categories
-
         $productMatch = !empty($selectedProductIds) && !empty(array_intersect($selectedProductIds, $orderedProductIds));
         $categoryMatch = !empty($selectedProductCategories) && !empty(array_intersect($selectedProductCategories, $orderProductCategories));
 
-        // Return true if either matches
         return $productMatch || $categoryMatch;
     }
 

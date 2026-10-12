@@ -397,7 +397,8 @@ class BlockParser
 
         $tagIds = Arr::get($data, 'attrs.tag_ids');
         if (!$tagIds) {
-            return '';
+            // No tags selected means no condition, the same as block visibility.
+            return $content;
         }
 
         $tagMatched = $subscriber->hasAnyTagId($tagIds);

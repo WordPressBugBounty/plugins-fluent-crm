@@ -32,7 +32,7 @@ class DetachListAction extends BaseAction
     {
         return [
             'title'     => __('Remove Contact from the Selected Lists', 'fluent-crm'),
-            'sub_title' => __('Select Lists that you want to remove from targeted Contact', 'fluent-crm'),
+            'sub_title' => __('Select the lists you want to remove the contact from', 'fluent-crm'),
             'fields'    => [
                 'lists' => [
                     'type'        => 'option_selectors',

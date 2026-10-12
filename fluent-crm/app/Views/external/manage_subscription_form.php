@@ -11,14 +11,14 @@
                    class="fc_input_control" type="text" name="email"/>
         </div>
         <div class="fc_field">
-            <label for="fc_first_name"><?php esc_html_e('First Name', 'fluent-crm'); ?></label>
+            <label for="fc_first_name"><?php esc_html_e('First name', 'fluent-crm'); ?></label>
             <input id="fc_first_name" required value="<?php echo esc_html($subscriber->first_name); ?>"
-                   placeholder="<?php esc_attr_e('First Name', 'fluent-crm'); ?>" class="fc_input_control" type="text"
+                   placeholder="<?php esc_attr_e('First name', 'fluent-crm'); ?>" class="fc_input_control" type="text"
                    name="first_name"/>
         </div>
         <div class="fc_field">
-            <label for="fc_last_name"><?php esc_html_e('Last Name', 'fluent-crm'); ?></label>
-            <input id="fc_last_name" required value="<?php echo esc_html($subscriber->last_name); ?>" placeholder="<?php esc_attr_e('Last Name', 'fluent-crm'); ?>" class="fc_input_control" type="text" name="last_name"/>
+            <label for="fc_last_name"><?php esc_html_e('Last name', 'fluent-crm'); ?></label>
+            <input id="fc_last_name" required value="<?php echo esc_html($subscriber->last_name); ?>" placeholder="<?php esc_attr_e('Last name', 'fluent-crm'); ?>" class="fc_input_control" type="text" name="last_name"/>
         </div>
 
         <?php if ($list_options): ?>
@@ -36,7 +36,17 @@
         </div>
         <?php if (apply_filters('fluent_crm/show_unsubscribe_on_pref', false)): ?>
             <div class="fc_field">
-                <?php esc_html_e('or', 'fluent-crm'); ?> <a id="pref_unsubscribe" href="#"><?php esc_html_e('Unsubscribe', 'fluent-crm'); ?></a>
+                <?php
+                echo wp_kses(
+                    sprintf(
+                        /* translators: %1$s: opening unsubscribe link tag, %2$s: closing link tag */
+                        __('or %1$sUnsubscribe%2$s', 'fluent-crm'),
+                        '<a id="pref_unsubscribe" href="#">',
+                        '</a>'
+                    ),
+                    ['a' => ['id' => [], 'href' => []]]
+                );
+                ?>
             </div>
         <?php endif; ?>
     </form>

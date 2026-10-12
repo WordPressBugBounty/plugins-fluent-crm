@@ -147,21 +147,16 @@ class AbCartHelper
             ->orderBy('id', 'DESC')
             ->get();
 
-        $formattedFunnels = [];
+        $sorted = $funnels->all();
 
-        foreach ($funnels as $funnel) {
-            $priority = Arr::get($funnel->settings, 'priority', 1);
-            if (isset($formattedFunnels[$priority])) {
-                $priority++;
-            }
+        // Highest priority first; equal priorities newest first. Keying by priority dropped every
+        // third automation that shared a priority (the default is 1 for all of them).
+        usort($sorted, function ($a, $b) {
+            $byPriority = (int)Arr::get($b->settings, 'priority', 1) <=> (int)Arr::get($a->settings, 'priority', 1);
+            return $byPriority ?: ((int)$b->id <=> (int)$a->id);
+        });
 
-            $formattedFunnels[$priority] = $funnel;
-        }
-
-        // reverse the array to get the latest funnels first
-        krsort($formattedFunnels);
-
-        return array_values($formattedFunnels);
+        return $sorted;
     }
 
     public static function getAbCartByDataProps($props = [], $statuses = ['processing', 'draft'])

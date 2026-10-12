@@ -21,7 +21,7 @@ class WaitTimeAction extends BaseAction
         return [
             'category'    => __('CRM', 'fluent-crm'),
             'title'       => __('Wait X Days/Hours', 'fluent-crm'),
-            'description' => __('Wait defined timespan before execute the next action', 'fluent-crm'),
+            'description' => __('Wait for a defined time before running the next action', 'fluent-crm'),
             'icon'        => 'fc-icon-wait_time',
             'settings'    => [
                 'wait_type'         => 'unit_wait',
@@ -65,12 +65,12 @@ class WaitTimeAction extends BaseAction
         // add date of birth field at the beginning
         array_unshift($customFields, [
             'id'    => '__date_of_birth__',
-            'title' => __('Contact\'s Next Date of Birth', 'fluent-crm')
+            'title' => __('Contact\'s next birthday', 'fluent-crm')
         ]);
 
         return [
             'title'     => __('Wait X Days/Hours', 'fluent-crm'),
-            'sub_title' => __('Wait defined timespan before execute the next action', 'fluent-crm'),
+            'sub_title' => __('Wait for a defined time before running the next action', 'fluent-crm'),
             'fields'    => [
                 'wait_type'        => [
                     'type'    => 'radio_buttons',
@@ -136,7 +136,7 @@ class WaitTimeAction extends BaseAction
                     'label'       => __('Specify Date and Time', 'fluent-crm'),
                     'type'        => 'date_time',
                     'placeholder' => __('Select Date & Time', 'fluent-crm'),
-                    'inline_help' => __('Please input date and time and this step will be executed after that time (TimeZone will be as per your WordPress Date Time Zone)', 'fluent-crm'),
+                    'inline_help' => __('Enter a date and time. This step will run after that time (in your WordPress timezone).', 'fluent-crm'),
                     'dependency'  => [
                         'depends_on' => 'wait_type',
                         'value'      => 'timestamp_wait',
@@ -145,7 +145,7 @@ class WaitTimeAction extends BaseAction
                 ],
                 'to_day'           => [
                     'type'          => 'checkboxes',
-                    'label'         => __('Wait until next day(s) of the week', 'fluent-crm'),
+                    'label'         => __('Wait until the next selected weekday', 'fluent-crm'),
                     'wrapper_class' => 'fc_2col_inline pad-r-20',
                     'options'       => [
                         [
@@ -202,7 +202,7 @@ class WaitTimeAction extends BaseAction
                 'by_custom_field'   => [
                     'label'         => __('Select Contact\'s Custom Field', 'fluent-crm'),
                     'type'          => 'select',
-                    'inline_help' => __('If no value is found in the contact\'s custom field or past date then it will wait only 1 minute by default', 'fluent-crm'),
+                    'inline_help' => __('If the contact\'s custom field is empty or holds a past date, it will wait 1 minute by default', 'fluent-crm'),
                     'options'       => $customFields,
                     'dependency'    => [
                         'depends_on' => 'wait_type',

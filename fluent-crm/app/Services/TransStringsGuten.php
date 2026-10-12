@@ -21,6 +21,13 @@ class TransStringsGuten
             'Next'                             => __('Next', 'fluent-crm'),
             'Next step'                        => __('Next step', 'fluent-crm'),
             'Preview'                          => __('Preview', 'fluent-crm'),
+            'Global colors'                    => __('Global colors', 'fluent-crm'),
+            'Body background'                  => __('Body background', 'fluent-crm'),
+            'Content background'               => __('Content background', 'fluent-crm'),
+            'Headings'                         => __('Headings', 'fluent-crm'),
+            'Text'                             => __('Text', 'fluent-crm'),
+            'Links'                            => __('Links', 'fluent-crm'),
+            'No link color is set, so links use the mail app\'s default color.' => __('No link color is set, so links use the mail app\'s default color.', 'fluent-crm'),
         ];
     }
 }

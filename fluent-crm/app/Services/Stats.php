@@ -13,14 +13,12 @@ class Stats
 {
     public function getCounts()
     {
-        // These COUNT(*)s scan millions of rows on large sites and the dashboard runs
-        // them on every load — cache the raw numbers for 5 minutes. Titles/routes are
-        // built per-request so translations always match the viewer's locale.
+        // Raw counts are cached for 5 minutes; titles are built per request for the viewer's locale.
         $counts = fluentCrmGetFromCache('dashboard_stat_counts', function () {
             return [
                 'total_subscribers' => Subscriber::where('status', 'subscribed')->count(),
                 'total_campaigns'   => Campaign::count(),
-                'email_sent'        => CampaignEmail::where('status', 'sent')->count(),
+                'email_sent'        => CampaignEmail::whereIn('status', CampaignEmail::SENT_STATUSES)->count(),
                 'total_automations' => Funnel::where('status', 'published')->count(),
                 'email_pending'     => CampaignEmail::whereIn('status', ['pending', 'scheduled', 'processing'])->count()
             ];
@@ -107,7 +105,7 @@ class Stats
                 'icon'  => 'el-icon-connection'
             ],
             [
-                'title' => __('Documentations', 'fluent-crm'),
+                'title' => __('Documentation', 'fluent-crm'),
                 'url'   =>  $urlBase . 'documentation',
                 'icon'  => 'Documentations'
             ],

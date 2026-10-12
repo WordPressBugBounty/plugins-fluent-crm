@@ -6,24 +6,19 @@ use FluentCrm\App\Models\CustomContactField;
 use FluentCrm\App\Models\Lists;
 use FluentCrm\App\Models\Subscriber;
 use FluentCrm\App\Models\Tag;
+use FluentCrm\App\Modules\MCP\AbilitiesRegistrar;
 use FluentCrm\App\Modules\MCP\Helpers\MCPHelper;
 use FluentCrm\App\Services\Helper;
 use FluentCrm\App\Services\PermissionManager;
 use FluentCrm\App\Services\Stats;
 
 /**
- * `get-crm-context` — compact, permission-scoped discovery surface.
- *
- * Identity and site metadata are always returned. Reference-heavy sections are
- * selected through `include`; omitting it returns only the small default set.
- * Each domain section is built only when the current user holds its matching
- * FluentCRM capability.
- *
- * Reads live — see getContext() for why there is no cache layer.
+ * `get-crm-context`: compact, permission-scoped discovery surface.
+ * Sections are selected through `include` and built only for users holding the matching capability.
  */
 class ContextTools
 {
-    const DEFAULT_SECTIONS = ['overview', 'capabilities'];
+    const DEFAULT_SECTIONS = ['overview'];
 
     const AVAILABLE_SECTIONS = [
         'overview',
@@ -48,13 +43,7 @@ class ContextTools
             return $sections;
         }
 
-        // Deliberately uncached. This is an operator-facing tool called a
-        // handful of times per session by a handful of people, not a public
-        // endpoint — the default sections are a few COUNTs and some in-memory
-        // registries. A transient layer cost a cache read on every call, a
-        // version option, and twelve invalidation hooks, and still served
-        // stale tags for up to its TTL. Reading live is both simpler and more
-        // correct: a tag created a moment ago shows up immediately.
+        // Deliberately uncached so new tags and lists show up immediately.
         $userId      = get_current_user_id();
         $permissions = self::effectivePermissions(PermissionManager::currentUserPermissions(false));
         $access      = self::buildAccessMap();
@@ -63,11 +52,8 @@ class ContextTools
     }
 
     /**
-     * Normalize explicit section selection before any queries run.
-     *
-     * Omitted include uses DEFAULT_SECTIONS, [] returns identity/site only, and
-     * `all` expands to every section. Unknown values fail for direct Abilities
-     * API callers even when MCP schema validation is not in front of us.
+     * Normalize the `include` section selection.
+     * Omitted => DEFAULT_SECTIONS, [] => identity/site only, `all` => every section.
      */
     private static function normalizeSections($params)
     {
@@ -76,7 +62,7 @@ class ContextTools
         }
 
         if (!is_array($params['include'])) {
-            return MCPHelper::error('invalid_param', __('include must be an array of context section names.', 'fluent-crm'));
+            return MCPHelper::error('invalid_param', 'include must be an array of context section names.');
         }
 
         $requested = array_values(array_unique(array_map('sanitize_key', $params['include'])));
@@ -86,14 +72,13 @@ class ContextTools
 
         $unknown = array_values(array_diff($requested, self::AVAILABLE_SECTIONS));
         if ($unknown) {
-            return MCPHelper::error('invalid_param', __('include contains unknown context sections.', 'fluent-crm'), [
+            return MCPHelper::error('invalid_param', 'include contains unknown context sections.', [
                 'unknown' => $unknown,
                 'allowed' => self::AVAILABLE_SECTIONS,
             ]);
         }
 
-        // Return sections in the caller's order so the response remains easy
-        // to compare with the request while still de-duplicating names.
+        // Caller's order, de-duplicated.
         return $requested;
     }
 
@@ -139,6 +124,9 @@ class ContextTools
             'fluent_crm_version'    => defined('FLUENTCRM_PLUGIN_VERSION') ? FLUENTCRM_PLUGIN_VERSION : null,
             'fluent_campaign_active' => $proActive,
             'timezone'               => fluentCrmGetTimezoneString(),
+            // Dates sent without an offset are read in this zone.
+            'timezone_name'          => MCPHelper::siteTimezoneName(),
+            'utc_offset'             => MCPHelper::siteUtcOffset(),
             'current_time'           => fluentCrmTimestamp(),
         ];
 
@@ -176,8 +164,7 @@ class ContextTools
     }
 
     /**
-     * Resolve the displayed/cache-signature permissions through the same
-     * currentUserCan filters used by every ability permission callback.
+     * Filter permissions through currentUserCan(), as the ability permission callbacks do.
      */
     private static function effectivePermissions($permissions)
     {
@@ -192,8 +179,7 @@ class ContextTools
     }
 
     /**
-     * Append one authorized section while preserving the existing top-level
-     * response keys used by agents (`tags`/`lists`, `default_sender`, etc.).
+     * Append one authorized section under its top-level response keys.
      */
     private static function appendSection(&$context, $section, $access, $params = [])
     {
@@ -299,8 +285,7 @@ class ContextTools
     }
 
     /**
-     * Cheap default discovery: capability-sliced counts, essential enums, and
-     * feature availability. It deliberately excludes reference catalogs.
+     * Default discovery: capability-scoped counts, essential enums and feature flags.
      */
     private static function buildOverview($access)
     {
@@ -349,11 +334,6 @@ class ContextTools
     /**
      * Marketing-campaign lifecycle statuses (type='campaign').
      *
-     * Single source for both enum builders — they previously carried separate
-     * copies of this literal, which is how `published` came to be missing from
-     * the advertised contract after one-off writes were normalized to it
-     * (PR #2026 review finding 1).
-     *
      * @return array<int, string>
      */
     public static function campaignStatuses()
@@ -363,16 +343,7 @@ class ContextTools
 
     /**
      * Statuses carried by one-off sends (type='custom_email_campaign').
-     *
-     * Deliberately separate from campaignStatuses(): a one-off has no
-     * lifecycle. The row is written 'published' at creation and never advances,
-     * so the value says "this is a one-off", not "this was delivered" — the
-     * real delivery state is get-campaign's `one_off_status`. Folding this into
-     * campaign_statuses would tell agents a marketing campaign can be
-     * 'published', which it never is.
-     *
-     * These values only match rows when list-campaigns is called with
-     * include_one_offs=true.
+     * The status never advances; delivery state is get-campaign's `one_off_status`.
      *
      * @return array<int, string>
      */
@@ -406,84 +377,85 @@ class ContextTools
     }
 
     /**
-     * Per-tool safety classification — round-3 review R3.
+     * Tools grouped by risk, derived from each ability's MCP hints so the context section
+     * and tools/list can never disagree. Keys are the tool names agents call
+     * ("fluent-crm-get-contact"), not the ability names.
      *
-     * Lets agents branch on a stable code instead of parsing tool
-     * descriptions or relying on annotations alone (which only
-     * differentiate readonly / destructive in two coarse buckets).
-     *
-     * Levels:
-     *   safe_render          — no DB writes, no sends, no side effects
-     *   readonly             — DB reads only
-     *   creates_or_mutates_draft — writes data the user can still review/cancel
-     *   mutating_with_dry_run    — writes data; dry_run preview available
-     *   destructive_send         — actually sends mail to a real recipient
-     *   destructive_irrecoverable — deletion / cannot be undone
+     *   read_only: reads only
+     *   write: changes data, deletes nothing
+     *   destructive: overwrites or deletes data
+     *   reaches_people: can email or notify contacts, directly or through automations
+     *   confirm_first: reaches_people, or destructive and idempotent (deletes and removals);
+     *                  confirm with the user before calling. Draft edits are left out.
      */
     private static function buildSafetyLevels()
     {
-        return apply_filters('fluent_crm/mcp_safety_levels', [
-            'fluent-crm/get-crm-context'                  => 'readonly',
-            'fluent-crm/list-contacts'                    => 'readonly',
-            'fluent-crm/get-contact-filter-schema'        => 'readonly',
-            'fluent-crm/get-contact'                      => 'readonly',
-            'fluent-crm/list-campaigns'                   => 'readonly',
-            'fluent-crm/get-campaign'                     => 'readonly',
-            'fluent-crm/list-automations'                 => 'readonly',
-            'fluent-crm/list-funnel-subscribers'          => 'readonly',
-            'fluent-crm/get-automation'                   => 'readonly',
-            'fluent-crm/list-sequences'                   => 'readonly',
-            'fluent-crm/get-sequence'                     => 'readonly',
-            'fluent-crm/estimate-dynamic-segment'         => 'readonly',
-            'fluent-crm/upsert-contact'                   => 'creates_or_mutates_draft',
-            'fluent-crm/bulk-upsert-contacts'             => 'creates_or_mutates_draft',
-            'fluent-crm/add-contact-note'                 => 'creates_or_mutates_draft',
-            'fluent-crm/upsert-campaign'                  => 'creates_or_mutates_draft',
-            'fluent-crm/apply-segments-to-contacts'       => 'mutating_with_dry_run',
-            'fluent-crm/manage-sequence-subscribers'      => 'mutating_with_dry_run',
-            'fluent-crm/update-contact-automation-status' => 'creates_or_mutates_draft',
-            'fluent-crm/manage-tag'                       => 'destructive_irrecoverable',
-            'fluent-crm/manage-list'                      => 'destructive_irrecoverable',
-            'fluent-crm/delete-contact'                   => 'destructive_irrecoverable',
-            'fluent-crm/delete-contact-note'              => 'destructive_irrecoverable',
-            'fluent-crm/render-email-preview'             => 'safe_render',
-            'fluent-crm/send-test-email'                  => 'destructive_send',
-            'fluent-crm/send-email-to-contact'            => 'destructive_send',
-            // change-campaign-status: per-action — schedule + delete are
-            // destructive in different ways. Annotation already flags it;
-            // the description spells out which actions are dangerous.
-            'fluent-crm/change-campaign-status'           => 'destructive_send',
-        ]);
+        $groups = ['read_only' => [], 'write' => [], 'destructive' => [], 'reaches_people' => [], 'confirm_first' => []];
+
+        foreach (self::abilityAnnotations() as $abilityName => $hints) {
+            $tool = MCPHelper::toolName($abilityName);
+            if (!empty($hints['readonly'])) {
+                $groups['read_only'][] = $tool;
+            } elseif (!empty($hints['destructive'])) {
+                $groups['destructive'][] = $tool;
+            } else {
+                $groups['write'][] = $tool;
+            }
+            if (!empty($hints['openWorldHint'])) {
+                $groups['reaches_people'][] = $tool;
+            }
+            $deletes = !empty($hints['destructive']) && !empty($hints['idempotent']);
+            if (empty($hints['readonly']) && ($deletes || !empty($hints['openWorldHint']))) {
+                $groups['confirm_first'][] = $tool;
+            }
+        }
+
+        return apply_filters('fluent_crm/mcp_safety_levels', $groups);
     }
 
     /**
-     * Rate / cap hints — round-3 review R4.
+     * MCP hint annotations of every ability on the FluentCRM server, Pro's included.
      *
-     * Surfaces the limits that are otherwise embedded only in tool
-     * descriptions ("Cap 5000 per call"). Lets agents pre-validate
-     * batch sizes deterministically.
+     * @return array<string, array> ability name => annotations
+     */
+    private static function abilityAnnotations()
+    {
+        $names = apply_filters('fluent_crm/mcp_ability_names', array_keys(AbilitiesRegistrar::getDefinitions()));
+        $out   = [];
+
+        foreach (array_unique((array) $names) as $name) {
+            $ability = function_exists('wp_get_ability') ? wp_get_ability($name) : null;
+            if (!$ability || !method_exists($ability, 'get_meta')) {
+                continue;
+            }
+            $meta = (array) $ability->get_meta();
+            $out[$name] = (array) ($meta['annotations'] ?? []);
+        }
+
+        return $out;
+    }
+
+    /**
+     * Per-tool rate and batch-size limits.
      */
     private static function buildRateHints()
     {
-        $cap = (int) apply_filters('fluent_crm/mcp_bulk_cap', 5000, 'apply-segments-to-contacts');
+        $cap = (int) apply_filters('fluent_crm/mcp_bulk_cap', 5000, 'apply-tags-lists-to-contacts');
         return apply_filters('fluent_crm/mcp_rate_hints', [
-            'fluent-crm/bulk-upsert-contacts'        => ['max_per_call' => 500, 'recommended_batch' => 100],
-            'fluent-crm/apply-segments-to-contacts'  => ['max_per_call' => $cap],
-            'fluent-crm/manage-sequence-subscribers' => ['max_per_call' => $cap],
-            'fluent-crm/send-email-to-contact'       => ['note' => 'Goes through the normal queue + bounce handling — site-level rate limits apply (see settings.email_settings.emails_per_second).'],
+            'fluent-crm-bulk-upsert-contacts'        => ['max_per_call' => 500, 'recommended_batch' => 100],
+            'fluent-crm-apply-tags-lists-to-contacts'  => ['max_per_call' => $cap],
+            'fluent-crm-manage-sequence-subscribers' => ['max_per_call' => $cap],
+            'fluent-crm-send-email-to-contact'       => ['note' => 'Goes through the normal queue and bounce handling; the site\'s sending rate limit applies.'],
         ]);
     }
 
     /**
-     * Versioned capabilities map — round-3 review R9.
-     *
-     * Lets agents adapt their strategy across MCP versions without trial
-     * and error. Bump `version` whenever a capability is added/removed.
+     * Versioned MCP capabilities map. `version` is the result schema version (MCPHelper::SCHEMA_VERSION).
      */
     private static function buildCapabilities()
     {
         return apply_filters('fluent_crm/mcp_capabilities', [
-            'version' => '1.10.0',
+            'version' => MCPHelper::SCHEMA_VERSION,
             'supports' => [
                 'paginated_tag_list_registry',
                 'segment_last_used_at',
@@ -492,7 +464,7 @@ class ContextTools
                 'context_section_selection',
                 'bounded_contact_profile',
                 'campaign_body_format',
-                'dry_run_apply_segments',
+                'dry_run_apply_tags_lists',
                 'send_test_email',
                 'test_email_sender_parity',
                 'render_email_preview',
@@ -513,19 +485,6 @@ class ContextTools
                 'advanced_filters_provider_validation',
                 'contact_filter_schema_discovery',
             ],
-            'deprecated'             => [
-                'get-contact include "ai_summary" — removed in 1.6.0; summarize from the raw sections instead',
-                'contact field "life_time_value" — removed in 1.6.0 (was never populated); use the purchase_history include',
-                'send-test-email "render_only" — removed from the schema in 1.8.0; use the render-email-preview tool (a render_only argument is still honored as a preview for back-compat, and now requires fcrm_read_contacts like the tool it stands in for)',
-                'upsert-campaign recipients/exclude_recipients "sending_filter" — rejected as of 1.9.0; it was never persisted, so accepting it was a silent drop. Campaign targeting is tags + lists only',
-            ],
-            'corrections'            => [
-                'get-crm-context segments: tags/lists no longer carry subscribers_count by default (it cost a per-row pivot count). Pass include_segment_counts=true, or read `total` from a filtered list-contacts call for one segment',
-                'get-crm-context segments caps tags and lists at 50 rows each with no paging — it is a discovery teaser, not the registry. As of 1.10.0 use list-tags / list-lists to enumerate them all, with search, counts, and last_used_at',
-                'get-contact automations[].next_sequence_id returned the step ORDINAL before 1.9.0; it now returns the fc_funnel_sequences row id (usable as update-contact-automation-status.advance_to_sequence_id). The ordinal moved to next_sequence_no',
-                'Timestamps returned by every tool now carry the site UTC offset instead of being stamped +00:00 while holding site-local time',
-            ],
-            'breaking_changes_pending' => [],
         ]);
     }
 
@@ -534,8 +493,7 @@ class ContextTools
         $stats = (new Stats())->getCounts();
 
         $todayStart = (new \DateTime('today', new \DateTimeZone(fluentCrmGetTimezoneString())))->format('Y-m-d H:i:s');
-        // Site-local like $todayStart — the compared columns store site time, so a
-        // UTC time() base skews the 7-day window by the site offset.
+        // Site-local: the compared columns store site time.
         $sevenDaysAgo = gmdate('Y-m-d H:i:s', current_time('timestamp') - (7 * DAY_IN_SECONDS));
 
         return [
@@ -551,14 +509,8 @@ class ContextTools
     }
 
     /**
-     * The tag registry an agent needs to resolve names to ids.
-     *
-     * subscribers_count is OPT-IN: withCount() runs a correlated subquery
-     * against fc_subscriber_pivot for every row, which is by far the most
-     * expensive thing get-crm-context can do — and the count is not what the
-     * registry is for. Agents use this to map "newsletter" to an id; when they
-     * actually want sizes they can ask, or get an exact one from list-contacts
-     * total. Without counts this is a single indexed SELECT over ~50 rows.
+     * The first tags an agent needs to resolve names to ids.
+     * subscribers_count is opt-in: it runs a pivot subquery per row.
      */
     private static function tagsForContext($withCounts = false, $limit = 50)
     {
@@ -572,9 +524,7 @@ class ContextTools
 
     private static function segmentRegistry($query, $withCounts, $limit)
     {
-        // Ordering follows the data we actually have: by size when counted,
-        // alphabetically otherwise (deterministic and readable, and cheap
-        // because title is what the agent matches on anyway).
+        // By size when counted, alphabetical otherwise.
         if ($withCounts) {
             $query->withCount('subscribers')->orderByDesc('subscribers_count');
         } else {
@@ -617,19 +567,16 @@ class ContextTools
     }
 
     /**
-     * Design templates the MCP tools allow agents to select. The
-     * visual_builder template is intentionally excluded — it's an
-     * interactive Gutenberg editor experience, not something an agent
-     * should be authoring against. Use `mcp_allowed_design_templates`
-     * to publish it deliberately if a custom workflow needs it.
+     * Design templates agents may select. visual_builder is excluded unless
+     * added through `fluent_crm/mcp_allowed_design_templates`.
      */
     public static function allowedDesignTemplates()
     {
         $defaults = [
-            'plain'       => __('Plain', 'fluent-crm'),
-            'classic'     => __('Classic', 'fluent-crm'),
-            'raw_html'    => __('Raw HTML', 'fluent-crm'),
-            'raw_classic' => __('Raw Classic', 'fluent-crm'),
+            'plain'       => 'Plain',
+            'classic'     => 'Classic',
+            'raw_html'    => 'Raw HTML',
+            'raw_classic' => 'Raw Classic',
         ];
 
         if (method_exists(Helper::class, 'getEmailDesignTemplates')) {
@@ -690,9 +637,7 @@ class ContextTools
     }
 
     /**
-     * Flatten Helper::getGlobalSmartCodes() into a compact, agent-friendly
-     * shape — review #19. Preserves group structure so the agent can find
-     * codes by source (contact / custom fields / general / extensions).
+     * Flatten Helper::getGlobalSmartCodes() into a compact shape, keeping the groups.
      */
     private static function buildSmartCodes()
     {
@@ -733,8 +678,8 @@ class ContextTools
         }
 
         if ($access['emails']) {
-            $guidelines[] = "Before sending to a contact, confirm their status is 'subscribed'. Drafts are reviewable; change-campaign-status action=schedule starts delivery.";
-            $guidelines[] = 'Use site.timezone when constructing scheduled_at.';
+            $guidelines[] = "send-email-to-contact needs the contact's status to be subscribed or transactional; never change a status just to send. Campaigns go only to subscribed contacts. upsert-campaign saves a draft; change-campaign-status action=schedule starts delivery.";
+            $guidelines[] = 'A scheduled_at without an offset is read in site.timezone_name.';
         }
 
         if ($access['funnels']) {

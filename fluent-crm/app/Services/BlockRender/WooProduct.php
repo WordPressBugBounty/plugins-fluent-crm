@@ -61,14 +61,14 @@ class WooProduct
 
         $contentHtml = sprintf(
             '<h2 style="%1$s">%2$s</h2>',
-            $contentColorStyle.'margin: 0;',
+            esc_attr($contentColorStyle.'margin: 0;'),
             wp_kses_post($product->get_title())
         );
 
         if (Arr::get($atts, 'showDescription')) {
             $contentHtml .= sprintf(
                 '<div style="%1$s">%2$s</div>',
-                $contentColorStyle.'margin-bottom: 5px;',
+                esc_attr($contentColorStyle.'margin-bottom: 5px;'),
                 wc_format_content(wp_kses_post($product->get_short_description() ? $product->get_short_description() : wc_trim_string($product->get_description(), 400)))
             );
         }
@@ -76,7 +76,7 @@ class WooProduct
         if (Arr::get($atts, 'showPrice')) {
             $contentHtml .= sprintf(
                 '<div class="fcw_p_price" style="%1$s">%2$s</div>',
-                $pricingStyle,
+                esc_attr($pricingStyle),
                 ProductListRenderer::preparePriceHtml($product->get_price_html(), __('Free', 'fluent-crm'))
             );
         }
@@ -86,7 +86,8 @@ class WooProduct
         $template = Arr::get($atts, 'template', 'left');
 
         if($template != 'none') {
-            $image = self::getImage($product);
+            // Same precedence as the editor preview: a chosen custom image wins.
+            $image = Arr::get($atts, 'customImage') ?: self::getImage($product);
         }
         if (!$image) {
             $template = 'none';
@@ -100,11 +101,12 @@ class WooProduct
         }
 
         $imageTd = '';
+        $imageAlt = esc_attr(wp_strip_all_tags($product->get_title()));
         if($image) {
             if($template == 'top') {
-                $contentHtml = '<img src="'.$image.'" width="auto" alt="'.$product->get_title().'" style="border: 0; height: auto; outline: none; text-decoration: none; max-width: 100%; -ms-interpolation-mode: bicubic; display: block;margin: 0 auto 15px;">'.$contentHtml;
+                $contentHtml = '<img src="'.esc_url($image).'" width="auto" alt="'.$imageAlt.'" style="border: 0; height: auto; outline: none; text-decoration: none; max-width: 100%; -ms-interpolation-mode: bicubic; display: block;margin: 0 auto 15px;">'.$contentHtml;
             } else if($template == 'left') {
-                $imageContent = '<img src="'.$image.'" width="auto" alt="'.$product->get_title().'" style="border: 0; height: auto; outline: none; text-decoration: none; max-width: 100%; -ms-interpolation-mode: bicubic; display: block;margin: 0 auto;">';
+                $imageContent = '<img src="'.esc_url($image).'" width="auto" alt="'.$imageAlt.'" style="border: 0; height: auto; outline: none; text-decoration: none; max-width: 100%; -ms-interpolation-mode: bicubic; display: block;margin: 0 auto;">';
                 $imageTd = self::getContentTd($imageContent, $template);
             }
         }
@@ -120,7 +122,7 @@ class WooProduct
         ob_start();
         ?>
 
-        <table class="<?php echo esc_attr($tableClass); ?>" border="0" cellpadding="0" cellspacing="0" width="100%" style="table-layout: fixed; border-collapse: collapse;mso-table-lspace: 0pt;mso-table-rspace: 0pt;-ms-text-size-adjust: 100%;-webkit-text-size-adjust: 100%;margin-bottom: 20px; margin-top: 20px;<?php echo $tableStyle; //phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>"><tbody><tr>
+        <table class="<?php echo esc_attr($tableClass); ?>" border="0" cellpadding="0" cellspacing="0" width="100%" style="table-layout: fixed; border-collapse: collapse;mso-table-lspace: 0pt;mso-table-rspace: 0pt;-ms-text-size-adjust: 100%;-webkit-text-size-adjust: 100%;margin-bottom: 20px; margin-top: 20px;<?php echo esc_attr($tableStyle); ?>"><tbody><tr>
                 <?php
                 if($imageTd) {
                     echo $imageTd; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
@@ -142,7 +144,7 @@ class WooProduct
         if($template == 'left') {
             $width = '50';
         }
-        return '<td align="center" valign="middle" width="' . $width . '%" class="fce_column"><table border="0" cellpadding="10" cellspacing="0" width="100%"><tr><td class="fc_column_content" style="padding: 10px;'. $extraStyle.'">'.$contentHtml.'</td></tr></table></td>'; //phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
+        return '<td align="center" valign="middle" width="' . $width . '%" class="fce_column"><table border="0" cellpadding="10" cellspacing="0" width="100%"><tr><td class="fc_column_content" style="padding: 10px;'. esc_attr($extraStyle).'">'.$contentHtml.'</td></tr></table></td>'; //phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
     }
 
     /**

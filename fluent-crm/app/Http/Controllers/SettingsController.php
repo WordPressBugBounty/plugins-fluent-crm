@@ -7,10 +7,12 @@ use FluentCrm\App\Models\ActivityLog;
 use FluentCrm\App\Models\Campaign;
 use FluentCrm\App\Models\CampaignEmail;
 use FluentCrm\App\Models\CampaignUrlMetric;
+use FluentCrm\App\Models\Subscriber;
 use FluentCrm\App\Models\SystemLog;
 use FluentCrm\App\Services\AutoSubscribe;
 use FluentCrm\App\Services\DbPerformanceService;
 use FluentCrm\App\Services\Helper;
+use FluentCrm\App\Services\Libs\Mailer\DoubleOptinRenderer;
 use FluentCrm\App\Services\RoleBasedTagging;
 use FluentCrm\Framework\Support\Arr;
 use FluentCrm\Framework\Http\Request\Request;
@@ -27,9 +29,7 @@ use FluentCrm\Framework\Http\Request\Request;
 class SettingsController extends Controller
 {
     /**
-     * Number of campaigns returned to the Campaign Archive selector in one response,
-     * matching the archive's own 200-campaign ceiling. A caller may request fewer with
-     * an explicit limit, never more. Past this the selector relies on its search box.
+     * Maximum campaigns returned to the Campaign Archive selector; a caller may ask for fewer.
      */
     const MAX_SELECTOR_CAMPAIGNS = 200;
 
@@ -73,7 +73,7 @@ class SettingsController extends Controller
                 $emailFooter = Arr::get($setting, 'email_footer');
                 if (!Helper::hasComplianceText($emailFooter)) {
                     return $this->sendError([
-                        'message' => __('##crm.manage_subscription_url## or ##crm.unsubscribe_url## string is required for compliance. Please include unsubscription or manage subscription link', 'fluent-crm')
+                        'message' => __('##crm.manage_subscription_url## or ##crm.unsubscribe_url## is required for compliance. Please include an unsubscribe or manage subscription link.', 'fluent-crm')
                     ]);
                 }
             }
@@ -88,16 +88,14 @@ class SettingsController extends Controller
 
     public function getDoubleOptinSettings(Request $request)
     {
-        //check if list id comes
         $listId = $request->get('list_id', null);
         $doubleOptinSettings = null;
-        //if list id sent then it is double optin setup of a list
         if ($listId) {
             $meta = fluentcrm_get_list_meta($listId, 'double_optin_settings');
             $doubleOptinSettings = $meta ? $meta->value : null;
         }
 
-        //if no double optin setup of list found or this is global
+        // Fall back to the global settings when the list has none.
         if (!$doubleOptinSettings) {
             $doubleOptinSettings = Helper::getDoubleOptinSettings();
             if (empty($doubleOptinSettings['tag_based_redirect'])) {
@@ -130,45 +128,50 @@ class SettingsController extends Controller
                 'design_template'          => [
                     'type'    => 'image-radio',
                     'label'   => __('Design Template', 'fluent-crm'),
-                    'help'    => __('Email Design Template for this double-optin email', 'fluent-crm'),
+                    'help'    => __('Email design template for the double opt-in email', 'fluent-crm'),
                     'options' => $designTemplates
                 ],
                 'email_subject'            => [
                     'type'        => 'input-text-popper',
-                    'placeholder' => __('Optin Email Subject', 'fluent-crm'),
+                    'placeholder' => __('Opt-in Email Subject', 'fluent-crm'),
                     'label'       => __('Email Subject', 'fluent-crm'),
-                    'help'        => __('Your double-optin email subject', 'fluent-crm')
+                    'help'        => __('Your double opt-in email subject', 'fluent-crm')
                 ],
                 'email_pre_header'         => [
                     'type'        => 'input-text-popper',
-                    'placeholder' => __('Optin Email Pre Header', 'fluent-crm'),
-                    'label'       => __('Email Pre Header', 'fluent-crm'),
-                    'help'        => __('Your double-optin email pre header', 'fluent-crm')
+                    'placeholder' => __('Opt-in email preview text', 'fluent-crm'),
+                    'label'       => __('Preview text', 'fluent-crm'),
+                    'help'        => __('Preview text for your double opt-in email', 'fluent-crm')
                 ],
                 'email_body'               => [
                     'type'        => 'wp-editor',
-                    'placeholder' => __('Double-Optin Email Body', 'fluent-crm'),
-                    'label'       => __('Email Body', 'fluent-crm'),
-                    'help'        => __('Provide Email Body for the double-optin', 'fluent-crm'),
-                    'inline_help' => __('Use #activate_link# for plain url or {{crm.activate_button|Confirm Subscription}} for default button', 'fluent-crm')
+                    'placeholder' => __('Double opt-in email body', 'fluent-crm'),
+                    'label'       => __('Email body', 'fluent-crm'),
+                    'help'        => __('Email body for the double opt-in email', 'fluent-crm'),
+                    'inline_help' => __('Use #activate_link# for a plain URL or {{crm.activate_button|Confirm Subscription}} for the default button', 'fluent-crm'),
+                    // Sent to the contact's own inbox, so the picker offers access-token smartcodes too.
+                    'smartcode_level' => 'credential'
                 ],
                 'confirmation_html_viewer' => [
                     'type'    => 'html-viewer',
                     'heading' => __('After Confirmation Actions', 'fluent-crm'),
-                    'info'    => __('Please provide details after a contact confirms double opt-in from email', 'fluent-crm')
+                    'info'    => __('Choose what happens after a contact confirms the double opt-in email', 'fluent-crm')
                 ],
                 'after_confirmation_type'  => [
-                    'type'    => 'input-radio',
-                    'label'   => __('After Confirmation Type', 'fluent-crm'),
-                    'help'    => __('Please select what will happen once a contact confirms double opt-in', 'fluent-crm'),
-                    'options' => [
+                    'type'          => 'input-radio',
+                    'label'         => __('After Confirmation Type', 'fluent-crm'),
+                    'help'          => __('Select what happens after a contact confirms double opt-in', 'fluent-crm'),
+                    'wrapper_class' => 'fcrm_radio_card_group',
+                    'options'       => [
                         [
-                            'id'    => 'message',
-                            'label' => __('Show Message', 'fluent-crm')
+                            'id'          => 'message',
+                            'label'       => __('Show a message', 'fluent-crm'),
+                            'description' => __('A simple thank-you page hosted by your site. Good default.', 'fluent-crm')
                         ],
                         [
-                            'id'    => 'redirect',
-                            'label' => __('Redirect to an URL', 'fluent-crm')
+                            'id'          => 'redirect',
+                            'label'       => __('Redirect to a Page', 'fluent-crm'),
+                            'description' => __('Send people to your own thank-you page, a download or an offer.', 'fluent-crm')
                         ]
                     ]
                 ],
@@ -176,7 +179,7 @@ class SettingsController extends Controller
                     'type'        => 'wp-editor',
                     'placeholder' => __('After Confirmation Message', 'fluent-crm'),
                     'label'       => __('After Confirmation Message', 'fluent-crm'),
-                    'help'        => __('This message will be shown after a subscriber confirm subscription', 'fluent-crm'),
+                    'help'        => __('This message is shown after a contact confirms their subscription', 'fluent-crm'),
                     'dependency'  => [
                         'depends_on' => 'after_confirmation_type',
                         'operator'   => '=',
@@ -187,7 +190,7 @@ class SettingsController extends Controller
                     'type'        => 'input-text-popper',
                     'placeholder' => __('Redirect URL', 'fluent-crm'),
                     'label'       => __('Redirect URL', 'fluent-crm'),
-                    'help'        => __('Please provide redirect URL after confirmation', 'fluent-crm'),
+                    'help'        => __('The URL to redirect to after confirmation', 'fluent-crm'),
                     'dependency'  => [
                         'depends_on' => 'after_confirmation_type',
                         'operator'   => '=',
@@ -196,17 +199,17 @@ class SettingsController extends Controller
                 ],
                 'tag_based_redirect'       => [
                     'type'           => 'inline-checkbox',
-                    'checkbox_label' => (defined('FLUENTCAMPAIGN')) ? __('Enable Tag based double optin redirect', 'fluent-crm') : __('Enable Tag based double optin redirect (Require FluentCRM Pro)', 'fluent-crm'),
+                    'checkbox_label' => (defined('FLUENTCAMPAIGN')) ? __('Enable tag-based double opt-in redirect', 'fluent-crm') : __('Enable tag-based double opt-in redirect (requires FluentCRM Pro)', 'fluent-crm'),
                     'true_label'     => 'yes',
                     'false_label'    => 'no',
                     'disabled'       => !defined('FLUENTCAMPAIGN')
                 ],
                 'tag_redirects'            => [
-                    'label'                 => __('Configure your redirect URLs based on tags (Will redirect to the provided URL if any selected tag matches the contact)', 'fluent-crm'),
+                    'label'                 => __('Set redirect URLs based on tags. The contact is redirected to the provided URL if any selected tag matches.', 'fluent-crm'),
                     'type'                  => 'form-many-drop-down-mapper',
                     'local_label'           => __('Targeted Tags', 'fluent-crm'),
-                    'local_placeholder'     => __('Select Tags', 'fluent-crm'),
-                    'remote_label'          => __('Redirect URL (After Double Optin Confirmation)', 'fluent-crm'),
+                    'local_placeholder'     => __('Select tags', 'fluent-crm'),
+                    'remote_label'          => __('Redirect URL (after double opt-in confirmation)', 'fluent-crm'),
                     'field_option_selector' => [
                         'option_key'  => 'tags',
                         'is_multiple' => true
@@ -215,7 +218,7 @@ class SettingsController extends Controller
                     'remote_field'          => [
                         'placeholder' => __('Redirect URL', 'fluent-crm')
                     ],
-                    'help'                  => __('User will be redirected to the URL which matches based on the tags at first match', 'fluent-crm'),
+                    'help'                  => __('The contact is redirected to the URL of the first matching tag', 'fluent-crm'),
                     'dependency'            => [
                         'depends_on' => 'tag_based_redirect',
                         'operator'   => '=',
@@ -227,6 +230,72 @@ class SettingsController extends Controller
         }
 
         return $this->sendSuccess($data);
+    }
+
+    /**
+     * Render unsaved double opt-in settings for the admin preview without sending anything.
+     *
+     * @param Request $request `settings` (unsaved form values), `target` (email|confirmation), optional `contact_id`.
+     * @return \WP_REST_Response|array
+     */
+    public function previewDoubleOptin(Request $request)
+    {
+        if (!defined('FLUENTCRM_PREVIEWING_EMAIL')) {
+            define('FLUENTCRM_PREVIEWING_EMAIL', true);
+        }
+
+        $settings = (array)wp_unslash($request->get('settings', []));
+        $contactId = absint($request->get('contact_id'));
+        $subscriber = $contactId ? Subscriber::find($contactId) : fluentcrm_get_current_contact();
+
+        if (!$subscriber) {
+            $subscriber = Subscriber::where('status', 'subscribed')->first();
+        }
+
+        if (!$subscriber) {
+            return $this->sendError([
+                'message' => __('A contact is required to render the preview.', 'fluent-crm')
+            ]);
+        }
+
+        if ($request->getSafe('target', 'sanitize_text_field') !== 'confirmation') {
+            $renderedEmail = DoubleOptinRenderer::render($settings, $subscriber, true);
+
+            return [
+                'preview_html'    => $renderedEmail['body'],
+                'preview_subject' => $renderedEmail['subject'],
+                'subjects'        => [['id' => 0, 'key' => 100, 'value' => $renderedEmail['subject']]],
+                'sender'          => Helper::getPreviewSender()
+            ];
+        }
+
+        $message = Arr::get($settings, 'after_confirm_message', '');
+
+        // Same rule as saving: the public message is filtered unless the user has unfiltered_html.
+        if (!current_user_can('unfiltered_html')) {
+            $message = wp_kses_post($message);
+        }
+
+        $message = apply_filters('fluent_crm/parse_campaign_email_text', $message, $subscriber);
+        $message = apply_filters('fluent_crm/parse_extended_crm_text', $message, $subscriber);
+
+        // Mirror the public confirmation page: same markup and stylesheet, minus wp_head()/wp_footer().
+        // Block themes set the page font through global styles, which wp_head() would normally print.
+        $themeStyles = '';
+        if (wp_is_block_theme() && function_exists('wp_print_font_faces') && function_exists('wp_get_global_stylesheet')) {
+            ob_start();
+            wp_print_font_faces();
+            $themeStyles = ob_get_clean() . '<style>' . wp_get_global_stylesheet() . '</style>';
+        }
+
+        $confirmationPage = $themeStyles
+            . '<link rel="stylesheet" href="' . esc_url(fluentCrmMix('public/public_pref.css')) . '">'
+            . fluentCrm('view')->make('external.confirmation_content', [
+                'body'     => $message,
+                'business' => fluentcrmGetGlobalSettings('business_settings', [])
+            ]);
+
+        return ['confirmation_html' => $confirmationPage];
     }
 
     public function saveDoubleOptinSettings(Request $request)
@@ -241,11 +310,10 @@ class SettingsController extends Controller
             'after_confirm_message' => 'required'
         ], [
             'email_subject.required'         => __('Email Subject is required', 'fluent-crm'),
-            'email_body.required'            => __('Email Body is required', 'fluent-crm'),
+            'email_body.required'            => __('Email body is required', 'fluent-crm'),
             'after_confirm_message.required' => __('After Confirmation Message is required', 'fluent-crm')
         ]);
 
-        // let's check if message contains #activate_link# or {{crm.activate_button
         $emailBody = $settings['email_body'];
 
         if (
@@ -253,12 +321,11 @@ class SettingsController extends Controller
             strpos($emailBody, '{{crm.activate_button') === false
         ) {
             return $this->sendError([
-                'message' => __('Email Body need to contains activation link', 'fluent-crm')
+                'message' => __('Email body must contain the activation link', 'fluent-crm')
             ]);
         }
 
-        // Delegated CRM settings managers do not automatically receive WordPress'
-        // unfiltered HTML authority for a public confirmation page.
+        // The confirmation message is public; filter it unless the user has unfiltered_html.
         if (!current_user_can('unfiltered_html')) {
             $settings['after_confirm_message'] = wp_kses_post($settings['after_confirm_message']);
         }
@@ -273,7 +340,7 @@ class SettingsController extends Controller
         }
 
         return $this->sendSuccess([
-                'message' => __('Double Opt-in settings has been updated', 'fluent-crm')
+                'message' => __('The double opt-in settings have been updated.', 'fluent-crm')
             ]
         );
     }
@@ -290,13 +357,13 @@ class SettingsController extends Controller
     {
         if (!current_user_can('manage_options')) {
             return $this->sendError([
-                'message' => __('Sorry, You do not have admin permission to reset database', 'fluent-crm')
+                'message' => __('Sorry, you do not have admin permission to reset the database', 'fluent-crm')
             ]);
         }
 
         if (!defined('FLUENTCRM_IS_DEV_FEATURES') || !FLUENTCRM_IS_DEV_FEATURES) {
             return $this->sendError([
-                'message' => __('Development mode is not activated. So you cannot use this feature. You can define "FLUENTCRM_IS_DEV_FEATURES" in your wp-config to enable this feature', 'fluent-crm')
+                'message' => __('Development mode is not enabled, so you cannot use this feature. Define "FLUENTCRM_IS_DEV_FEATURES" in your wp-config.php to enable it.', 'fluent-crm')
             ]);
         }
 
@@ -327,7 +394,6 @@ class SettingsController extends Controller
             // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
             $wpdb->query("DROP TABLE IF EXISTS " . $wpdb->prefix . $table);
         }
-        // All tables are delete now let's run the migration
         (new ActivationHandler)->handle(false);
 
         if (defined('FLUENTCAMPAIGN_PLUGIN_URL')) {
@@ -343,7 +409,7 @@ class SettingsController extends Controller
         }
 
         return [
-            'message' => __('All FluentCRM Database Tables have been reset', 'fluent-crm'),
+            'message' => __('All FluentCRM database tables have been reset', 'fluent-crm'),
             'tables'  => $tables
         ];
     }
@@ -372,77 +438,77 @@ class SettingsController extends Controller
                 ], site_url('index.php')),
                 'doc_url'     => 'https://fluentcrm.com/docs/bounce-handler-with-amazon-ses/',
                 'input_title' => __('Amazon SES Bounce Handler URL', 'fluent-crm'),
-                'input_info'  => __('Please use this bounce handler url in your Amazon SES + SNS settings', 'fluent-crm')
+                'input_info'  => __('Use this bounce handler URL in your Amazon SES + SNS settings', 'fluent-crm')
             ],
             'tosend'       => [
                 'label'       => __('ToSend', 'fluent-crm'),
                 'webhook_url' => $bounceUrl('tosend'),
                 'doc_url'     => 'https://fluentcrm.com/docs/bounce-handling-with-tosend/',
                 'input_title' => __('ToSend Bounce Handler Webhook URL', 'fluent-crm'),
-                'input_info'  => __('Please paste this URL into your ToSend\'s Webhook settings to enable Bounce Handling with FluentCRM. Select both Bounce and Complaint events.', 'fluent-crm')
+                'input_info'  => __('Paste this URL into your ToSend webhook settings to enable bounce handling in FluentCRM. Select both the Bounce and Complaint events.', 'fluent-crm')
             ],
             'mailgun'      => [
                 'label'       => __('Mailgun', 'fluent-crm'),
                 'webhook_url' => $bounceUrl('mailgun'),
                 'doc_url'     => 'https://fluentcrm.com/docs/bounce-handling-with-mailgun/',
                 'input_title' => __('Mailgun Bounce Handler Webhook URL', 'fluent-crm'),
-                'input_info'  => __('Please paste this URL into your Mailgun\'s Webhook settings to enable Bounce Handling with FluentCRM', 'fluent-crm')
+                'input_info'  => __('Paste this URL into your Mailgun webhook settings to enable bounce handling in FluentCRM', 'fluent-crm')
             ],
             'pepipost'     => [
                 'label'       => __('PepiPost', 'fluent-crm'),
                 'webhook_url' => $bounceUrl('pepipost'),
                 'doc_url'     => 'https://fluentcrm.com/docs/bounce-handling-with-pepipost/',
                 'input_title' => __('PepiPost Bounce Handler Webhook URL', 'fluent-crm'),
-                'input_info'  => __('Please paste this URL into your PepiPost\'s Webhook settings to enable Bounce Handling with FluentCRM', 'fluent-crm')
+                'input_info'  => __('Paste this URL into your PepiPost webhook settings to enable bounce handling in FluentCRM', 'fluent-crm')
             ],
             'postmark'     => [
-                'label'       => __('PostMark', 'fluent-crm'),
+                'label'       => __('Postmark', 'fluent-crm'),
                 'webhook_url' => $bounceUrl('postmark'),
                 'doc_url'     => 'https://fluentcrm.com/docs/bounce-handling-with-postmark/',
-                'input_title' => __('PostMark Bounce Handler Webhook URL', 'fluent-crm'),
-                'input_info'  => __('Please paste this URL into your PostMark\'s Webhook settings to enable Bounce Handling with FluentCRM', 'fluent-crm')
+                'input_title' => __('Postmark Bounce Handler Webhook URL', 'fluent-crm'),
+                'input_info'  => __('Paste this URL into your Postmark webhook settings to enable bounce handling in FluentCRM', 'fluent-crm')
             ],
             'sendgrid'     => [
                 'label'       => __('SendGrid', 'fluent-crm'),
                 'webhook_url' => $bounceUrl('sendgrid'),
                 'doc_url'     => 'https://fluentcrm.com/docs/bounce-handling-with-sendgrid/',
                 'input_title' => __('SendGrid Bounce Handler Webhook URL', 'fluent-crm'),
-                'input_info'  => __('Please paste this URL into your SendGrid\'s Webhook settings to enable Bounce Handling with FluentCRM', 'fluent-crm')
+                'input_info'  => __('Paste this URL into your SendGrid webhook settings to enable bounce handling in FluentCRM', 'fluent-crm')
             ],
             'sparkpost'    => [
                 'label'       => __('SparkPost', 'fluent-crm'),
                 'webhook_url' => $bounceUrl('sparkpost'),
                 'doc_url'     => 'https://fluentcrm.com/docs/bounce-handling-with-sparkpost/',
                 'input_title' => __('SparkPost Bounce Handler Webhook URL', 'fluent-crm'),
-                'input_info'  => __('Please paste this URL into your SparkPost\'s Webhook settings to enable Bounce Handling with FluentCRM', 'fluent-crm')
+                'input_info'  => __('Paste this URL into your SparkPost webhook settings to enable bounce handling in FluentCRM', 'fluent-crm')
             ],
             'elasticemail' => [
                 'label'       => __('Elastic Email', 'fluent-crm'),
                 'webhook_url' => $bounceUrl('elasticemail'),
                 'doc_url'     => 'https://fluentcrm.com/docs/bounce-handling-with-elastic-email/',
                 'input_title' => __('Elastic Email Bounce Handler Webhook URL', 'fluent-crm'),
-                'input_info'  => __('Please paste this URL into your Elastic Email\'s Webhook settings to enable Bounce Handling with FluentCRM', 'fluent-crm')
+                'input_info'  => __('Paste this URL into your Elastic Email webhook settings to enable bounce handling in FluentCRM', 'fluent-crm')
             ],
             'postalserver' => [
                 'label'       => __('Postal Server', 'fluent-crm'),
                 'webhook_url' => $bounceUrl('postalserver'),
                 'doc_url'     => 'https://fluentcrm.com/docs/bounce-handling-with-postal-server/',
                 'input_title' => __('Postal Server Bounce Handler Webhook URL', 'fluent-crm'),
-                'input_info'  => __('Please paste this URL into your Postal Server\'s Webhook settings to enable Bounce Handling with FluentCRM. Please select only MessageBounced & MessageDeliveryFailed event', 'fluent-crm')
+                'input_info'  => __('Paste this URL into your Postal Server webhook settings to enable bounce handling in FluentCRM. Select only the MessageBounced and MessageDeliveryFailed events.', 'fluent-crm')
             ],
             'smtp2go'      => [
                 'label'       => __('SMTP2Go', 'fluent-crm'),
                 'webhook_url' => $bounceUrl('smtp2go'),
                 'doc_url'     => 'https://fluentcrm.com/docs/bounce-handling-with-smtp2go/',
                 'input_title' => __('SMTP2Go Bounce Handler Webhook URL', 'fluent-crm'),
-                'input_info'  => __('Please paste this URL into your SMTP2Go\'s Webhook settings to enable Bounce Handling with FluentCRM', 'fluent-crm')
+                'input_info'  => __('Paste this URL into your SMTP2Go webhook settings to enable bounce handling in FluentCRM', 'fluent-crm')
             ],
             'brevo'        => [
-                'label'       => __('Brevo (ex Sendinblue)', 'fluent-crm'),
+                'label'       => __('Brevo (formerly Sendinblue)', 'fluent-crm'),
                 'webhook_url' => $bounceUrl('brevo'),
                 'doc_url'     => 'https://fluentcrm.com/docs/bounce-handling-with-brevo/',
                 'input_title' => __('Brevo Bounce Handler Webhook URL', 'fluent-crm'),
-                'input_info'  => __('Please paste this URL into your Brevo\'s Webhook settings to enable Bounce Handling with FluentCRM', 'fluent-crm')
+                'input_info'  => __('Paste this URL into your Brevo webhook settings to enable bounce handling in FluentCRM', 'fluent-crm')
             ],
         ];
 
@@ -554,7 +620,7 @@ class SettingsController extends Controller
         }
 
         return [
-            'message' => __('Settings has been updated', 'fluent-crm')
+            'message' => __('Settings have been updated', 'fluent-crm')
         ];
     }
 
@@ -572,10 +638,7 @@ class SettingsController extends Controller
             'interval'   => 60
         );
 
-        // 'hook' must name the event this row actually describes: it is both the
-        // v-for key in _CronJobMonitor.vue and the payload its "Run Manually"
-        // button posts to runCron(). Naming the hourly hook here gave two rows
-        // the same key and made this row fire the hourly task instead.
+        // 'hook' is the row key in the UI and the hook its "Run Manually" button fires.
         $nextFiverMinutesRun = wp_next_scheduled('fluentcrm_scheduled_five_minute_tasks');
         $events[] = (object)array(
             'hook'       => 'fluentcrm_scheduled_five_minute_tasks',
@@ -624,15 +687,12 @@ class SettingsController extends Controller
         do_action($hookName);
 
         return [
-            'message' => __('Selected CRON Event successfully ran', 'fluent-crm')
+            'message' => __('The selected cron event has been run.', 'fluent-crm')
         ];
     }
 
     /**
-     * Return the health of the critical DB indexes for the settings UI.
-     *
-     * Cheap by default: serves the cached snapshot unless ?fresh=1 is passed
-     * (e.g. to re-verify right after a repair).
+     * Return the health of the critical DB indexes. Cached unless ?fresh=1.
      *
      * @param Request $request
      * @return array
@@ -647,21 +707,14 @@ class SettingsController extends Controller
     }
 
     /**
-     * Repair any missing/broken critical DB indexes.
-     *
-     * Runs inline (the ALTERs are idempotent and prefer a non-blocking online
-     * build) behind a short transient lock so concurrent admin tabs/users can't
-     * trigger overlapping ALTERs on the same tables. If a repair is already in
-     * flight we report that rather than stacking a second one.
+     * Repair any missing or broken critical DB indexes, behind a transient lock.
      *
      * @param Request $request
      * @return array
      */
     public function repairDbIndexes(Request $request)
     {
-        // Re-check from the live DB so a stale "ok" cache can't make us skip a
-        // genuinely needed repair (and a stale "broken" cache can't force a
-        // pointless ALTER pass).
+        // Re-check the live DB, not the cache.
         if (!DbPerformanceService::hasBrokenIndex(true)) {
             return $this->sendSuccess([
                 'message' => __('All database indexes are healthy.', 'fluent-crm'),
@@ -671,9 +724,7 @@ class SettingsController extends Controller
 
         $lockKey = 'fc_db_index_repairing';
         if (get_transient($lockKey)) {
-            // Not an error — another tab/request is already repairing. Report it
-            // as a benign "pending" success so the client doesn't surface a
-            // false failure notice while the other request finishes the work.
+            // Another request is already repairing; report pending, not an error.
             return $this->sendSuccess([
                 'pending' => true,
                 'message' => __('A database index repair is already running.', 'fluent-crm'),
@@ -690,8 +741,6 @@ class SettingsController extends Controller
         }
 
         if ($result['failed']) {
-            // Lead with the specific cause(s) found by the service; several indexes
-            // on one table usually fail for the same reason, so de-duplicate.
             $reasons = array_unique(array_values($result['errors']));
 
             return $this->sendError([
@@ -703,7 +752,7 @@ class SettingsController extends Controller
         }
 
         return $this->sendSuccess([
-            'message'  => __('Database indexes repaired successfully.', 'fluent-crm'),
+            'message'  => __('The database indexes have been repaired.', 'fluent-crm'),
             'repaired' => $result['repaired'],
             'indexes'  => array_values($result['health'])
         ]);
@@ -720,8 +769,7 @@ class SettingsController extends Controller
         $selectedLogs = $data['selected_logs'];
         $daysBefore = $data['days_before'];
 
-        // Site-local cutoff: created_at is written with current_time(), so a UTC
-        // time() base deletes up to a site-offset's worth of extra (or fewer) rows.
+        // created_at is site-local (current_time()), so the cutoff is site-local too.
         $refDate = gmdate('Y-m-d 00:00:01', current_time('timestamp') - $daysBefore * 86400);
 
         $dataCounters = [];
@@ -729,14 +777,14 @@ class SettingsController extends Controller
             $dataCounters[] = [
                 'title' => __('Email History Logs', 'fluent-crm'),
                 'count' => CampaignEmail::where('created_at', '<', $refDate)
-                    ->where('status', 'sent')
+                    ->whereIn('status', CampaignEmail::SENT_STATUSES)
                     ->count()
             ];
         }
 
         if (in_array('email_clicks', $selectedLogs)) {
             $dataCounters[] = [
-                'title' => __('Email clicks', 'fluent-crm'),
+                'title' => __('Email Clicks', 'fluent-crm'),
                 'count' => CampaignUrlMetric::where('type', 'click')
                     ->where('created_at', '<', $refDate)
                     ->count()
@@ -784,7 +832,7 @@ class SettingsController extends Controller
         $selectedLogs = $data['selected_logs'];
         $daysBefore = $data['days_before'];
 
-        $perChunk = 10000; // Deleting 10,000 per chunk
+        $perChunk = 10000;
         $hasMore = false;
 
         // Same site-local cutoff as the preview in getOldLogDetails().
@@ -792,7 +840,7 @@ class SettingsController extends Controller
         if (in_array('emails', $selectedLogs)) {
 
             $campaignIds = CampaignEmail::where('created_at', '<', $refDate)
-                ->where('status', 'sent')
+                ->whereIn('status', CampaignEmail::SENT_STATUSES)
                 ->groupBy('campaign_id')
                 ->pluck('campaign_id');
 
@@ -801,12 +849,12 @@ class SettingsController extends Controller
             }
 
             CampaignEmail::where('created_at', '<', $refDate)
-                ->where('status', 'sent')
+                ->whereIn('status', CampaignEmail::SENT_STATUSES)
                 ->limit($perChunk)
                 ->delete();
 
             $hasMore = CampaignEmail::where('created_at', '<', $refDate)
-                ->where('status', 'sent')
+                ->whereIn('status', CampaignEmail::SENT_STATUSES)
                 ->exists();
         }
 
@@ -858,7 +906,7 @@ class SettingsController extends Controller
 
         return [
             /* translators: %d is the number of days; used to indicate how old the deleted logs were. */
-            'message'  => sprintf(__('Logs older than %d days have been deleted successfully', 'fluent-crm'), $daysBefore),
+            'message'  => sprintf(__('Logs older than %d days have been deleted.', 'fluent-crm'), $daysBefore),
             'has_more' => $hasMore
         ];
     }
@@ -882,7 +930,7 @@ class SettingsController extends Controller
 
         if (!current_user_can('manage_options')) {
             return $this->sendError([
-                'message' => __('Sorry, You do not have permission to delete REST API', 'fluent-crm')
+                'message' => __('Sorry, you do not have permission to delete REST API keys', 'fluent-crm')
             ]);
         }
 
@@ -902,12 +950,12 @@ class SettingsController extends Controller
 
         if (!$deleted) {
             return $this->sendError([
-                'message' => __('Something is wrong', 'fluent-crm')
+                'message' => __('The API key could not be deleted. Please try again.', 'fluent-crm')
             ]);
         }
 
         return [
-            'message' => __('API Key has been successfully deleted', 'fluent-crm')
+            'message' => __('The API key has been deleted.', 'fluent-crm')
         ];
     }
 
@@ -993,7 +1041,6 @@ class SettingsController extends Controller
         $data['api_user_id'] = intval($data['api_user_id']);
         $data['api_name'] = sanitize_text_field($data['api_name']);
 
-        // check if the provided user has FluentCRM Access
         if (!get_user_meta($data['api_user_id'], '_fcrm_has_role', true)) {
             return $this->sendError([
                 'message' => __('Sorry, the provided user does not have FluentCRM access', 'fluent-crm')
@@ -1002,7 +1049,7 @@ class SettingsController extends Controller
 
         if (!current_user_can('manage_options')) {
             return $this->sendError([
-                'message' => __('Sorry, You do not have permission to create REST API', 'fluent-crm')
+                'message' => __('Sorry, you do not have permission to create REST API keys', 'fluent-crm')
             ]);
         }
 
@@ -1048,7 +1095,7 @@ class SettingsController extends Controller
 
         return [
             'item'    => $item,
-            'message' => __('API Key has been successfully created', 'fluent-crm')
+            'message' => __('The API key has been created.', 'fluent-crm')
         ];
     }
 
@@ -1115,7 +1162,7 @@ class SettingsController extends Controller
         }
 
         return $this->sendError([
-            'message' => __('Sorry, the provided provider does not exist', 'fluent-crm')
+            'message' => __('Sorry, this provider does not exist', 'fluent-crm')
         ]);
     }
 
@@ -1148,7 +1195,7 @@ class SettingsController extends Controller
         do_action('fluent_crm/sync_subscriber_delete_setting', 'compliance_settings', $data['delete_contact_on_user']);
 
         return [
-            'message'  => __('Settings has been successfully updated', 'fluent-crm'),
+            'message'  => __('The settings have been updated.', 'fluent-crm'),
             'settings' => $data
         ];
     }
@@ -1199,13 +1246,8 @@ class SettingsController extends Controller
             \FluentCrmMigrations\ActivityLogsMigrator::migrate();
         }
 
-        // Merge over what is stored instead of replacing it. The option holds
-        // every experimental flag in one row, so a request carrying only some of
-        // them — a screen that owns a single switch, or a client whose GET failed
-        // and left it with an empty snapshot — would otherwise drop every flag it
-        // did not send, silently reverting those modules to their defaults.
-        // The raw option is merged rather than Helper::getExperimentalSettings()
-        // so that defaults and filtered values are not persisted as a side effect.
+        // Merge over the raw stored option so a partial request keeps the flags it did not send,
+        // without persisting defaults or filtered values.
         $stored = get_option('_fluentcrm_experimental_settings', []);
 
         if (!$stored || !is_array($stored)) {
@@ -1231,41 +1273,24 @@ class SettingsController extends Controller
         do_action('fluent_crm/experimental_settings_saved', $data);
 
         return [
-            'message' => __('Settings has been updated', 'fluent-crm')
+            'message' => __('Settings have been updated', 'fluent-crm')
         ];
     }
 
     /**
-     * Campaign list for the Campaign Archive selector.
-     *
-     * Only the columns the selector renders are selected: whole campaign rows carry
-     * email_body (LONGTEXT), which made the payload ~33x larger than it needs to be.
-     *
-     * The list is bounded newest-first rather than returned whole, because the
-     * selector renders one DOM node per option — an unbounded list would degrade on a
-     * site with a long sending history. MAX_SELECTOR_CAMPAIGNS is both the default and
-     * the ceiling: an explicit $limit can only ask for fewer. Anything past that bound
-     * stays reachable through $searchBy, which the selector sends as the admin types.
-     *
-     * $includeIds are appended even when they fall outside the bound or the search, so
-     * campaigns already saved in the setting always resolve to a title instead of
-     * rendering as a bare numeric id. They are capped the same way, so they cannot be
-     * used to sidestep the bound.
+     * Newest-first campaign list for the Campaign Archive selector, capped at MAX_SELECTOR_CAMPAIGNS.
+     * include_ids (also capped) are appended so saved selections always resolve to a title.
      */
     public function getCampaigns(Request $request)
     {
         $columns = ['id', 'title', 'email_subject', 'status'];
         $search = sanitize_text_field($request->get('searchBy', ''));
-        // Bounded like the page itself: without this cap a caller could bypass $limit
-        // entirely by naming every campaign here.
         $includeIds = array_slice(
             array_unique(array_filter(array_map('intval', (array) $request->get('include_ids', [])))),
             0,
             self::MAX_SELECTOR_CAMPAIGNS
         );
 
-        // A caller-supplied limit may only narrow the page; anything absent, invalid
-        // or above the ceiling falls back to it, so the query stays bounded.
         $limit = intval($request->get('limit', 0));
         if ($limit <= 0 || $limit > self::MAX_SELECTOR_CAMPAIGNS) {
             $limit = self::MAX_SELECTOR_CAMPAIGNS;
@@ -1273,7 +1298,6 @@ class SettingsController extends Controller
 
         $campaigns = Campaign::select($columns)
             ->when($search, function ($query) use ($search) {
-                // Escape LIKE wildcards (%, _) so the term matches literally.
                 global $wpdb;
                 return $query->where('title', 'LIKE', '%' . $wpdb->esc_like($search) . '%');
             })

@@ -24,7 +24,7 @@ class OrderStatusChangedTrigger extends BaseTrigger
         return [
             'category' => __('FluentCart', 'fluent-crm'),
             'label' => __('Order Status Changed', 'fluent-crm'),
-            'description' => __('This funnel will start when an order status updates', 'fluent-crm'),
+            'description' => __('This automation will start when an order status changes', 'fluent-crm'),
             'svg' => '<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="24px" height="24px" viewBox="0 0 24 24" version="1.1"><g id="surface1"><path style=" stroke:none;fill-rule:nonzero;fill:rgb(100%,100%,100%);fill-opacity:1;" d="M 2.398438 0 L 21.601562 0 C 22.925781 0 24 1.074219 24 2.398438 L 24 21.601562 C 24 22.925781 22.925781 24 21.601562 24 L 2.398438 24 C 1.074219 24 0 22.925781 0 21.601562 L 0 2.398438 C 0 1.074219 1.074219 0 2.398438 0 Z M 2.398438 0 "/><path style=" stroke:none;fill-rule:nonzero;fill:rgb(0%,0%,62.352943%);fill-opacity:1;" d="M 10.925781 16.476562 L 3.769531 16.476562 L 4.894531 13.878906 C 5.222656 13.117188 5.972656 12.625 6.804688 12.625 L 15.328125 12.625 L 14.746094 13.964844 C 14.085938 15.488281 12.585938 16.476562 10.925781 16.476562 Z M 10.925781 16.476562 "/><path style=" stroke:none;fill-rule:nonzero;fill:rgb(0%,0%,62.352943%);fill-opacity:1;" d="M 16.851562 11.394531 L 6.789062 11.394531 L 7.367188 10.054688 C 8.027344 8.53125 9.53125 7.542969 11.191406 7.542969 L 19.886719 7.542969 L 18.761719 10.140625 C 18.433594 10.902344 17.683594 11.394531 16.851562 11.394531 Z M 16.851562 11.394531 "/></g></svg>'
         ];
     }
@@ -40,18 +40,18 @@ class OrderStatusChangedTrigger extends BaseTrigger
     {
         return [
             'title'     => __('FluentCart Order Status Changed', 'fluent-crm'),
-            'sub_title' => __('This Funnel will start when a Order status will change from one state to another', 'fluent-crm'),
+            'sub_title' => __('This automation will start when an order status changes from one state to another', 'fluent-crm'),
             'fields'    => [
                 'subscription_status'      => [
                     'type'        => 'option_selectors',
                     'option_key'  => 'editable_statuses',
                     'is_multiple' => false,
                     'label'       => __('Subscription Status', 'fluent-crm'),
-                    'placeholder' => __('Select Status', 'fluent-crm')
+                    'placeholder' => __('Select status', 'fluent-crm')
                 ],
                 'subscription_status_info' => [
                     'type'       => 'html',
-                    'info'       => '<b>' . __('An Automated double-optin email will be sent for new subscribers', 'fluent-crm') . '</b>',
+                    'info'       => '<b>' . __('An automated double opt-in email will be sent to new contacts', 'fluent-crm') . '</b>',
                     'dependency' => [
                         'depends_on' => 'subscription_status',
                         'operator'   => '=',
@@ -95,34 +95,34 @@ class OrderStatusChangedTrigger extends BaseTrigger
                 'option_key'  => 'fluent_cart_products',
                 'is_multiple' => true,
                 'label'       => __('Target Products', 'fluent-crm'),
-                'help'        => __('Select for which products this automation will run', 'fluent-crm'),
-                'inline_help' => __('Keep it blank to run for any product\'s order status change', 'fluent-crm'),
+                'help'        => __('Select the products this automation will run for', 'fluent-crm'),
+                'inline_help' => __('Leave blank to run for any product\'s order status change', 'fluent-crm'),
             ],
             'product_categories' => [
                 'type'        => 'rest_selector',
                 'option_key'  => 'fluent_cart_product_categories',
                 'is_multiple' => true,
                 'label'       => __('Or Target Product Categories', 'fluent-crm'),
-                'help'        => __('Select for which product category the automation will run', 'fluent-crm'),
-                'inline_help' => __('Keep it blank to run to any category products', 'fluent-crm'),
+                'help'        => __('Select the product categories this automation will run for', 'fluent-crm'),
+                'inline_help' => __('Leave blank to run for products in any category', 'fluent-crm'),
             ],
             'from_status' => [
                 'type' => 'select',
                 'label' => __('From Order Status', 'fluent-crm'),
-                'help' => __('The current status that will trigger an action when it changes from this status to the \'To Order Status.\'', 'fluent-crm'),
+                'help' => __('The order\'s previous status. The automation runs when the order moves from this status to the "To Order Status".', 'fluent-crm'),
                 'options' => $formattedStatuses
             ],
             'to_status' => [
                 'type' => 'select',
                 'label' => __('To Order Status', 'fluent-crm'),
-                'help' => __('The target status that will trigger an action when the order moves from the \'From Order Status\' to this status.', 'fluent-crm'),
+                'help' => __('The order\'s new status. The automation runs when the order moves from the "From Order Status" to this status.', 'fluent-crm'),
                 'options' => $formattedStatuses
             ],
             'run_multiple'  => [
                 'type'        => 'yes_no_check',
                 'label'       => '',
-                'check_label' => __('Restart the Automation Multiple times for a contact for this event. (Only enable if you want to restart automation for the same contact)', 'fluent-crm'),
-                'inline_help' => __('If enabled, it will restart the automation for a contact if the contact is already in the automation. Otherwise, it will skip if it already exists', 'fluent-crm')
+                'check_label' => __('Allow this event to restart the automation for the same contact', 'fluent-crm'),
+                'inline_help' => __('If enabled, it will restart the automation for a contact who is already in it. Otherwise, the contact will be skipped.', 'fluent-crm')
             ]
         ];
     }

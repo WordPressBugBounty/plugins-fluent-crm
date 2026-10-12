@@ -29,7 +29,7 @@ class FluentFormSubmissionTrigger extends BaseTrigger
         return [
             'category'    => __('Fluent Forms', 'fluent-crm'),
             'label'       => __('New Form Submission (Fluent Forms)', 'fluent-crm'),
-            'description' => __('This Funnel will be initiated when a new form submission has been submitted', 'fluent-crm'),
+            'description' => __('This automation will start when a form is submitted', 'fluent-crm'),
             'icon'        => 'fc-icon-fluentforms',
         ];
     }
@@ -59,10 +59,16 @@ class FluentFormSubmissionTrigger extends BaseTrigger
 
         $formId = Arr::get($funnel->settings, 'form_id');
 
-        $subtitle = __('This Funnel will be initiated when a new form submission has been submitted.', 'fluent-crm');
+        $subtitle = __('This automation will start when a form is submitted.', 'fluent-crm');
 
         if ($formId) {
-            $subtitle .= ' Use shortcode <b> [fluentform id="' . $formId . '"] </b> to show the form in your WordPress page/posts. <a target="_blank" href="' . admin_url('admin.php?page=fluent_forms&route=editor&form_id=' . $formId) . '">Edit The Form</a>';
+            $subtitle .= ' ' . sprintf(
+                /* translators: %1$s: form shortcode, %2$s: opening link tag to the form editor, %3$s: closing link tag */
+                __('Use shortcode %1$s to show the form on your WordPress pages or posts. %2$sEdit the form%3$s', 'fluent-crm'),
+                '<b> [fluentform id="' . $formId . '"] </b>',
+                '<a target="_blank" href="' . admin_url('admin.php?page=fluent_forms&route=editor&form_id=' . $formId) . '">',
+                '</a>'
+            );
         }
 
         $secondaryFields = apply_filters('fluent_crm/fluentform_other_map_fields',
@@ -70,7 +76,7 @@ class FluentFormSubmissionTrigger extends BaseTrigger
         );
 
         return [
-            'title'     => __('New Fluent Forms Submission Funnel', 'fluent-crm'),
+            'title'     => __('New Fluent Forms Submission Automation', 'fluent-crm'),
             'sub_title' => $subtitle,
             'fields'    => [
                 'form_id'                  => [
@@ -110,7 +116,7 @@ class FluentFormSubmissionTrigger extends BaseTrigger
                         ]
                     ],
                     'label'       => __('Subscription Status', 'fluent-crm'),
-                    'placeholder' => __('Select Status', 'fluent-crm')
+                    'placeholder' => __('Select status', 'fluent-crm')
                 ],
                 'subscription_status_info' => [
                     'type'       => 'html',
@@ -167,6 +173,7 @@ class FluentFormSubmissionTrigger extends BaseTrigger
     public function getFunnelConditionDefaults($funnel)
     {
         return [
+            'update_type'  => 'update',
             'run_only_one' => 'yes'
         ];
     }
@@ -174,11 +181,17 @@ class FluentFormSubmissionTrigger extends BaseTrigger
     public function getConditionFields($funnel)
     {
         return [
+            'update_type'  => [
+                'type'    => 'radio',
+                'label'   => __('If the contact already exists', 'fluent-crm'),
+                'help'    => __('Choose what happens if the contact already exists.', 'fluent-crm'),
+                'options' => FunnelHelper::getUpdateOptions()
+            ],
             'run_only_one' => [
                 'type'        => 'yes_no_check',
                 'label'       => '',
-                'check_label' => __('Run this automation only once per contact. If unchecked then it will over-write existing flow', 'fluent-crm'),
-                'help'        => __('If you enable this then this will run only once per customer otherwise, It will delete the existing automation flow and start new', 'fluent-crm'),
+                'check_label' => __('Run this automation only once per contact. If unchecked, it will overwrite the existing flow', 'fluent-crm'),
+                'help'        => __('If enabled, it will run only once per contact. Otherwise, it will delete the existing automation flow and start a new one', 'fluent-crm'),
                 'options'     => FunnelHelper::getUpdateOptions()
             ],
         ];
@@ -195,6 +208,9 @@ class FluentFormSubmissionTrigger extends BaseTrigger
         if (Arr::get($processedValues, 'form_id') != $form->id) {
             return; // not our form
         }
+
+        // Automations saved before update_type existed run with the defaults ("Update if Exists").
+        $funnel->conditions = wp_parse_args((array)$funnel->conditions, $this->getFunnelConditionDefaults($funnel));
 
         $processedValues['primary_fields']['ip'] = '{submission.ip}';
 
@@ -253,6 +269,10 @@ class FluentFormSubmissionTrigger extends BaseTrigger
     private function isProcessable($funnel, $subscriberData)
     {
         $subscriber = FunnelHelper::getSubscriber($subscriberData['email']);
+        if ($subscriber && Arr::get($funnel->conditions, 'update_type') == 'skip_all_if_exist') {
+            return false;
+        }
+
         if ($subscriber && FunnelHelper::ifAlreadyInFunnel($funnel->id, $subscriber->id)) {
             $conditions = $funnel->conditions;
             // check update_type

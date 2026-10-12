@@ -3,36 +3,15 @@
 namespace FluentCrm\App\Services;
 
 /**
- * DbPerformanceService
- *
- * Health-checks and repairs the small set of "critical" indexes that the
- * hot-path queries (campaign sending, automation runner, dedupe-protecting
- * unique keys) depend on.
- *
- * Why this exists: index creation runs on plugin activation / DB version bumps.
- * On large or busy tables an ALTER can fail mid-flight (lock-wait timeout,
- * killed request, insufficient privilege, a "Duplicate entry" left behind by
- * un-deduped rows). When that happens the DB version option is still bumped, so
- * the migrator never retries and the index stays missing — silently degrading
- * performance or, for the unique keys, allowing duplicate rows to accumulate.
- *
- * This service is the single source of truth for how each critical index is
- * built (sweep + dedupe + online-or-plain ALTER). The relevant migrations
- * delegate to ensureCriticalIndex() instead of carrying their own copy of that
- * logic, and the runtime path (getIndexHealth/repairIndex) uses the same code
- * to detect drift on load — via a lightweight cached check — and heal it on
- * demand. Migration and runtime therefore can never diverge.
+ * Health-checks and repairs the critical indexes the hot-path queries depend on.
+ * Migrations and the runtime repair path both build indexes through ensureCriticalIndex().
  */
 class DbPerformanceService
 {
     /**
      * Build the health status for every critical index.
      *
-     * @param bool $fromDb When false, serve from the cached snapshot if it is
-     *                      complete (covers every known index). When the cache
-     *                      is missing any index it is treated as stale and a
-     *                      live DB check is performed. Pass true to always hit
-     *                      the DB (e.g. right after a repair).
+     * @param bool $fromDb False serves the cache when it covers every known index.
      * @return array<string, array> Index name => meta + 'status' ('yes'|'no').
      */
     public static function getIndexHealth($fromDb = true)
@@ -45,9 +24,6 @@ class DbPerformanceService
             if ($existing) {
                 foreach ($indexActions as $indexName => $indexData) {
                     if (!isset($existing[$indexName])) {
-                        // A known index is absent from the cache — snapshot is
-                        // stale (e.g. a new critical index was introduced), so
-                        // fall through to a fresh DB check below.
                         $broken = true;
                         continue;
                     }
@@ -64,7 +40,6 @@ class DbPerformanceService
 
         global $wpdb;
 
-        // Group required indexes by table so we run a single SHOW INDEX per table.
         $formattedIndex = [];
         foreach ($indexActions as $indexName => $indexData) {
             if (!isset($formattedIndex[$indexData['table']])) {
@@ -79,9 +54,6 @@ class DbPerformanceService
         foreach ($formattedIndex as $tableName => $requiredIndexes) {
             $table = $wpdb->prefix . $tableName;
 
-            // Full per-key structure (uniqueness + ordered columns + prefix
-            // lengths), so a same-named index with the WRONG columns/order is
-            // reported broken rather than silently accepted as healthy.
             $info = self::getIndexInfo($table);
 
             foreach ($requiredIndexes as $indexName => $indexData) {
@@ -93,7 +65,6 @@ class DbPerformanceService
             }
         }
 
-        // Preserve the original ordering defined in getCriticalIndexLists().
         $ordered = [];
         foreach ($indexActions as $indexName => $indexData) {
             if (isset($indexedResults[$indexName])) {
@@ -109,8 +80,7 @@ class DbPerformanceService
     /**
      * Whether any critical index is currently missing.
      *
-     * @param bool $fromDb See getIndexHealth(). Defaults to the cached check so
-     *                     it is cheap to call on every app load.
+     * @param bool $fromDb See getIndexHealth(). Defaults to the cached check.
      * @return bool
      */
     public static function hasBrokenIndex($fromDb = false)
@@ -125,22 +95,11 @@ class DbPerformanceService
     }
 
     /**
-     * Ensure a single critical index exists (and, for unique keys, is actually
-     * unique), creating it with the appropriate cleanup if not.
-     *
-     * This is the single source of truth for how each critical index is built.
-     * It is intentionally low-level — it touches only $wpdb (no option store, no
-     * WP_Error), so it is safe to call from the migration classes during plugin
-     * activation, before the framework is fully booted. repairIndex() wraps this
-     * with verification and health-cache refresh for the runtime/AJAX path.
-     *
-     * For the uniqueness constraints the table is swept + deduped first; without
-     * it the ADD UNIQUE KEY fails with "Duplicate entry" on any table that
-     * accumulated dupes while the constraint was absent.
+     * Ensure a critical index exists with the right columns, deduping first for unique keys.
+     * Uses only $wpdb so migrations can call it before the framework boots.
      *
      * @param string $indexName One of the keys from getCriticalIndexLists().
-     * @return bool True if the index is known and the ensure ran (it may still
-     *              no-op when already present); false for an unknown index.
+     * @return bool False for an unknown index.
      */
     public static function ensureCriticalIndex($indexName)
     {
@@ -164,16 +123,10 @@ class DbPerformanceService
     }
 
     /**
-     * Repair a single critical index from the runtime/AJAX path.
-     *
-     * Delegates the actual DDL to ensureCriticalIndex(), then verifies against
-     * the live DB and refreshes the health cache so the caller and any later
-     * cached read both see the true post-repair state.
+     * Repair a single critical index, then verify it and refresh the health cache.
      *
      * @param string $indexName One of the keys from getCriticalIndexLists().
-     * @return array|\WP_Error The refreshed index record on success, WP_Error
-     *                         if the index is unknown or still missing after
-     *                         the repair attempt.
+     * @return array|\WP_Error The refreshed index record, or WP_Error if unknown or still missing.
      */
     public static function repairIndex($indexName)
     {
@@ -185,11 +138,9 @@ class DbPerformanceService
         }
 
         global $wpdb;
-        // Capture the ALTER's error before the verification queries below reset
-        // $wpdb->last_error, so a privilege/lock failure can still be surfaced.
+        // Captured before the verification queries reset $wpdb->last_error.
         $repairError = $wpdb->last_error;
 
-        // Verify against the live DB (and refresh the cache).
         $health = self::getIndexHealth(true);
 
         if (!isset($health[$indexName]) || $health[$indexName]['status'] !== 'yes') {
@@ -207,11 +158,7 @@ class DbPerformanceService
 
     /**
      * Turn a failed index ALTER into a message an admin can act on.
-     *
-     * The MySQL error tells us the real cause, and it is rarely privileges: the
-     * common case in the field is a MyISAM table, whose 1000-byte key limit a
-     * utf8mb4 index can exceed. Pointing those users at their privileges sent
-     * them the wrong way, so we name the cause whenever the error reveals it.
+     * The most common cause is MyISAM's 1000-byte key limit.
      *
      * @param string $table   Fully-prefixed table name.
      * @param string $dbError The MySQL error captured from the ALTER, or ''.
@@ -272,9 +219,6 @@ class DbPerformanceService
     /**
      * Repair every missing critical index in one pass.
      *
-     * 'errors' maps each failed index name to the actionable message from
-     * describeRepairFailure(), so the caller can say why rather than guess.
-     *
      * @return array{repaired: string[], failed: string[], errors: array<string, string>, health: array}
      */
     public static function repairBrokenIndexes()
@@ -302,19 +246,17 @@ class DbPerformanceService
             'repaired' => $repaired,
             'failed'   => $failed,
             'errors'   => $errors,
-            'health'   => self::getIndexHealth(false), // freshly cached by the calls above
+            'health'   => self::getIndexHealth(false),
         ];
     }
 
     /**
-     * Ensure a plain (non-unique) composite index exists with exactly the
-     * expected columns. A same-named index whose column list/order/prefix has
-     * drifted is dropped and recreated, so the performance assumption it backs
-     * actually holds — name-presence alone is not enough.
+     * Ensure a plain index exists with exactly the expected columns.
+     * A same-named index with drifted columns is dropped and recreated.
      *
      * @param string $table     Fully-prefixed table name.
      * @param string $indexName Key name to create.
-     * @param array  $columns   Expected column spec — see getCriticalIndexLists().
+     * @param array  $columns   Expected column spec, see getCriticalIndexLists().
      * @return void
      */
     private static function ensurePlainIndex($table, $indexName, array $columns)
@@ -324,9 +266,8 @@ class DbPerformanceService
 
         if (isset($info[$indexName])) {
             if (self::indexColumnsMatch($info[$indexName]['columns'], $columns, true)) {
-                return; // present with the right columns — nothing to do.
+                return;
             }
-            // Same name, wrong columns — replace it in one statement.
             self::alterWithOnlineFallback($table, "DROP INDEX `{$indexName}`, ADD INDEX `{$indexName}` ({$columnSql})");
             return;
         }
@@ -335,17 +276,8 @@ class DbPerformanceService
     }
 
     /**
-     * Add a UNIQUE KEY, cleaning the table first so the ALTER can't fail with
-     * "Duplicate entry".
-     *
-     * This is the canonical convergence logic the owning migrations delegate to:
-     * a key of the same name that exists but is non-unique OR has drifted columns
-     * is dropped and re-added; offending rows are swept/deduped before the ALTER
-     * runs. The cleanup differs per table, so each has its own dedicated method
-     * ('cleanup' names which one). If cleanup fails (lock-wait timeout, missing
-     * privilege) we skip the ALTER rather than let it throw — the caller's
-     * verification step reports the index as still broken and a later attempt
-     * can retry.
+     * Add a UNIQUE KEY after the table-specific dedupe, replacing a same-named
+     * key that is non-unique or has drifted columns. Skips the ALTER if cleanup fails.
      *
      * @param string $table     Fully-prefixed table name.
      * @param string $indexName Unique key name to create.
@@ -357,15 +289,12 @@ class DbPerformanceService
         $info = self::getIndexInfo($table);
         $existing = isset($info[$indexName]) ? $info[$indexName] : null;
 
-        // Already a correct unique key (unique AND the right columns) — done.
         if ($existing
             && $existing['non_unique'] === 0
             && self::indexColumnsMatch($existing['columns'], $index['columns'])) {
             return;
         }
 
-        // Run the table-specific cleanup. Each method sweeps garbage rows and
-        // removes duplicates with the survivor rule appropriate for that table.
         $clean = false;
         switch ($index['cleanup']) {
             case 'subscriber_pivot':
@@ -380,13 +309,12 @@ class DbPerformanceService
         }
 
         if (!$clean) {
-            return; // cleanup failed — don't risk a "Duplicate entry" ALTER.
+            return;
         }
 
         $columnSql = self::buildColumnSql($index['columns']);
 
         if ($existing) {
-            // Same name but non-unique or wrong columns — replace it in one statement.
             self::alterWithOnlineFallback($table, "DROP INDEX `{$indexName}`, ADD UNIQUE KEY `{$indexName}` ({$columnSql})");
         } else {
             self::alterWithOnlineFallback($table, "ADD UNIQUE KEY `{$indexName}` ({$columnSql})");
@@ -394,19 +322,8 @@ class DbPerformanceService
     }
 
     /**
-     * Run an index ALTER, preferring a non-blocking online build but always
-     * falling back to a plain ALTER so the index is created on any server.
-     *
-     * Why both: ALGORITHM=INPLACE, LOCK=NONE lets the table stay readable AND
-     * writable during the build, which avoids stalling live traffic (e.g. the
-     * email pipeline on a multi-million-row fc_campaign_emails). But it is not
-     * universally available — the ALGORITHM/LOCK syntax did not exist before
-     * MySQL 5.6 / MariaDB 10.0 (where it is a hard parse error), and some
-     * engines/operations can't satisfy LOCK=NONE. FluentCRM runs on WordPress
-     * hosts we don't control, and these keys — the unique ones especially — are
-     * a correctness dependency for the app (INSERT IGNORE / firstOrCreate rely
-     * on them). So we try online first, then retry plain: a brief write-block on
-     * an old server is an acceptable price for a key that actually gets created.
+     * Run an index ALTER online (ALGORITHM=INPLACE, LOCK=NONE), falling back to a
+     * plain ALTER where online DDL is unsupported (pre MySQL 5.6 / MariaDB 10.0).
      *
      * @param string $table      Fully-prefixed table name.
      * @param string $operations The ALTER body, e.g. "ADD UNIQUE KEY `x` (...)"
@@ -417,35 +334,20 @@ class DbPerformanceService
     {
         global $wpdb;
 
-        // Attempt the non-blocking online build first.
         // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
         $result = $wpdb->query("ALTER TABLE {$table} {$operations}, ALGORITHM=INPLACE, LOCK=NONE");
         if ($result !== false) {
             return $result;
         }
 
-        // Online DDL unavailable (old server, FK/engine constraint, etc.) — retry
-        // with a plain ALTER that works everywhere, even if it briefly blocks
-        // writes. If this also fails (real duplicate, no privilege) the caller's
-        // verification reports the index missing and a later run can retry.
         // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
         return $wpdb->query("ALTER TABLE {$table} {$operations}");
     }
 
     /**
-     * Cleanup for fc_subscriber_pivot ahead of the subscriber_object_type_unique
-     * key, which enforces uniqueness on (subscriber_id, object_id, object_type).
-     *
-     * Sweeps rows where subscriber_id or object_id is NULL or 0 — these are
-     * never a valid list/tag relationship (they come from past writer bugs that
-     * lacked a real id) and would otherwise survive into the unique key and
-     * block legitimate future writes. The schema declares both columns
-     * BIGINT UNSIGNED NOT NULL, but we still guard IS NULL so the repair is
-     * correct even on an older live table whose definition has drifted.
-     *
-     * Then keeps the lowest id per (subscriber_id, object_id, object_type) group
-     * so the survivor has the earliest created_at ("we already had this
-     * attachment"). (SubscriberPivot::migrate() delegates here.)
+     * Prepare fc_subscriber_pivot for subscriber_object_type_unique.
+     * Deletes rows with a NULL/0 subscriber_id or object_id, then keeps the lowest
+     * id per (subscriber_id, object_id, object_type).
      *
      * @param string $table Fully-prefixed fc_subscriber_pivot table name.
      * @return bool True if the table is safe to receive the unique key.
@@ -485,18 +387,10 @@ class DbPerformanceService
     }
 
     /**
-     * Cleanup for fc_funnel_subscribers ahead of the funnel_subscriber_idx key.
-     *
-     * Sweeps rows with NULL/0 funnel_id or subscriber_id, then dedupes keeping
-     * the row that has progressed FURTHEST through the funnel rather than the
-     * newest row. This is a state table, not a pure pivot: a naive MAX(id)
-     * survivor can discard a row that already executed sequences in favour of a
-     * newer, less advanced duplicate, which then re-fires sequences the contact
-     * already received. Survivor rule: highest IFNULL(last_sequence_id, 0) wins,
-     * tiebroken by MAX(id). The IFNULL is essential — last_sequence_id is NULL
-     * for freshly enrolled contacts, and SQL's three-valued logic would
-     * otherwise match no survivor for all-NULL groups, leaving the dupes in
-     * place and failing the ALTER. (FunnelSubscribers::migrate() delegates here.)
+     * Prepare fc_funnel_subscribers for funnel_subscriber_idx.
+     * Deletes rows with a NULL/0 funnel_id or subscriber_id, then keeps the row with
+     * the highest IFNULL(last_sequence_id, 0), ties broken by MAX(id), so a
+     * contact never re-runs sequences it already received.
      *
      * @param string $table Fully-prefixed fc_funnel_subscribers table name.
      * @return bool True if the table is safe to receive the unique key.
@@ -542,19 +436,9 @@ class DbPerformanceService
     }
 
     /**
-     * Cleanup for fc_funnel_metrics ahead of the funnel_seq_subscriber_unique
-     * key, which enforces uniqueness on (funnel_id, sequence_id, subscriber_id).
-     *
-     * Sweeps rows where any of the three key columns is NULL or 0 — a metric is
-     * only meaningful when tied to a real funnel, sequence and subscriber, so
-     * such rows are invalid leftovers. They are also collapsed into a single
-     * GROUP BY bucket by the dedupe below, so removing them up front keeps the
-     * survivor selection clean. (All three are BIGINT UNSIGNED NULL in the
-     * schema, so both NULL and 0 are reachable.)
-     *
-     * Then keeps the latest entry (MAX id) per (funnel_id, sequence_id,
-     * subscriber_id) group. (FunnelMetrics::migrate() delegates here; this adds
-     * the NULL/0 pre-sweep the old inline migration lacked.)
+     * Prepare fc_funnel_metrics for funnel_seq_subscriber_unique.
+     * Deletes rows with any NULL/0 key column, then keeps the MAX(id) per
+     * (funnel_id, sequence_id, subscriber_id).
      *
      * @param string $table Fully-prefixed fc_funnel_metrics table name.
      * @return bool True if the table is safe to receive the unique key.
@@ -594,15 +478,7 @@ class DbPerformanceService
     }
 
     /**
-     * Read every index on a table into a structured map keyed by index name.
-     *
-     * SHOW INDEX emits one row per indexed column; we fold them into:
-     *   [ Key_name => [
-     *       'non_unique' => 0|1,
-     *       'columns'    => [ ['name' => ..., 'sub_part' => int|null], ... ]  // ordered by Seq_in_index
-     *   ] ]
-     * so callers can verify the full column sequence and prefix lengths, not
-     * just the index name.
+     * Read every index on a table, keyed by index name, with columns ordered by Seq_in_index.
      *
      * @param string $table Fully-prefixed table name.
      * @return array<string, array{non_unique:int, columns:array}>
@@ -623,7 +499,6 @@ class DbPerformanceService
             if (!isset($info[$name])) {
                 $info[$name] = ['non_unique' => (int) $row->Non_unique, 'columns' => []];
             }
-            // Seq_in_index is 1-based; key by it so out-of-order rows still sort.
             $info[$name]['columns'][(int) $row->Seq_in_index] = [
                 'name'     => $row->Column_name,
                 'sub_part' => ($row->Sub_part === null) ? null : (int) $row->Sub_part,
@@ -640,9 +515,7 @@ class DbPerformanceService
     }
 
     /**
-     * Whether a required index is present, of the right kind, AND backed by the
-     * exact expected columns. This is the health gate that closes the
-     * "same-named index with the wrong columns reads as healthy" hole.
+     * Whether a required index is present, of the right kind, with the expected columns.
      *
      * @param array  $info      Output of getIndexInfo().
      * @param string $indexName Required index name.
@@ -657,7 +530,6 @@ class DbPerformanceService
 
         $actual = $info[$indexName];
 
-        // A same-named non-unique index does not enforce uniqueness.
         if ($index['type'] === 'unique' && $actual['non_unique'] !== 0) {
             return false;
         }
@@ -666,24 +538,10 @@ class DbPerformanceService
     }
 
     /**
-     * Compare an index's actual column sequence (from getIndexInfo) against the
-     * expected one (from getCriticalIndexLists). Column names compare
-     * case-insensitively; order matters.
-     *
-     * Prefix handling: when a prefix length is expected (e.g. object_type(50)),
-     * a full-column index (Sub_part = NULL) is accepted because MySQL stores a
-     * prefix as a full-column index when the prefix length equals the column
-     * length — which is exactly what object_type(50) becomes on the current
-     * VARCHAR(50) schema, and a full column is never weaker than the prefix.
-     * A prefix where a full column is expected, or a different prefix length,
-     * is a mismatch — unless $allowLongerPrefix is set.
-     *
-     * $allowLongerPrefix is for plain (non-unique) indexes only: there a longer
-     * prefix serves every lookup the expected one does, and it is what a site
-     * built under an older, wider spec holds (subscriber_meta_key_value_idx was
-     * key(191) before it was narrowed to fit MyISAM). It must stay off for
-     * UNIQUE keys, where a longer prefix is a weaker constraint: values sharing
-     * the expected prefix but differing after it would be allowed to coexist.
+     * Compare actual index columns against the expected spec. Names compare
+     * case-insensitively and order matters. A full-column index satisfies an
+     * expected prefix, since MySQL reports a prefix equal to the column length as full.
+     * $allowLongerPrefix must stay false for UNIQUE keys, where a longer prefix is a weaker constraint.
      *
      * @param array $actualColumns     Ordered [['name'=>, 'sub_part'=>], ...].
      * @param array $expectedColumns   Ordered [['name'=>, 'sub_part'=>?], ...].
@@ -710,14 +568,10 @@ class DbPerformanceService
             $actualSub = isset($actual['sub_part']) ? $actual['sub_part'] : null;
 
             if ($expectedSub === null) {
-                // Full column expected — a prefix index is weaker.
                 if ($actualSub !== null) {
                     return false;
                 }
             } else {
-                // Prefix expected — accept the exact prefix, or a full-column
-                // index (NULL) which equals/exceeds the prefix. A longer prefix
-                // only when the caller allows it (plain indexes; see docblock).
                 if ($actualSub !== null && $actualSub !== $expectedSub
                     && !($allowLongerPrefix && $actualSub > $expectedSub)) {
                     return false;
@@ -729,9 +583,7 @@ class DbPerformanceService
     }
 
     /**
-     * Build the SQL column spec — e.g. "`subscriber_id`, `object_id`,
-     * `object_type`(50)" — for the ADD [UNIQUE] INDEX statement from the
-     * structured column definition.
+     * Build the SQL column list for ADD [UNIQUE] INDEX, e.g. "`object_id`, `object_type`(50)".
      *
      * @param array $columns Ordered [['name'=>, 'sub_part'=>?], ...].
      * @return string
@@ -753,37 +605,25 @@ class DbPerformanceService
     /**
      * The canonical list of performance- and integrity-critical indexes.
      *
-     * Each entry is self-describing so repairIndex() can heal it without
-     * touching the migration classes:
      *   - type    : 'index' | 'unique'
      *   - table   : unprefixed table name
-     *   - title   : human label for the UI
-     *   - columns : ordered column definition — [['name' => 'col', 'sub_part' =>
-     *               50?], ...]. Used both to build the ADD statement
-     *               (buildColumnSql) and to verify the live index matches
-     *               (indexColumnsMatch), so health and creation share one spec.
-     *   - cleanup : (unique only) which dedicated cleanup method makes the table
-     *               safe for the key — 'subscriber_pivot' | 'funnel_subscribers'
-     *               | 'funnel_metrics'.
-     *
-     * Every index is created via alterWithOnlineFallback(), which prefers a
-     * non-blocking online ALTER and falls back to a plain one, so no per-index
-     * online flag is needed.
+     *   - title   : UI label
+     *   - columns : ordered [['name' => 'col', 'sub_part' => 50?], ...]
+     *   - cleanup : (unique only) 'subscriber_pivot' | 'funnel_subscribers' | 'funnel_metrics'
      *
      * @return array<string, array>
      */
     private static function getCriticalIndexLists()
     {
         global $wpdb;
-        // The campaign-emails composite index is created with the table prefix
-        // baked into its name (see CampaignEmails migration), so we match that.
+        // The CampaignEmails migration bakes the table prefix into this index name.
         $campaignEmailIndexPrefix = $wpdb->prefix . 'fc_cam_';
 
         $indexActions = [
             'subscriber_object_type_unique'          => [
                 'type'    => 'unique',
                 'table'   => 'fc_subscriber_pivot',
-                'title'   => __('Subscriber Tags / Lists Relationship Uniqueness', 'fluent-crm'),
+                'title'   => __('Contact Tags / Lists Relationship Uniqueness', 'fluent-crm'),
                 'columns' => [
                     ['name' => 'subscriber_id'],
                     ['name' => 'object_id'],
@@ -803,7 +643,7 @@ class DbPerformanceService
             'funnel_subscriber_idx'                  => [
                 'type'    => 'unique',
                 'table'   => 'fc_funnel_subscribers',
-                'title'   => __('Per Automation Subscriber Uniqueness', 'fluent-crm'),
+                'title'   => __('Per-Automation Contact Uniqueness', 'fluent-crm'),
                 'columns' => [
                     ['name' => 'funnel_id'],
                     ['name' => 'subscriber_id'],
@@ -831,7 +671,7 @@ class DbPerformanceService
             'funnel_seq_subscriber_unique'           => [
                 'type'    => 'unique',
                 'table'   => 'fc_funnel_metrics',
-                'title'   => __('Automation Subscriber Metrics Uniqueness', 'fluent-crm'),
+                'title'   => __('Automation Contact Metrics Uniqueness', 'fluent-crm'),
                 'columns' => [
                     ['name' => 'funnel_id'],
                     ['name' => 'sequence_id'],
@@ -839,30 +679,18 @@ class DbPerformanceService
                 ],
                 'cleanup' => 'funnel_metrics',
             ],
-            // Serves the `_secure_hash` reverse lookup that runs on every unsubscribe
-            // click / manage-subscription view / conditional-content page render.
-            // Without it those unauthenticated endpoints full-scan the meta table
-            // with a LONGTEXT comparison.
-            //
-            // Prefix widths are sized to fit every storage engine: 100 + 64 utf8mb4
-            // chars = 656 bytes, under MyISAM's 1000-byte key limit and InnoDB's
-            // 767-byte per-column limit on old servers. The looked-up keys are short
-            // fixed names and the hashes are <= 64 chars, so lookups stay exact.
-            // Sites that already hold the older, wider key(191)/value(64) index keep
-            // it — indexColumnsMatch() accepts a longer prefix on a plain index.
+            // Serves the `_secure_hash` lookup on unsubscribe and manage-subscription requests.
+            // Prefixes stay under MyISAM's 1000-byte key limit; older key(191) indexes still match.
             'subscriber_meta_key_value_idx'          => [
                 'type'    => 'index',
                 'table'   => 'fc_subscriber_meta',
-                'title'   => __('Subscriber Meta Key/Value Lookup Indexing', 'fluent-crm'),
+                'title'   => __('Contact Meta Key/Value Lookup Indexing', 'fluent-crm'),
                 'columns' => [
                     ['name' => 'key', 'sub_part' => 100],
                     ['name' => 'value', 'sub_part' => 64],
                 ],
             ],
-            // Serves the dashboard growth chart and recent-contacts queries that
-            // filter by status and range/sort on created_at on every dashboard load.
-            // Its leading `status` column also covers status-only filtering, so
-            // fresh installs no longer ship a separate plain `status` index.
+            // Dashboard growth chart and recent contacts. Also covers status-only filtering.
             'subscriber_status_created_idx'          => [
                 'type'    => 'index',
                 'table'   => 'fc_subscribers',

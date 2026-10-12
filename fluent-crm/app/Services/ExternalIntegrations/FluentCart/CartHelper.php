@@ -58,10 +58,7 @@ class CartHelper
     /**
      * Build the coupon option list for the funnel "Create Coupon" template selector.
      *
-     * Supports a free-text search (matched against title and code) and guarantees that any
-     * already-selected coupon IDs are present in the returned options, even when they fall
-     * outside the search window. Mirrors the search/selected-ID contract used by the product
-     * and category selectors above so the shared ajax-selector behaves consistently.
+     * Searches title and code; selected IDs are always included.
      *
      * @param array  $items  Unused; kept for the fluentcrm_ajax_options_* filter signature.
      * @param string $search Free-text search term.
@@ -78,8 +75,6 @@ class CartHelper
 
             if ($search) {
                 global $wpdb;
-                // Escape LIKE wildcards so a % or _ typed in the selector matches literally
-                // instead of silently widening the result set.
                 $likeSearch = '%' . $wpdb->esc_like($search) . '%';
 
                 $couponQuery->where(function ($query) use ($likeSearch) {
@@ -130,11 +125,8 @@ class CartHelper
     /**
      * Build a flat product-variation option list for coupon product restrictions.
      *
-     * FluentCart coupon conditions (included_products / excluded_products) are matched against the
-     * cart item's object_id, which is the product VARIATION id (OrderItem::object_id ->
-     * ProductVariation.id), not the product post id. So the coupon action's Products / Exclude
-     * Products selectors must store variation ids — this provider returns them, labelled by product
-     * and variation title. Selected ids are always included so saved values rehydrate on edit.
+     * Returns variation ids, which FluentCart coupon conditions match against cart items.
+     * Selected ids are always included.
      *
      * @param array  $items  Unused; kept for the fluentcrm_ajax_options_* filter signature.
      * @param string $search Free-text search (matched against variation title and product title).
@@ -154,8 +146,6 @@ class CartHelper
 
             if ($search) {
                 global $wpdb;
-                // Escape LIKE wildcards so a % or _ typed in the selector matches literally
-                // instead of silently widening the result set.
                 $likeSearch = '%' . $wpdb->esc_like($search) . '%';
 
                 $variationQuery->where(function ($q) use ($likeSearch) {
@@ -226,9 +216,7 @@ class CartHelper
     /**
      * Build the product-category option list for coupon category restriction selectors.
      *
-     * Mirrors the search/selected-ID contract used by coupons and product-variation selectors:
-     * filters by search when provided, caps at 50 results, and appends any selected IDs that
-     * fall outside the window so saved values always rehydrate on edit.
+     * Caps at 50 results; selected IDs are always included.
      *
      * @param array  $items  Unused; kept for the fluentcrm_ajax_options_* filter signature.
      * @param string $search Free-text search term matched against term name.
@@ -295,19 +283,29 @@ class CartHelper
         }
     }
 
+    /**
+     * Category term ids of the given products.
+     *
+     * Term ids, as the "Target Product Categories" selector saves them. This returned
+     * term_taxonomy_ids, which differ from term ids on most older sites, so the condition never
+     * matched there.
+     *
+     * @param int[] $ids product (post) ids
+     * @return int[]
+     */
     public static function getProductCategoriesByIds($ids)
     {
-        try {
-            $products = Product::with('wp_terms')->whereIn('id', $ids)->get();
-
-            $categories = $products->flatMap(function ($product) {
-                return $product->wp_terms->pluck('term_taxonomy_id');
-            })->unique()->values()->toArray();
-        } catch (\Exception $e) {
-            $categories = [];
+        $ids = array_values(array_filter(array_map('intval', (array)$ids)));
+        if (!$ids) {
+            return [];
         }
 
-        return $categories;
+        $terms = wp_get_object_terms($ids, 'product-categories', ['fields' => 'ids', 'orderby' => 'none']);
+        if (is_wp_error($terms)) {
+            return [];
+        }
+
+        return array_values(array_unique(array_map('intval', $terms)));
     }
 
     public static function getFluentCartSubscriptionProducts($items, $search, $ids)
@@ -395,8 +393,10 @@ class CartHelper
     {
         $productIds = [];
         try {
+            // Paid orders only, the rule that picked the customer (success_order_items).
             $orderIds = fluentCrmDb()->table('fct_orders')
                 ->where('customer_id', $customerId)
+                ->whereIn('payment_status', \FluentCart\App\Helpers\Status::getOrderPaymentSuccessStatuses())
                 ->pluck('id');
 
             $productIds = fluentCrmDb()->table('fct_order_items')

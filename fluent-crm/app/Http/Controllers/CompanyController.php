@@ -170,7 +170,7 @@ class CompanyController extends Controller
         }
 
         return [
-            'message'   => __('Selected Companies have been attached successfully', 'fluent-crm'),
+            'message'   => __('The selected companies have been attached.', 'fluent-crm'),
             'companies' => $result['companies']
         ];
     }
@@ -185,7 +185,7 @@ class CompanyController extends Controller
         if (!$result) {
             return $this->sendError('Invalid data', 422);
         }
-        $result['message'] = __('Company has been successfully detached', 'fluent-crm');
+        $result['message'] = __('The company has been detached.', 'fluent-crm');
 
         return $result;
     }
@@ -255,7 +255,7 @@ class CompanyController extends Controller
         }
 
         return [
-            'message' => __('Company has been created successfully', 'fluent-crm'),
+            'message' => __('The company has been created.', 'fluent-crm'),
             'company' => $company
         ];
     }
@@ -341,13 +341,13 @@ class CompanyController extends Controller
                     $company->logo = $newLogo;
                     $company->save();
                     return [
-                        'message'      => __('Logo has been updated successfully', 'fluent-crm'),
+                        'message'      => __('The logo has been updated.', 'fluent-crm'),
                         'updated_logo' => $newLogo
                     ];
                 }
 
                 return $this->sendError([
-                    'message' => __('Sorry, we could not find the logo from website. Please upload manually', 'fluent-crm')
+                    'message' => __('Sorry, we could not find a logo on the website. Please upload one manually.', 'fluent-crm')
                 ]);
             }
 
@@ -362,7 +362,7 @@ class CompanyController extends Controller
         }
 
         return $this->sendSuccess([
-            'message' => __('Company successfully updated', 'fluent-crm')
+            'message' => __('The company has been updated.', 'fluent-crm')
         ]);
     }
 
@@ -374,7 +374,7 @@ class CompanyController extends Controller
         do_action('fluent_crm/company_deleted', $id);
 
         return [
-            'message' => __('Company has been deleted successfully', 'fluent-crm')
+            'message' => __('The company has been deleted.', 'fluent-crm')
         ];
     }
 
@@ -384,37 +384,15 @@ class CompanyController extends Controller
 
         $companyIds = array_map('intval', $request->get('company_ids', []));
         $companyIds = array_filter($companyIds);
-        $lastId = $request->get('last_id', 0);
 
+        // Bulk actions take the ids the user selected; there is no "everything in this filter" mode.
         if (!$companyIds) {
-        
-
-            $companyQuery = Company::orderBy('id', 'ASC')
-                ->searchBy($request->getSafe('search', 'sanitize_text_field'));
-
-            $inlineFilters = $request->get('company_query.inline_filters', []);
-
-            if ($inlineFilters && is_array($inlineFilters)) {
-                $inlineFilters = array_filter($inlineFilters);
-
-                foreach ($inlineFilters as $key => $values) {
-                    if (!is_array($values)) {
-                        continue;
-                    }
-                    $values = array_map('sanitize_text_field', $values);
-
-                    if ($key == 'company_categories') {
-                        $companyQuery->whereIn('industry', $values);
-                    } else if ($key == 'company_types') {
-                        $companyQuery->whereIn('type', $values);
-                    }
-                }
-            }
-            $companyQuery = $companyQuery->limit(50)
-                ->where('id', '>', $lastId);
-        } else {
-            $companyQuery = Company::whereIn('id', $companyIds);
+            return $this->sendError([
+                'message' => __('Please select companies first', 'fluent-crm')
+            ]);
         }
+
+        $companyQuery = Company::whereIn('id', $companyIds);
 
         $companies = $companyQuery->get();
         if ($companies->isEmpty()) {
@@ -438,13 +416,13 @@ class CompanyController extends Controller
             return $this->sendSuccess([
                 'last_company_id'    => $lastCompanyId,
                 'completed_companies' => count($companyIds),
-                'message' => __('Selected Companies have been deleted permanently', 'fluent-crm'),
+                'message' => __('Selected companies have been permanently deleted', 'fluent-crm'),
             ]);
         } elseif ($actionName == 'change_company_status') {
             $newStatus = sanitize_text_field($request->get('new_status', ''));
             if (!$newStatus) {
                 return $this->sendError([
-                    'message' => __('Please select status', 'fluent-crm')
+                    'message' => __('Please select a status', 'fluent-crm')
                 ]);
             }
 
@@ -466,7 +444,7 @@ class CompanyController extends Controller
             $newType = sanitize_text_field($request->get('new_status', ''));
             if (!$newType) {
                 return $this->sendError([
-                    'message' => __('Please select new type', 'fluent-crm')
+                    'message' => __('Please select a new type', 'fluent-crm')
                 ]);
             }
             foreach ($companies as $company) {
@@ -481,13 +459,13 @@ class CompanyController extends Controller
             return [
                 'last_company_id'    => $lastCompanyId,
                 'completed_companies' => count($companyIds),
-                'message' => __('Company Type has been updated for the selected companies', 'fluent-crm')
+                'message' => __('Company type has been updated for the selected companies', 'fluent-crm')
             ];
         } else if ($actionName == 'change_company_category') {
             $newCategory = sanitize_text_field($request->get('new_status', ''));
             if (!$newCategory) {
                 return $this->sendError([
-                    'message' => __('Please select new category', 'fluent-crm')
+                    'message' => __('Please select a new category', 'fluent-crm')
                 ]);
             }
             foreach ($companies as $company) {
@@ -502,14 +480,14 @@ class CompanyController extends Controller
             return [
                 'last_company_id'    => $lastCompanyId,
                 'completed_companies' => count($companyIds),
-                'message' => __('Company Category has been updated for the selected companies', 'fluent-crm')
+                'message' => __('Company category has been updated for the selected companies', 'fluent-crm')
             ];
         }
 
         return [
             'last_company_id'    => $lastCompanyId,
             'completed_companies' => count($companyIds),
-            'message' => __('Selected bulk action has been successfully completed', 'fluent-crm')
+            'message' => __('The selected bulk action has been completed.', 'fluent-crm')
         ];
     }
 
@@ -543,11 +521,7 @@ class CompanyController extends Controller
 
         $data = Sanitize::company($allData);
 
-        // Only allow real, user-editable company fields to be mass-assigned. System-managed
-        // columns (hash, meta, created_at, updated_at) are deliberately excluded so a client
-        // payload cannot overwrite them via createOrUpdate()->fill(). `id` is kept because
-        // createOrUpdate() uses it to locate the record on update (it is guarded, never filled),
-        // and `custom_values` is handled separately (merged into meta) by createOrUpdate().
+        // Mass-assignable fields only; system columns are excluded. createOrUpdate() uses `id` for lookup only.
         $allowedFields = [
             'id', 'name', 'owner_id', 'industry', 'type', 'email', 'phone',
             'address_line_1', 'address_line_2', 'postal_code', 'city', 'state', 'country',
@@ -729,9 +703,7 @@ class CompanyController extends Controller
 
         $note = Sanitize::contactNote($note);
 
-        // Only persist server-trusted fields on this endpoint (mirrors updateNote): authorship
-        // is always the current user, and note metadata like parent_id/status is not
-        // client-settable here. Prevents forging note authorship / re-threading via the payload.
+        // Authorship and threading fields are not client-settable.
         $note = Arr::only($note, ['subscriber_id', 'title', 'description', 'type', 'created_at']);
         $note['created_by'] = get_current_user_id();
 
@@ -749,7 +721,7 @@ class CompanyController extends Controller
 
         return $this->sendSuccess([
             'note'    => $subscriberNote,
-            'message' => __('Note has been successfully added', 'fluent-crm')
+            'message' => __('The note has been added.', 'fluent-crm')
         ]);
     }
 
@@ -772,8 +744,7 @@ class CompanyController extends Controller
 
         $note = Sanitize::contactNote($note);
 
-        // Scope the note to this company so a note belonging to another company cannot be
-        // edited by pairing its id with a different (accessible) company route id.
+        // Scoped to this company so another company's note id cannot be edited.
         $companyNote = CompanyNote::where('id', $noteId)
             ->where('subscriber_id', $company->id)
             ->firstOrFail();
@@ -792,15 +763,14 @@ class CompanyController extends Controller
 
         return $this->sendSuccess([
             'note'    => $companyNote,
-            'message' => __('Note successfully updated', 'fluent-crm')
+            'message' => __('The note has been updated.', 'fluent-crm')
         ]);
     }
 
     public function deleteNote($id, $noteId)
     {
         $company = Company::findOrFail($id);
-        // Scope the delete to this company so a note belonging to another company cannot be
-        // deleted by pairing its id with a different (accessible) company route id.
+        // Scoped to this company so another company's note id cannot be deleted.
         $deleted = CompanyNote::where('id', $noteId)
             ->where('subscriber_id', $company->id)
             ->delete();
@@ -817,7 +787,7 @@ class CompanyController extends Controller
         }
 
         return $this->sendSuccess([
-            'message' => __('Note successfully deleted', 'fluent-crm')
+            'message' => __('The note has been deleted.', 'fluent-crm')
         ]);
     }
 
@@ -838,7 +808,7 @@ class CompanyController extends Controller
             ]);
         }
 
-        // Scope delete to this company so users cannot delete notes belonging to other companies.
+        // Scoped to this company's notes.
         $deletableNoteIds = CompanyNote::where('subscriber_id', $company->id)
             ->whereIn('id', $noteIds)
             ->pluck('id')
@@ -879,7 +849,7 @@ class CompanyController extends Controller
 
         return $this->sendSuccess([
             'fields'  => $fields,
-            'message' => __('Fields saved successfully!', 'fluent-crm')
+            'message' => __('The fields have been saved.', 'fluent-crm')
         ]);
     }
 
@@ -891,7 +861,7 @@ class CompanyController extends Controller
 
         return $this->sendSuccess([
             'fields'  => $updatedCustomFields,
-            'message' => __('Group name updated successfully!', 'fluent-crm')
+            'message' => __('The group name has been updated.', 'fluent-crm')
         ]);
     }
 

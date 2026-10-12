@@ -12,6 +12,84 @@ class ContactsQuery
 
     private $model = null;
 
+    /**
+     * Every real fc_subscribers column, the allowlist for `sort_by`.
+     */
+    const SORTABLE_COLUMNS = [
+        'id', 'user_id', 'hash', 'contact_owner', 'company_id', 'prefix',
+        'first_name', 'last_name', 'email', 'timezone', 'address_line_1',
+        'address_line_2', 'postal_code', 'city', 'state', 'country', 'ip',
+        'latitude', 'longitude', 'total_points', 'life_time_value', 'phone',
+        'status', 'contact_type', 'source', 'avatar', 'date_of_birth',
+        'created_at', 'last_activity', 'updated_at',
+    ];
+
+    /**
+     * ContactsQuery args for the contact list's request params.
+     * The list, its counts, prev/next and select-all bulk actions all build their query here.
+     *
+     * @param array $params The list's params: filter_type, search,
+     *   search_custom_fields, sort_by, sort_type, tags, lists, statuses, company_ids,
+     *   advanced_filters (JSON or array), has_commerce, custom_fields.
+     * @return array
+     */
+    public static function argsFromRequest($params)
+    {
+        $params = is_array($params) ? $params : [];
+
+        $flag = function ($key) use ($params) {
+            return in_array(Arr::get($params, $key), [true, 1, '1', 'true', 'yes'], true);
+        };
+        // Absent or empty means "no filter"; a single scalar id is one id.
+        $ids = function ($key) use ($params) {
+            $value = Arr::get($params, $key);
+            if (!$value) {
+                return [];
+            }
+            return is_array($value) ? $value : [$value];
+        };
+        $scalar = function ($key, $default = '') use ($params) {
+            $value = Arr::get($params, $key, $default);
+            return is_scalar($value) ? (string)$value : $default;
+        };
+
+        $sortBy = sanitize_sql_orderby($scalar('sort_by', 'id'));
+
+        $args = [
+            'filter_type'          => $scalar('filter_type') === 'advanced' ? 'advanced' : 'simple',
+            'search'               => trim(sanitize_text_field($scalar('search'))),
+            'search_custom_fields' => $flag('search_custom_fields'),
+            'sort_by'              => $sortBy ?: 'id',
+            // The builder throws on anything but asc/desc.
+            'sort_type'            => strtoupper($scalar('sort_type', 'DESC')) === 'ASC' ? 'ASC' : 'DESC',
+            'has_commerce'         => $flag('has_commerce'),
+            'custom_fields'        => $flag('custom_fields'),
+            'company_ids'          => array_values(array_filter(array_map('intval', array_filter($ids('company_ids'), 'is_scalar')))),
+        ];
+
+        if ($args['filter_type'] === 'advanced') {
+            $args['filters_groups_raw'] = Helper::parseArrayOrJson(Arr::get($params, 'advanced_filters'));
+        } else {
+            $args['tags'] = $ids('tags');
+            $args['lists'] = $ids('lists');
+            $args['statuses'] = $ids('statuses');
+        }
+
+        return $args;
+    }
+
+    /**
+     * A ContactsQuery for the contact list's request params; see argsFromRequest().
+     *
+     * @param array $params The list's params.
+     * @param array $overrides Args that are not filters, e.g. `with`, `sort_by`, `limit`.
+     * @return static
+     */
+    public static function fromRequest($params, $overrides = [])
+    {
+        return new static(array_merge(static::argsFromRequest($params), $overrides));
+    }
+
     public function __construct($args = [])
     {
         $this->args = wp_parse_args($args, [
@@ -27,6 +105,8 @@ class ContactsQuery
             'statuses'           => [],
             'has_commerce'       => false,
             'custom_fields'      => false,
+            // Also match search text against custom-field values; separate from `custom_fields`.
+            'search_custom_fields' => false,
             'limit'              => false,
             'offset'             => false,
             'contact_status'     => '',
@@ -46,28 +126,34 @@ class ContactsQuery
         }
 
         $subscribersQuery = Subscriber::with($this->args['with']);
-        if ($search = $this->args['search']) {
-            $subscribersQuery->searchBy($search, $this->args['custom_fields']);
+        $searchPlan = ContactSearch::parse($this->args['search']);
+        if ($searchPlan['mode'] !== 'empty') {
+            ContactSearch::apply($subscribersQuery, $searchPlan, [
+                'include_custom_fields' => (bool)$this->args['search_custom_fields'],
+            ]);
         }
 
-        if ($shortBy = $this->args['sort_by']) {
-            // Allowlist of every real fc_subscribers column. The framework
-            // rewrite (May 2025) made orderBy() throw LogicException for
-            // names that don't match ^[a-zA-Z0-9_\.]+$, and unknown columns
-            // would produce SQL errors — so the check has to happen before
-            // we hand the value to the builder. getFillable() used to be
-            // the gate but it omits id, contact_owner and a few others,
-            // so legitimate sorts (e.g., contact_owner) silently dropped.
-            $allowedSortBy = [
-                'id', 'user_id', 'hash', 'contact_owner', 'company_id', 'prefix',
-                'first_name', 'last_name', 'email', 'timezone', 'address_line_1',
-                'address_line_2', 'postal_code', 'city', 'state', 'country', 'ip',
-                'latitude', 'longitude', 'total_points', 'life_time_value', 'phone',
-                'status', 'contact_type', 'source', 'avatar', 'date_of_birth',
-                'created_at', 'last_activity', 'updated_at',
-            ];
-            if (in_array($shortBy, $allowedSortBy, true)) {
+        $shortBy = $this->args['sort_by'];
+
+        // `relevance` without a search falls back to id order.
+        if ($shortBy === 'relevance') {
+            if ($searchPlan['mode'] !== 'empty') {
+                ContactSearch::orderByRelevance($subscribersQuery, $searchPlan);
+                $shortBy = '';
+            } else {
+                $shortBy = 'id';
+                $this->args['sort_type'] = 'DESC';
+            }
+        }
+
+        if ($shortBy) {
+            // orderBy() throws on unknown or malformed column names.
+            if (in_array($shortBy, self::SORTABLE_COLUMNS, true)) {
                 $subscribersQuery->orderBy($shortBy, $this->args['sort_type']);
+                // Tie-break on id so offset pages are stable.
+                if ($shortBy !== 'id') {
+                    $subscribersQuery->orderBy('id', $this->args['sort_type']);
+                }
             }
         }
 
@@ -82,12 +168,7 @@ class ContactsQuery
                     }
 
                     $subscribersQueryGroup->{$method}(function ($q) use ($group) {
-                        // Fail closed: a group whose constraints cannot be applied must match
-                        // NOTHING. Constraints are added by action hooks, so a provider with no
-                        // registered handler (Pro deactivated, license lapsed, feature toggled
-                        // off) would otherwise add zero WHERE clauses and silently degrade the
-                        // group to "match every subscriber" — the worst possible blast radius
-                        // for a campaign send.
+                        // Fail closed: a group with no applicable constraints matches nothing, not everyone.
                         if (!$group) {
                             $q->whereRaw('1 = 0');
                             return;
@@ -112,15 +193,15 @@ class ContactsQuery
                 $subscribersQuery->filterByLists($lists);
             }
 
-            if ($company_ids = $this->args['company_ids']) {
-                $subscribersQuery->filterByCompanies($company_ids);
-            }
-
             if ($statuses = $this->args['statuses']) {
-                $statuses = (array) $statuses;
-                $statuses = array_intersect($statuses, fluentcrm_subscriber_statuses());
+                $statuses = array_values(array_filter(array_map([Sanitize::class, 'contactStatus'], (array) $statuses)));
 
-                $subscribersQuery->filterByStatues($statuses);
+                if ($statuses) {
+                    $subscribersQuery->filterByStatues($statuses);
+                } else {
+                    // No known status in the filter: match nothing, since these args drive bulk deletes.
+                    $subscribersQuery->whereRaw('1 = 0');
+                }
             }
         }
 
@@ -146,9 +227,7 @@ class ContactsQuery
             $subscribersQuery->where('status', $this->args['contact_status']);
         }
 
-        // Plain column filter, applied outside the simple/advanced branch so it
-        // composes with either — callers may pass it alongside tags/lists or
-        // alongside advanced filter groups.
+        // Applies to both simple and advanced filters.
         if ($this->args['contact_type']) {
             $subscribersQuery->where('contact_type', $this->args['contact_type']);
         }
@@ -161,10 +240,7 @@ class ContactsQuery
             $subscribersQuery->whereIn('id', $this->args['contact_ids']);
         }
 
-        // Direct address lookup — "give me the contacts for these emails".
-        // Applied outside the simple/advanced branch (same as contact_ids), so
-        // it narrows either branch rather than replacing it. Matching follows
-        // the column collation, which is case-insensitive by default.
+        // Narrows either filter branch; matching follows the column collation.
         if ($this->args['emails'] && is_array($this->args['emails'])) {
             $subscribersQuery->whereIn('email', $this->args['emails']);
         }
@@ -200,8 +276,7 @@ class ContactsQuery
     private function returnSubscribers($subscribers)
     {
         if ($this->args['custom_fields']) {
-            // One meta query for the whole page — the per-subscriber
-            // $subscriber->custom_fields() call is an N+1 (one query per row).
+            // One meta query for the whole page.
             $customFields = fluentcrm_get_custom_contact_fields();
 
             $keys = [];
@@ -244,8 +319,11 @@ class ContactsQuery
 
         foreach ($filters as $filterGroup) {
             $group = [];
-            foreach ($filterGroup as $filterItem) {
-                if (count($filterItem['source']) != 2 || empty($filterItem['source'][0]) || empty($filterItem['source'][1]) || empty($filterItem['operator'])) {
+            $hasRows = false;
+            foreach ((array)$filterGroup as $filterItem) {
+                $hasRows = true;
+                $source = Arr::get((array)$filterItem, 'source');
+                if (!is_array($source) || count($source) != 2 || empty($source[0]) || empty($source[1]) || empty($filterItem['operator'])) {
                     continue;
                 }
                 $provider = $filterItem['source'][0];
@@ -268,7 +346,8 @@ class ContactsQuery
                 ];
             }
 
-            if ($group) {
+            // An empty UI group is dropped; a group whose rows all failed to parse is kept so it fails closed.
+            if ($group || $hasRows) {
                 $groups[] = $group;
             }
         }

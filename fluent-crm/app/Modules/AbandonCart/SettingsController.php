@@ -71,7 +71,7 @@ class SettingsController extends Controller
         update_option('_fc_ab_cart_settings', $settings);
 
         return [
-            'message'  => __('Settings has been saved successfully', 'fluent-crm'),
+            'message'  => __('The settings have been saved.', 'fluent-crm'),
             'reload'   => $prevSettings['enabled'] !== $settings['enabled'],
             'settings' => $settings
         ];

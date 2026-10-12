@@ -25,6 +25,14 @@ class CampaignEmail extends Model
     protected $appends = ['email_type_label'];
 
     /**
+     * A queued email to a contact can hold access-token smartcodes resolved for that contact,
+     * so the stored body never goes out in API responses; previews render it through previewData().
+     *
+     * @var array
+     */
+    protected $hidden = ['email_body'];
+
+    /**
      * Define the canonical email types and any legacy or module-specific aliases.
      *
      * @return array<string, array<int, string>>
@@ -52,7 +60,7 @@ class CampaignEmail extends Model
             'recurring_campaign'    => __('Recurring Campaign', 'fluent-crm'),
             'custom_email_campaign' => __('Custom Email', 'fluent-crm'),
             'campaign'              => __('Campaign', 'fluent-crm'),
-            'sequence'              => __('Sequence', 'fluent-crm'),
+            'sequence'              => __('Email Sequence', 'fluent-crm'),
         ];
     }
 
@@ -147,12 +155,7 @@ class CampaignEmail extends Model
     /**
      * One2One: CampaignEmail belongs to one Subject
      *
-     * Note: The email_subject_id will be inserted by calculating the prioroty
-     * from subjects table where the subjects are related to a parent Campaign.
-     * So, when creating a campaign email, there will be an option to select a
-     * subject from a list and that list will contain subjects related to the
-     * parent campaign because a campaign can have many subjects and the campaign
-     * email will get only one from that list by calculating the priority from subjects.
+     * The subject is picked by weighted priority from the parent campaign's subjects.
      *
      * @return Model
      */
@@ -168,6 +171,53 @@ class CampaignEmail extends Model
         $this->status = $status;
         $this->save();
         return $this;
+    }
+
+    /**
+     * Statuses of an email that went out: delivered ("sent") or rejected by the receiving server
+     * after sending ("bounced"). Counts of emails sent include both.
+     */
+    const SENT_STATUSES = ['sent', 'bounced'];
+
+    /**
+     * Statuses of an email whose send has begun: claimed by the mailer (processing), delivered,
+     * bounced, or attempted (failed; it may still have reached the inbox). A campaign with any
+     * of these must not be reset to draft, and these rows are never deleted on unschedule.
+     */
+    const STARTED_STATUSES = ['processing', 'sent', 'bounced', 'failed'];
+
+    /**
+     * Mark the most recent email sent to a contact in the last 30 days as bounced.
+     *
+     * Bounce webhooks say which address bounced, not which email, so the latest delivery to the
+     * contact is taken as the one that bounced. Callers run this only when the contact changes
+     * to bounced, so a repeated event does not walk back through older emails. Queried by
+     * subscriber_id, which is indexed (email_address is not).
+     *
+     * @param int $subscriberId
+     * @return int|null the email row marked, if any
+     */
+    public static function markLatestAsBounced($subscriberId)
+    {
+        $subscriberId = (int)$subscriberId;
+        if (!$subscriberId) {
+            return null;
+        }
+
+        $latest = static::where('subscriber_id', $subscriberId)
+            ->where('status', 'sent')
+            ->where('scheduled_at', '>=', gmdate('Y-m-d H:i:s', current_time('timestamp') - 30 * DAY_IN_SECONDS))
+            ->orderBy('scheduled_at', 'DESC')
+            ->orderBy('id', 'DESC')
+            ->first();
+
+        if (!$latest) {
+            return null;
+        }
+
+        static::where('id', $latest->id)->update(['status' => 'bounced']);
+
+        return (int)$latest->id;
     }
 
     public function markAsSent($status = 'sent')
@@ -205,13 +255,8 @@ class CampaignEmail extends Model
     }
 
     /**
-     * Build preview data for one queued/sent email row.
-     *
-     * Route: GET /campaigns/emails/{email_id}/preview via CampaignController::previewEmail().
-     * This is the contact/campaign/all-emails history preview, not the draft editor preview
-     * route (POST /campaigns/email-preview-html). Keep the body rendering rules aligned with
-     * CampaignController::getEmailPreviewBody(): raw/classic-builder templates must bypass
-     * BlockParser, while block-editor templates should continue through BlockParser.
+     * Build preview data for one queued or sent email row.
+     * Body rendering must stay aligned with CampaignController::getEmailPreviewBody().
      *
      * @return array
      */
@@ -223,6 +268,14 @@ class CampaignEmail extends Model
         $subscriber = $this->subscriber;
 
         $emailBody = ($this->email_body) ? $this->email_body : (($campaign) ? $campaign->email_body : '');
+
+        // Only administrators see a queued body as stored; everyone else gets the template re-rendered.
+        // That holds even when is_parsed is 0: older Pro sequence rows stored resolved bodies without the flag.
+        $usesStoredBody = $this->is_parsed && $this->email_body;
+        if ($this->email_body && !current_user_can('manage_options')) {
+            $usesStoredBody = false;
+            $emailBody = ($campaign) ? $campaign->email_body : '';
+        }
 
         $designTemplate = ($campaign) ? $campaign->design_template : '';
 
@@ -236,7 +289,7 @@ class CampaignEmail extends Model
             'raw_classic'
         ];
 
-        if (in_array($designTemplate, $rawTemplates, true) || ($this->is_parsed && $this->email_body)) {
+        if (in_array($designTemplate, $rawTemplates, true) || $usesStoredBody) {
             $emailBody = wp_unslash($emailBody);
         } else {
             $emailBody = (new BlockParser($subscriber))->parse($emailBody);
@@ -382,6 +435,9 @@ class CampaignEmail extends Model
             $subscriber->email_id = $this->id;
         }
 
+        // Access-token smartcodes resolve only when this email goes to the contact's own address.
+        $level = ($subscriber && $subscriber->email && strtolower((string)$this->email_address) === strtolower($subscriber->email)) ? 'credential' : 'private';
+
         $designTemplate = 'classic';
 
         $campaign = $this->campaign;
@@ -416,7 +472,7 @@ class CampaignEmail extends Model
 
             $emailBody = str_replace(['https://fonts.googleapis.com/css2', 'https://fonts.googleapis.com/css'], 'https://fonts.bunny.net/css', $emailBody);
 
-            $emailBody = apply_filters('fluent_crm/parse_campaign_email_text', $emailBody, $subscriber);
+            $emailBody = apply_filters('fluent_crm/parse_campaign_email_text', $emailBody, $subscriber, $level);
 
             $emailBody = apply_filters('fluentcrm_email_body_text', $emailBody, $subscriber, $this);
 
@@ -433,10 +489,7 @@ class CampaignEmail extends Model
 
             $this->email_body = $emailBody;
             $this->is_parsed = 1;
-            // Not saved to DB here — the parsed body is kept in memory for Mailer::send().
-            // BaseHandler's mark-as-sent UPDATE persists is_parsed=1 and clears email_body.
-            // On rare retry (process crash), the email re-parses from campaign body which
-            // is correct. This avoids a ~15ms LONGTEXT write per email during bulk sends.
+            // Kept in memory for Mailer::send(); the mark-as-sent UPDATE persists is_parsed.
         }
 
         $emailFooterConfig = [];
@@ -465,7 +518,7 @@ class CampaignEmail extends Model
                  * @since 2.7.0
                  *
                  */
-                $footerText = apply_filters('fluent_crm/parse_campaign_email_text', $footerText, $subscriber);
+                $footerText = apply_filters('fluent_crm/parse_campaign_email_text', $footerText, $subscriber, $level);
 
                 $preViewUrl = add_query_arg([
                     FLUENTCRM_EXTERNAL_URL_PARAM => 1,
@@ -503,13 +556,13 @@ class CampaignEmail extends Model
              * @since 2.7.0
              *
              */
-            $preHeader = apply_filters('fluent_crm/parse_campaign_email_text', $preHeader, $subscriber);
+            $preHeader = apply_filters('fluent_crm/parse_campaign_email_text', $preHeader, $subscriber, $level);
         }
 
         $footerUrls = $this->getCampaignUrls($footerText, false);
 
-        if ($footerUrls) {
-            $trackingType = $campaign ? $campaign->getClickTrackingStatus() : null;
+        $trackingType = $campaign ? $campaign->getClickTrackingStatus() : fluentcrmTrackClicking();
+        if ($footerUrls && $trackingType) {
             if ($trackingType === 'anonymous') {
                 $footerText = Helper::attachAnonymousUrls($footerText, $footerUrls, $this->id, $this->email_hash);
             } else {
@@ -563,16 +616,17 @@ class CampaignEmail extends Model
              * @since 2.7.0
              *
              */
-            $content = apply_filters('fluent_crm/parse_extended_crm_text', $content, $subscriber);
+            $content = apply_filters('fluent_crm/parse_extended_crm_text', $content, $subscriber, $level);
         }
 
-        return Helper::injectTrackerPixel($content, $this->email_hash, $this->id);
+        $openTracking = $campaign ? $campaign->getOpenTrackingStatus() : null;
+
+        return Helper::injectTrackerPixel($content, $this->email_hash, $this->id, $openTracking);
     }
 
     private function getParsedEmailBody()
     {
         if (!$this->campaign_id || !$this->campaign) {
-            // return (new BlockParser($this->subscriber))->parse($this->email_body);
             return (new BlockParser($this->subscriber))->parse($this->email_body);
         }
 
@@ -602,7 +656,6 @@ class CampaignEmail extends Model
         if (in_array($this->campaign->design_template, $rawTemplates)) {
             $emailBody = $originalBody;
         } else {
-            // $emailBody = (new BlockParser($this->subscriber))->parse($originalBody);
             $emailBody = (new BlockParser($this->subscriber))->parse($originalBody);
         }
 

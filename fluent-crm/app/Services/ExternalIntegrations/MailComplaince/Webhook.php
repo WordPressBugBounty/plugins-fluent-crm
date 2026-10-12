@@ -67,7 +67,8 @@ class Webhook
                 }
                 return $externalPages->recordSoftBounce([
                     'email'  => $recipientEmail,
-                    'reason' => __('Soft bounce was set by Mailgun webhook API.', 'fluent-crm') . ' ' . $description . __(' Recorded at: ', 'fluent-crm') . current_time('mysql')
+                    /* translators: %1$s: bounce description from Mailgun, %2$s: date and time the event was recorded */
+                    'reason' => sprintf(__('Soft bounce reported by the Mailgun webhook API. %1$s Recorded at: %2$s', 'fluent-crm'), $description, current_time('mysql'))
                 ]);
             }
         }
@@ -81,7 +82,8 @@ class Webhook
 
         $unsubscribeData = [
             'email'  => $recipientEmail,
-            'reason' => $newStatus . __(' was set by Mailgun webhook API with event name: ', 'fluent-crm') . $event . __(' at ', 'fluent-crm') . current_time('mysql'),
+            /* translators: %1$s: new contact status (bounced, complained or unsubscribed), %2$s: Mailgun event name, %3$s: date and time */
+            'reason' => sprintf(__('Status %1$s was set by the Mailgun webhook API (event: %2$s) at %3$s', 'fluent-crm'), $newStatus, $event, current_time('mysql')),
             'status' => $newStatus
         ];
 
@@ -117,7 +119,8 @@ class Webhook
             if ($eventName == 'unsubscribe') {
                 $externalPages->recordUnsubscribe([
                     'email'  => $email,
-                    'reason' => __('unsubscribed status was set from SendGrid Webhook API.', 'fluent-crm') . __(' Recorded at: ', 'fluent-crm') . current_time('mysql'),
+                    /* translators: %s: date and time the event was recorded */
+                    'reason' => sprintf(__('Unsubscribed status was set by the SendGrid webhook API. Recorded at: %s', 'fluent-crm'), current_time('mysql')),
                     'status' => 'unsubscribed'
                 ]);
                 $processed = true;
@@ -127,25 +130,46 @@ class Webhook
             if ($eventName == 'spamreport') {
                 $externalPages->recordUnsubscribe([
                     'email'  => $email,
-                    'reason' => __('complained status was set from SendGrid Webhook API.', 'fluent-crm') . __(' Recorded at: ', 'fluent-crm') . current_time('mysql'),
+                    /* translators: %s: date and time the event was recorded */
+                    'reason' => sprintf(__('Complained status was set by the SendGrid webhook API. Recorded at: %s', 'fluent-crm'), current_time('mysql')),
                     'status' => 'complained'
                 ]);
                 $processed = true;
                 continue;
             }
 
-            // bounce or dropped — check type field for soft vs hard bounce
-            $bounceType = Arr::get($event, 'type', 'bounce');
             $reason = Arr::get($event, 'reason', '');
+
+            if ($eventName == 'dropped') {
+                $dropStatus = self::sendgridDropStatus($reason);
+                if (!$dropStatus) {
+                    continue; // A sender-side drop (spam filter, bad header, quota) says nothing about the address.
+                }
+                if ($dropStatus != 'bounced') {
+                    $externalPages->recordUnsubscribe([
+                        'email'  => $email,
+                        /* translators: %1$s: contact status, %2$s: drop reason from SendGrid, %3$s: date and time the event was recorded */
+                        'reason' => sprintf(__('Status %1$s was set by the SendGrid webhook API (dropped: %2$s). Recorded at: %3$s', 'fluent-crm'), $dropStatus, $reason, current_time('mysql')),
+                        'status' => $dropStatus
+                    ]);
+                    $processed = true;
+                    continue;
+                }
+            }
+
+            // A bounce event's type is "bounce" (hard) or "blocked" (soft); a dropped event that reaches here is a known bad address.
+            $bounceType = $eventName == 'dropped' ? 'bounce' : Arr::get($event, 'type', 'bounce');
             if ($bounceType == 'blocked') {
                 $externalPages->recordSoftBounce([
                     'email'  => $email,
-                    'reason' => __('Soft bounce from SendGrid Webhook API. Reason: ', 'fluent-crm') . $reason . __(' Recorded at: ', 'fluent-crm') . current_time('mysql')
+                    /* translators: %1$s: bounce reason from SendGrid, %2$s: date and time the event was recorded */
+                    'reason' => sprintf(__('Soft bounce from the SendGrid webhook API. Reason: %1$s. Recorded at: %2$s', 'fluent-crm'), $reason, current_time('mysql'))
                 ]);
             } else {
                 $externalPages->recordUnsubscribe([
                     'email'  => $email,
-                    'reason' => __('bounced status was set from SendGrid Webhook API. Reason: ', 'fluent-crm') . $reason . __(' Recorded at: ', 'fluent-crm') . current_time('mysql'),
+                    /* translators: %1$s: bounce reason from SendGrid, %2$s: date and time the event was recorded */
+                    'reason' => sprintf(__('Bounced status was set by the SendGrid webhook API. Reason: %1$s. Recorded at: %2$s', 'fluent-crm'), $reason, current_time('mysql')),
                     'status' => 'bounced'
                 ]);
             }
@@ -187,7 +211,8 @@ class Webhook
                 $newStatus = 'complained';
             }
 
-            $reason = $newStatus . __(' status was set from Pepipost Webhook API. Reason: ', 'fluent-crm') . Arr::get($event, 'BOUNCE_TYPE') . __(' Recorded at: ', 'fluent-crm') . current_time('mysql');
+            /* translators: %1$s: new contact status (bounced, complained or unsubscribed), %2$s: bounce type, %3$s: date and time */
+            $reason = sprintf(__('Status %1$s was set by the Pepipost webhook API. Reason: %2$s. Recorded at: %3$s', 'fluent-crm'), $newStatus, Arr::get($event, 'BOUNCE_TYPE'), current_time('mysql'));
 
             if ($sourceResponse = Arr::get($event, 'RESPONSE')) {
                 $reason = $sourceResponse;
@@ -252,7 +277,8 @@ class Webhook
 
             $reason = Arr::get($event, 'raw_reason', '');
             if (!$reason) {
-                $reason = $eventName . __(' status was set from SparkPost Webhook API.', 'fluent-crm') . __(' Recorded at: ', 'fluent-crm') . current_time('mysql');
+                /* translators: %1$s: SparkPost event name, %2$s: date and time the event was recorded */
+                $reason = sprintf(__('Status %1$s was set by the SparkPost webhook API. Recorded at: %2$s', 'fluent-crm'), $eventName, current_time('mysql'));
             }
 
             // Both bounce and out_of_band events carry bounce_class
@@ -310,7 +336,8 @@ class Webhook
 
         $reason = Arr::get($event, 'Description', '');
         if (!$reason) {
-            $reason = $eventName . __(' status was set from Postmark Webhook API.', 'fluent-crm') . __(' Recorded at: ', 'fluent-crm') . current_time('mysql');
+            /* translators: %1$s: Postmark event name, %2$s: date and time the event was recorded */
+            $reason = sprintf(__('Status %1$s was set by the Postmark webhook API. Recorded at: %2$s', 'fluent-crm'), $eventName, current_time('mysql'));
         }
 
         $externalPages = new ExternalPages();
@@ -323,9 +350,13 @@ class Webhook
             ]);
         }
 
-        // For Bounce events, check Type to distinguish soft vs hard
-        $bounceType = Arr::get($event, 'Type', '');
-        if ($bounceType == 'SoftBounce' || $bounceType == 'Transient') {
+        $action = self::postmarkBounceAction(Arr::get($event, 'Type', ''), Arr::get($event, 'Inactive'));
+
+        if ($action == 'ignore') {
+            return false;
+        }
+
+        if ($action == 'soft') {
             return $externalPages->recordSoftBounce([
                 'email'  => $email,
                 'reason' => $reason
@@ -335,8 +366,73 @@ class Webhook
         return $externalPages->recordUnsubscribe([
             'email'  => $email,
             'reason' => $reason,
-            'status' => 'bounced'
+            'status' => $action
         ]);
+    }
+
+    /**
+     * What a Postmark bounce record means for the contact.
+     *
+     * Postmark posts a Bounce record for every bounce type, including auto-replies and
+     * sender-side errors (https://postmarkapp.com/developer/api/bounce-api#bounce-types).
+     * Only permanent address failures, or a bounce that made Postmark deactivate the address
+     * (Inactive = true), bounce the contact; temporary failures count toward the soft-bounce
+     * limit; replies and sender-side errors are ignored.
+     *
+     * @param string $type Postmark bounce Type
+     * @param mixed $inactive Postmark's Inactive flag
+     * @return string 'bounced', 'complained', 'unsubscribed', 'soft' or 'ignore'
+     */
+    public static function postmarkBounceAction($type, $inactive = false)
+    {
+        if ($type == 'SpamComplaint') {
+            return 'complained';
+        }
+
+        if ($type == 'Unsubscribe') {
+            return 'unsubscribed';
+        }
+
+        if (in_array($type, ['HardBounce', 'BadEmailAddress', 'ManuallyDeactivated'], true) || $inactive === true || $inactive === 'true') {
+            return 'bounced';
+        }
+
+        $ignored = ['Subscribe', 'AutoResponder', 'AddressChange', 'OpenRelayTest', 'ChallengeVerification', 'VirusNotification',
+            'Unconfirmed', 'SMTPApiError', 'InboundError', 'TemplateRenderingFailed'];
+        if (in_array($type, $ignored, true)) {
+            return 'ignore';
+        }
+
+        // Transient, SoftBounce, DnsError, SpamNotification, Blocked, DMARCPolicy, Unknown and anything new.
+        return 'soft';
+    }
+
+    /**
+     * The contact status a SendGrid "dropped" event implies, or null when the drop is sender-side.
+     *
+     * SendGrid drops a message for an address already on one of its suppression lists, or for a
+     * problem with the message itself (https://www.twilio.com/docs/sendgrid/for-developers/tracking-events/event).
+     * Only the former says anything about the contact.
+     *
+     * @param string $reason the event's reason
+     * @return string|null 'bounced', 'unsubscribed', 'complained' or null
+     */
+    public static function sendgridDropStatus($reason)
+    {
+        $reason = strtolower((string)$reason);
+
+        if (strpos($reason, 'bounced address') !== false || strpos($reason, 'invalid address') !== false) {
+            return 'bounced';
+        }
+        if (strpos($reason, 'unsubscribed address') !== false) {
+            return 'unsubscribed';
+        }
+        if (strpos($reason, 'spam reporting address') !== false) {
+            return 'complained';
+        }
+
+        // Spam Content, Invalid SMTPAPI header, Recipient List over Package Quota, Invalid (template/header).
+        return null;
     }
 
     private function handleElasticemail($request)
@@ -379,13 +475,15 @@ class Webhook
             if (in_array($category, $softBounceCategories)) {
                 return $externalPages->recordSoftBounce([
                     'email'  => $email,
-                    'reason' => __('Soft bounce from ElasticEmail Webhook API. Category: ', 'fluent-crm') . $category . __(' Recorded at: ', 'fluent-crm') . current_time('mysql')
+                    /* translators: %1$s: bounce category from Elastic Email, %2$s: date and time the event was recorded */
+                    'reason' => sprintf(__('Soft bounce from the Elastic Email webhook API. Category: %1$s. Recorded at: %2$s', 'fluent-crm'), $category, current_time('mysql'))
                 ]);
             }
 
             return $externalPages->recordUnsubscribe([
                 'email'  => $email,
-                'reason' => __('bounced status was set from ElasticEmail Webhook API. Category: ', 'fluent-crm') . $category . __(' Recorded at: ', 'fluent-crm') . current_time('mysql'),
+                /* translators: %1$s: bounce category from Elastic Email, %2$s: date and time the event was recorded */
+                'reason' => sprintf(__('Bounced status was set by the Elastic Email webhook API. Category: %1$s. Recorded at: %2$s', 'fluent-crm'), $category, current_time('mysql')),
                 'status' => 'bounced'
             ]);
         }
@@ -393,7 +491,8 @@ class Webhook
         if ($status == 'abusereport') {
             return $externalPages->recordUnsubscribe([
                 'email'  => $email,
-                'reason' => __('complained status was set from ElasticEmail Webhook API.', 'fluent-crm') . __(' Recorded at: ', 'fluent-crm') . current_time('mysql'),
+                /* translators: %s: date and time the event was recorded */
+                'reason' => sprintf(__('Complained status was set by the Elastic Email webhook API. Recorded at: %s', 'fluent-crm'), current_time('mysql')),
                 'status' => 'complained'
             ]);
         }
@@ -401,7 +500,8 @@ class Webhook
         // unsubscribed
         return $externalPages->recordUnsubscribe([
             'email'  => $email,
-            'reason' => __('unsubscribed status was set from ElasticEmail Webhook API.', 'fluent-crm') . __(' Recorded at: ', 'fluent-crm') . current_time('mysql'),
+            /* translators: %s: date and time the event was recorded */
+            'reason' => sprintf(__('Unsubscribed status was set by the Elastic Email webhook API. Recorded at: %s', 'fluent-crm'), current_time('mysql')),
             'status' => 'unsubscribed'
         ]);
     }
@@ -441,7 +541,8 @@ class Webhook
             if ($payloadStatus != 'HardFail') {
                 return $externalPages->recordSoftBounce([
                     'email'  => $toEmail,
-                    'reason' => __('Soft bounce from PostalServer. Reason: ', 'fluent-crm') . $reason . __(' Recorded at: ', 'fluent-crm') . current_time('mysql')
+                    /* translators: %1$s: bounce reason, %2$s: date and time the event was recorded */
+                    'reason' => sprintf(__('Soft bounce from Postal Server. Reason: %1$s. Recorded at: %2$s', 'fluent-crm'), $reason, current_time('mysql'))
                 ]);
             }
 
@@ -462,17 +563,19 @@ class Webhook
 
             return $externalPages->recordSoftBounce([
                 'email'  => $toEmail,
-                'reason' => __('Soft bounce (delayed) from PostalServer. Reason: ', 'fluent-crm') . $reason . __(' Recorded at: ', 'fluent-crm') . current_time('mysql')
+                /* translators: %1$s: bounce reason, %2$s: date and time the event was recorded */
+                'reason' => sprintf(__('Soft bounce (delayed) from Postal Server. Reason: %1$s. Recorded at: %2$s', 'fluent-crm'), $reason, current_time('mysql'))
             ]);
         }
 
-        // messagebounced — use original_message.to (not bounce.to which is the return-path)
+        // messagebounced: use original_message.to; bounce.to is the return-path.
         $toEmail = Arr::get($payload, 'original_message.to');
         if (!$toEmail || !is_email($toEmail)) {
             return false;
         }
 
-        $reason = __('Bounce notification received from PostalServer.', 'fluent-crm') . __(' Recorded at: ', 'fluent-crm') . current_time('mysql');
+        /* translators: %s: date and time the event was recorded */
+        $reason = sprintf(__('Bounce notification received from Postal Server. Recorded at: %s', 'fluent-crm'), current_time('mysql'));
 
         return $externalPages->recordUnsubscribe([
             'email'  => $toEmail,
@@ -508,7 +611,8 @@ class Webhook
             if ($bounceType == 'soft') {
                 return $externalPages->recordSoftBounce([
                     'email'  => $toEmail,
-                    'reason' => __('Soft bounce from SMTP2GO Webhook API. Reason: ', 'fluent-crm') . $reason . __(' Recorded at: ', 'fluent-crm') . current_time('mysql')
+                    /* translators: %1$s: bounce reason, %2$s: date and time the event was recorded */
+                    'reason' => sprintf(__('Soft bounce from the SMTP2GO webhook API. Reason: %1$s. Recorded at: %2$s', 'fluent-crm'), $reason, current_time('mysql'))
                 ]);
             }
         }
@@ -554,12 +658,14 @@ class Webhook
 
         // Soft bounces and deferred deliveries should be tracked separately
         if (in_array($eventName, ['soft_bounce', 'deferred'])) {
-            $reasonPrefix = $eventName === 'deferred'
-                ? __('Deferred delivery from Brevo Webhook API. Reason: ', 'fluent-crm')
-                : __('Soft bounce from Brevo Webhook API. Reason: ', 'fluent-crm');
+            $reasonMessage = $eventName === 'deferred'
+                /* translators: %1$s: reason from Brevo, %2$s: date and time the event was recorded */
+                ? sprintf(__('Deferred delivery from the Brevo webhook API. Reason: %1$s. Recorded at: %2$s', 'fluent-crm'), $reason, current_time('mysql'))
+                /* translators: %1$s: bounce reason from Brevo, %2$s: date and time the event was recorded */
+                : sprintf(__('Soft bounce from the Brevo webhook API. Reason: %1$s. Recorded at: %2$s', 'fluent-crm'), $reason, current_time('mysql'));
             return $externalPages->recordSoftBounce([
                 'email'  => $email,
-                'reason' => $reasonPrefix . $reason . __(' Recorded at: ', 'fluent-crm') . current_time('mysql')
+                'reason' => $reasonMessage
             ]);
         }
 
@@ -573,7 +679,8 @@ class Webhook
 
         return $externalPages->recordUnsubscribe([
             'email'  => $email,
-            'reason' => $newStatus . __(' status was set from Brevo Webhook API. Reason: ', 'fluent-crm') . $reason . __(' Recorded at: ', 'fluent-crm') . current_time('mysql'),
+            /* translators: %1$s: new contact status (bounced, complained or unsubscribed), %2$s: reason from Brevo, %3$s: date and time */
+            'reason' => sprintf(__('Status %1$s was set by the Brevo webhook API. Reason: %2$s. Recorded at: %3$s', 'fluent-crm'), $newStatus, $reason, current_time('mysql')),
             'status' => $newStatus
         ]);
     }
@@ -586,15 +693,13 @@ class Webhook
             return false;
         }
 
-        // ToSend sends the bounce event as `bounced` (past tense); `bounce` is kept
-        // for tolerance in case a flat/legacy payload is posted to this endpoint.
+        // ToSend sends `bounced`; `bounce` is accepted for legacy payloads.
         $eventType = Arr::get($event, 'type');
         if (!in_array($eventType, ['bounce', 'bounced', 'complaint'])) {
             return false;
         }
 
-        // ToSend nests the event fields under `data`: {type, data: {...}, created_at}.
-        // Fall back to the top level so a flat payload still resolves.
+        // ToSend nests event fields under `data`; fall back to the top level for flat payloads.
         $data = Arr::get($event, 'data');
         if (!$data || !is_array($data)) {
             $data = $event;
@@ -615,18 +720,17 @@ class Webhook
         if ($eventType == 'complaint') {
             return $externalPages->recordUnsubscribe([
                 'email'  => $email,
-                'reason' => __('Complaint received from ToSend Webhook API.', 'fluent-crm') . __(' Recorded at: ', 'fluent-crm') . current_time('mysql'),
+                /* translators: %s: date and time the event was recorded */
+                'reason' => sprintf(__('Complaint received from the ToSend webhook API. Recorded at: %s', 'fluent-crm'), current_time('mysql')),
                 'status' => 'complained'
             ]);
         }
 
-        // Bounce event — check is_hard_bounce flag
+        // Bounce event: check the is_hard_bounce flag.
         $reason = Arr::get($data, 'reason', 'Unknown');
         $isHardBounce = Arr::get($data, 'is_hard_bounce', false);
 
-        // Sender-fault bounces (our content/message, not the recipient's mailbox) —
-        // do NOT penalise the subscriber. Prefer the explicit `sender_fault` flag;
-        // fall back to `bounce_sub_type` for older payloads.
+        // Sender-fault bounces do not penalise the subscriber; `bounce_sub_type` covers older payloads.
         $senderFaultSubTypes = ['MessageTooLarge', 'ContentRejected', 'AttachmentRejected'];
         $isSenderFault = (bool) Arr::get($data, 'sender_fault', false)
             || (!$isHardBounce && in_array(Arr::get($data, 'bounce_sub_type'), $senderFaultSubTypes, true));
@@ -638,13 +742,15 @@ class Webhook
         if (!$isHardBounce) {
             return $externalPages->recordSoftBounce([
                 'email'  => $email,
-                'reason' => __('Soft bounce from ToSend Webhook API. Reason: ', 'fluent-crm') . $reason . __(' Recorded at: ', 'fluent-crm') . current_time('mysql')
+                /* translators: %1$s: bounce reason, %2$s: date and time the event was recorded */
+                'reason' => sprintf(__('Soft bounce from the ToSend webhook API. Reason: %1$s. Recorded at: %2$s', 'fluent-crm'), $reason, current_time('mysql'))
             ]);
         }
 
         return $externalPages->recordUnsubscribe([
             'email'  => $email,
-            'reason' => __('Hard bounce from ToSend Webhook API. Reason: ', 'fluent-crm') . $reason . __(' Recorded at: ', 'fluent-crm') . current_time('mysql'),
+            /* translators: %1$s: bounce reason, %2$s: date and time the event was recorded */
+            'reason' => sprintf(__('Hard bounce from the ToSend webhook API. Reason: %1$s. Recorded at: %2$s', 'fluent-crm'), $reason, current_time('mysql')),
             'status' => 'bounced'
         ]);
     }

@@ -16,7 +16,7 @@ class ConvertKitMigrator extends BaseMigrator
         return [
             'title'                  => 'Kit',
             'formerly'                => 'ConvertKit',
-            'description'            => __('Migrate your ConvertKit contacts and associate to FluentCRM', 'fluent-crm'),
+            'description'            => __('Transfer your ConvertKit tags and contacts to FluentCRM', 'fluent-crm'),
             'logo'                   => fluentCrmMix('images/migrators/convertkit.png'),
             'logo_svg'               => $logo,
             'supports'               => [
@@ -25,8 +25,8 @@ class ConvertKitMigrator extends BaseMigrator
                 'empty_tags'          => false,
                 'active_imports_only' => false
             ],
-            'field_map_info'         => __('Email Address and First name will be mapped automatically', 'fluent-crm'),
-            'tags_map_info'           => __('Only Selected tags will be imported from ConvertKit', 'fluent-crm'),
+            'field_map_info'         => __('Email address and first name will be mapped automatically', 'fluent-crm'),
+            'tags_map_info'           => __('Only selected tags will be imported from ConvertKit', 'fluent-crm'),
             'credentials'            => [
                 'api_key'    => '',
                 'api_secret' => ''
@@ -37,7 +37,8 @@ class ConvertKitMigrator extends BaseMigrator
                     'placeholder' => __('ConvertKit API Key', 'fluent-crm'),
                     'data_type'   => 'text',
                     'type'        => 'input-text',
-                    'inline_help' => $infoSvg . ' ' . __('You can find your API key at ConvertKit ', 'fluent-crm') . '<a href="https://app.convertkit.com/account_settings/advanced_settings" rel="noopener" target="_blank">'. __("Account -> Settings -> Advanced", "fluent-crm") .'</a>'
+                    /* translators: %1$s: opening link tag to the ConvertKit advanced settings page, %2$s: closing link tag */
+                    'inline_help' => $infoSvg . ' ' . sprintf(__('You can find your API key at ConvertKit %1$sAccount -> Settings -> Advanced%2$s', 'fluent-crm'), '<a href="https://app.convertkit.com/account_settings/advanced_settings" rel="noopener" target="_blank">', '</a>')
                 ],
                 'api_secret' => [
                     'label'       => __('API Secret', 'fluent-crm'),
@@ -151,7 +152,8 @@ class ConvertKitMigrator extends BaseMigrator
 
         }
 
-        $message = __('Based on your selections, ', 'fluent-crm') . $tagCounts . __(' tags and associate contacts will be imported from ConvertKit', 'fluent-crm');
+        /* translators: %d: number of ConvertKit tags selected for import */
+        $message = sprintf(_n('Based on your selections, %d tag and its contacts will be imported from ConvertKit.', 'Based on your selections, %d tags and their contacts will be imported from ConvertKit.', $tagCounts, 'fluent-crm'), $tagCounts);
 
 
         return [
@@ -231,9 +233,7 @@ class ConvertKitMigrator extends BaseMigrator
 
             $contact = FluentCrmApi('contacts')->createOrUpdate($data);
 
-            // Never resurrect a locally suppressed contact (unsubscribed/bounced/complained/
-            // spammed) just because the remote system lists the address as active — a re-run
-            // of the migration must not undo an opt-out or bounce recorded here.
+            // Never resurrect a locally suppressed contact because the remote lists it as active.
             if ($contact && $contact->status != 'subscribed' && !in_array($contact->status, fluentcrm_strict_statues())) {
                 $contact->updateStatus('subscribed');
             }
@@ -259,7 +259,8 @@ class ConvertKitMigrator extends BaseMigrator
             'total'          => 0,
             'import_tracker' => $import_tracker,
             'has_more'       => isset($taggingKeys[$import_tracker['current_index']]),
-            'message' => __('Importer is running now. ', 'fluent-crm').( $import_tracker['current_index']+1 ) .__(' tags have been imported so far', 'fluent-crm')
+            /* translators: %d: number of tags imported so far */
+            'message' => sprintf(__('The import is running. %d tags have been imported so far.', 'fluent-crm'), $import_tracker['current_index'] + 1)
         ];
     }
 

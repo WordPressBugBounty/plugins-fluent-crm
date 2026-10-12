@@ -20,7 +20,7 @@ class DetachTagAction extends BaseAction
         return [
             'category' => __('CRM', 'fluent-crm'),
             'title'       => __('Remove From Tag', 'fluent-crm'),
-            'description' => __('Remove this contact from the selected Tags', 'fluent-crm'),
+            'description' => __('Remove this contact from the selected tags', 'fluent-crm'),
             'icon' => 'fc-icon-tag_removed',//fluentCrmMix('images/funnel_icons/tag_remove.svg'),
             'settings'    => [
                 'tags' => []
@@ -32,13 +32,13 @@ class DetachTagAction extends BaseAction
     {
         return [
             'title'     => __('Remove Contact from the Selected Tags', 'fluent-crm'),
-            'sub_title' => __('Select Tags that you want to remove from targeted Contact', 'fluent-crm'),
+            'sub_title' => __('Select the tags you want to remove from the contact', 'fluent-crm'),
             'fields'    => [
                 'tags' => [
                     'type'        => 'option_selectors',
                     'option_key' => 'tags',
                     'is_multiple' => true,
-                    'label'       => __('Select Tags', 'fluent-crm'),
+                    'label'       => __('Select tags', 'fluent-crm'),
                     'placeholder' => __('Select Tag', 'fluent-crm'),
                     'creatable' => true
                 ]

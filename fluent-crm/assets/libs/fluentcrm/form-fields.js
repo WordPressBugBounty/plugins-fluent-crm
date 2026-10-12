@@ -1,18 +1,6 @@
 /**
- * FluentCRM — public form field initializers.
- *
- * Source file. The build copies resources/libs -> assets/libs (viteStaticCopy),
- * so this ships as assets/libs/fluentcrm/form-fields.js and is enqueued by
- * FormElementBuilder via wp_enqueue_script — no hardcoded inline <script>, so
- * the subscription/preference forms don't require `script-src 'unsafe-inline'`.
- *
- * Initializes flatpickr date/datetime pickers, Choices multi-selects, legacy
- * combodate inputs and native day/month/year dropdowns. Driven entirely by
- * CSS classes/structure (no per-field config inlined). Translatable strings
- * arrive via wp_localize_script as window.fluentcrmFormFields.i18n.
- *
- * Each initializer is idempotent and degrades gracefully if its library is
- * absent. Deferred to DOMContentLoaded so it is independent of script order.
+ * Public form field initializers (date pickers, multi-selects, combodate, date dropdowns).
+ * Copied to assets/libs by the build and enqueued by FormElementBuilder. Strings come from window.fluentcrmFormFields.i18n.
  */
 (function () {
     'use strict';
@@ -135,10 +123,7 @@
     }
 
     function initAll() {
-        // Isolate each initializer: a throw in one (e.g. legacy combodate when
-        // moment.js isn't loaded) must not stop the others from running. The old
-        // code emitted these as separate inline <script> blocks, which had this
-        // isolation for free; consolidating into one IIFE removed it.
+        // A throw in one initializer must not stop the others.
         [initDatePickers, initMultiSelects, initComboDates, initDateDropdowns].forEach(function (init) {
             try {
                 init();

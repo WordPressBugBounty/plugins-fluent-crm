@@ -24,6 +24,22 @@ class Template extends Model
 
     protected $primaryKey = 'ID';
 
+    /**
+     * Limit every query to FluentCRM's own template post types.
+     *
+     * The model sits on wp_posts, so without this a template id from a request could resolve to
+     * any page, post or product, letting a user with only the Email Templates permission read,
+     * overwrite or delete it. Inserts are not affected.
+     */
+    public static function boot()
+    {
+        parent::boot();
+
+        static::addGlobalScope('fluentcrm_template_post_types', function ($builder) {
+            $builder->whereIn('post_type', [fluentcrmTemplateCPTSlug(), fluentcrmCampaignTemplateCPTSlug()]);
+        });
+    }
+
     public function scopeEmailTemplates($query, $types = ['publish'])
     {
         return $query->where(

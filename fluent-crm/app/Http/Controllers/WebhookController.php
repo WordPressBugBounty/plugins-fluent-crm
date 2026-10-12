@@ -79,7 +79,7 @@ class WebhookController extends Controller
             'id'       => $webhook->id,
             'webhook'  => $webhook->value,
             'webhooks' => $webhook->latest()->get(),
-            'message'  => __('Successfully created the WebHook', 'fluent-crm')
+            'message'  => __('The webhook has been created.', 'fluent-crm')
         ];
     }
 
@@ -97,7 +97,7 @@ class WebhookController extends Controller
 
         return [
             'webhooks' => $webhook->latest()->get(),
-            'message'  => __('Successfully updated the webhook', 'fluent-crm')
+            'message'  => __('The webhook has been updated.', 'fluent-crm')
         ];
     }
 
@@ -107,7 +107,7 @@ class WebhookController extends Controller
 
         return [
             'webhooks' => $webhook->latest()->get(),
-            'message'  => __('Successfully deleted the webhook', 'fluent-crm')
+            'message'  => __('The webhook has been deleted.', 'fluent-crm')
         ];
     }
 }

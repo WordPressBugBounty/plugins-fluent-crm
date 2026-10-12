@@ -9,12 +9,6 @@ use FluentCrm\App\Modules\MCP\Helpers\MCPHelper;
 
 /**
  * Campaign-centric MCP tools.
- *
- * Read tools (Phase 2): listCampaigns, getCampaign.
- * Write tools (Phase 3): upsertCampaign, changeCampaignStatus.
- *
- * Reads query the Campaign model directly (matching CampaignController's read
- * paths) and shape the result through MCPHelper formatters.
  */
 class CampaignTools
 {
@@ -32,12 +26,7 @@ class CampaignTools
         $statuses = (array) ($params['statuses'] ?? []);
         $statuses = array_values(array_filter(array_map('sanitize_key', $statuses)));
 
-        // All fc_campaigns columns. The framework rewrite made orderBy() throw
-        // LogicException on column names that don't match ^[a-zA-Z0-9_\.]+$
-        // — empty strings, "id ASC", "DROP TABLE", etc. — so an unguarded
-        // sort_by would 500 the tool. Schema is stable (migration only adds
-        // indexes), so hardcoding the column list avoids a per-request
-        // SHOW COLUMNS without restricting agents to the input_schema enum.
+        // All fc_campaigns columns. orderBy() throws on an invalid column name.
         $allowedSortBy = [
             'id', 'parent_id', 'type', 'title', 'available_urls', 'slug',
             'status', 'template_id', 'email_subject', 'email_pre_header',
@@ -52,15 +41,11 @@ class CampaignTools
         }
         $sortType = strtoupper(sanitize_text_field((string) ($params['sort_type'] ?? 'DESC')));
         $sortType = in_array($sortType, ['ASC', 'DESC'], true) ? $sortType : 'DESC';
-        // Stats add several aggregate queries per campaign. Keep title/status
-        // scans cheap by default; callers that need engagement data opt in.
+        // Stats are opt-in: they add several aggregate queries per campaign.
         $includeStats = array_key_exists('include_stats', $params)
             ? (bool) $params['include_stats']
             : false;
-        // One-off sends (created by send-email-to-contact) live in
-        // fc_campaigns with type='custom_email_campaign'. The Campaign
-        // model's global scope hides them by default; let agents opt in
-        // when they want a unified "what did I send recently" view.
+        // One-off sends are type='custom_email_campaign', hidden by the model's global scope.
         $includeOneOffs = !empty($params['include_one_offs']);
 
         if ($includeOneOffs) {
@@ -106,22 +91,15 @@ class CampaignTools
         $campaignId = (int) ($params['campaign_id'] ?? 0);
 
         if (!$campaignId) {
-            return MCPHelper::error('invalid_param', __('campaign_id is required', 'fluent-crm'));
+            return MCPHelper::error('invalid_param', 'campaign_id is required');
         }
 
-        // Bypass the type global scope so one-off sends (created by
-        // send-email-to-contact) are reachable too. Without this, an id
-        // returned by list-campaigns(include_one_offs=true) couldn't be
-        // fetched here — operator-test report 2026-05-07 #4.
+        // Bypass the type scope so one-off sends are reachable too.
         $campaign = Campaign::withoutGlobalScope('type')->find($campaignId);
         if (!$campaign) {
-            return MCPHelper::error('not_found', __('Campaign not found', 'fluent-crm'), ['campaign_id' => $campaignId]);
+            return MCPHelper::error('not_found', 'Campaign not found', ['campaign_id' => $campaignId]);
         }
 
-        // Resolve body_format before the type branch so one-off emails honor
-        // it too (the early return used to skip it). text|html|both — default
-        // both for backward compatibility. Default resolved before the enum
-        // test so an omitted key doesn't warn (see ContactTools::getContact).
         $bodyFormat = $params['body_format'] ?? 'both';
         if (!in_array($bodyFormat, ['text', 'html', 'both'], true)) {
             $bodyFormat = 'both';
@@ -132,7 +110,7 @@ class CampaignTools
         }
 
         $defaultIncludes = ['stats'];
-        // array_key_exists: omitted => defaults, [] => none, explicit => those.
+        // Omitted => defaults, [] => none, explicit => those.
         if (array_key_exists('include', $params) && is_array($params['include'])) {
             $include = array_values(array_intersect($params['include'], ['stats', 'subjects', 'link_report', 'recipients_estimate']));
         } else {
@@ -153,13 +131,19 @@ class CampaignTools
             'exclude_tags'  => $recipientsExcluded['tags'],
         ];
 
+        $audienceType = $settings['sending_filter'] ?? 'list_tag';
+        if ($audienceType !== 'list_tag') {
+            $recipients['note'] = sprintf(
+                "Not used: this campaign's audience is '%s', set in the FluentCRM admin. Setting recipients through upsert-campaign switches it to these tags and lists.",
+                $audienceType
+            );
+        }
+
         $sentStatuses = ['archived', 'working', 'paused'];
         $sentAt = in_array($campaign->status, $sentStatuses, true)
             ? MCPHelper::toIso8601($campaign->updated_at)
             : null;
 
-        // Merge $bodyShape in the middle so an unrequested body key is omitted
-        // entirely (not emitted as null) when body_format narrows the output.
         $data = array_merge([
             'id'                => (int) $campaign->id,
             'title'             => $campaign->title,
@@ -169,6 +153,7 @@ class CampaignTools
             'design_template'   => $campaign->design_template,
         ], $bodyShape, [
             'settings'          => self::settingsForOutput($settings),
+            'audience_type'     => $audienceType,
             'recipients'        => $recipients,
             'scheduled_at'      => MCPHelper::toIso8601($campaign->scheduled_at),
             'scheduled_at_resolved' => MCPHelper::formatScheduledAtDual($campaign->scheduled_at),
@@ -197,22 +182,14 @@ class CampaignTools
     }
 
     /**
-     * Render a one-off send (`type=custom_email_campaign`) for get-campaign.
-     * One-offs don't have a marketing lifecycle — the row's `status` column is
-     * written once at creation ('published') and never advances, so it says
-     * nothing about delivery. The real status lives on the single
-     * fc_campaign_emails row, so surface it as `one_off_status` along with the
-     * recipient. Operator-test report 2026-05-07 #4.
-     *
-     * Note: rows created before the status fix carry 'draft'. Nothing here
-     * reads $campaign->status, so those keep rendering correctly.
+     * Render a one-off send for get-campaign. Delivery status comes from its
+     * fc_campaign_emails row as `one_off_status`; the campaign status never advances.
      */
     private static function formatOneOffEmail($campaign, $bodyFormat = 'both')
     {
         $body      = (string) $campaign->email_body;
         $bodyShape = MCPHelper::dualBodyShape($body, $bodyFormat);
 
-        // The one and only campaign-email row for this send.
         $email = \FluentCrm\App\Models\CampaignEmail::withoutGlobalScope('type')
             ->where('campaign_id', $campaign->id)
             ->orderBy('id', 'DESC')
@@ -223,18 +200,13 @@ class CampaignTools
             ? MCPHelper::toIso8601($email->updated_at)
             : null;
 
-        // The recipient block is contact PII and this tool is gated on
-        // `fcrm_read_emails` alone, so an email-only manager must not read
-        // identities out of it — same boundary render-email-preview enforces by
-        // demanding both caps. Skip the lookup entirely when unauthorized (one
-        // less query) and still confirm that a recipient exists. PR #2026
-        // review finding 2.
+        // The recipient is contact PII; this tool only requires fcrm_read_emails.
         $canReadContacts = \FluentCrm\App\Services\PermissionManager::currentUserCan('fcrm_read_contacts');
 
         $recipient = null;
         if ($email && $email->subscriber_id) {
             if (!$canReadContacts) {
-                $recipient = ['note' => __('Recipient hidden — requires contact read permission.', 'fluent-crm')];
+                $recipient = ['note' => 'Recipient hidden (requires contact read permission).'];
             } else {
                 $sub = \FluentCrm\App\Models\Subscriber::find($email->subscriber_id);
                 if ($sub) {
@@ -262,15 +234,13 @@ class CampaignTools
             'recipient'         => $recipient,
             'sent_at'           => $sentAt,
             'created_at'        => MCPHelper::toIso8601($campaign->created_at),
-            'note'              => __('This is a one-off send (not a marketing campaign). It supports change-campaign-status action=delete only — schedule/pause/resume/duplicate are not applicable.', 'fluent-crm'),
+            'note'              => 'This is a one-off send (not a marketing campaign). It supports change-campaign-status action=delete only; schedule/pause/resume/duplicate are not applicable.',
         ]);
     }
 
     /**
-     * Reverse the flat [{list, tag}] storage back into the agent-friendly
-     * {lists:[{id,title}], tags:[{id,title}]} shape for output. Items with
-     * 'all' on either side are treated as wildcards (omitted from the
-     * matching collection). Distinct ids only.
+     * Convert stored [{list, tag}] recipient pairs into {lists, tags} for output.
+     * 'all' is a wildcard and is omitted.
      */
     private static function recipientsForOutput($settings, $key)
     {
@@ -323,12 +293,7 @@ class CampaignTools
     }
 
     /**
-     * Revenue meta is shaped like ['orderIds' => [1,2,3], 'usd' => 12450,
-     * 'eur' => 600] — currency keys are interleaved with the
-     * 'orderIds' tracking array. Iterating naïvely and grabbing the first
-     * key produced `currency: "orderIds"` and a wrong amount (round-4
-     * review P1 #7). Skip the meta key, sum numeric values across all
-     * currency entries, and surface the order count.
+     * Campaign revenue. Meta is shaped ['orderIds' => [...], 'usd' => 12450, 'eur' => 600].
      */
     private static function campaignRevenue($campaign)
     {
@@ -349,8 +314,7 @@ class CampaignTools
             $byCurrency[strtoupper((string) $key)] = (float) $value;
         }
 
-        // Pick a primary currency for the headline number (first one set
-        // wins; multi-currency installs surface the rest in by_currency).
+        // First currency is the headline; the rest stay in by_currency.
         $primaryCurrency = '';
         $primaryTotal    = 0.0;
         if ($byCurrency) {
@@ -367,16 +331,8 @@ class CampaignTools
     }
 
     /**
-     * A/B subjects live in fc_meta keyed by object_id (NOT campaign_id —
-     * that column doesn't exist on fc_meta). The Subject model's global
-     * scope handles the object_type filter.
-     *
-     * Storage shape (per Campaign::syncSubjects): `key` is a stable
-     * identifier, `value` is the subject string itself. Operator-test
-     * report 2026-05-07 #7 — the read path previously assumed `value`
-     * was a serialized {email_subject, weight} array (which it isn't),
-     * so the response always came back empty even after a successful
-     * upsert.
+     * A/B subjects from fc_meta, keyed by object_id. The Subject scope filters object_type.
+     * `value` is the subject string itself.
      */
     private static function campaignSubjects($campaign)
     {
@@ -393,9 +349,7 @@ class CampaignTools
     }
 
     /**
-     * Link report — delegate to CampaignUrlMetric::getLinksReport, which
-     * joins fc_campaign_url_metrics → fc_url_stores correctly (the metrics
-     * table only stores url_id; the URL string lives in fc_url_stores).
+     * Link click report via CampaignUrlMetric::getLinksReport().
      */
     private static function campaignLinkReport($campaign)
     {
@@ -418,10 +372,7 @@ class CampaignTools
     }
 
     /**
-     * Find the first available title shaped like "Title (2)", "Title (3)", …
-     * given a base title that already exists. Mirrors what CampaignController
-     * ::ensureUniqueDefaultTitle does for the "Untitled" placeholder, but
-     * for any agent-supplied title.
+     * First free title of the form "Title (2)", "Title (3)" for a taken base title.
      */
     private static function nextAvailableTitle($baseTitle)
     {
@@ -433,18 +384,11 @@ class CampaignTools
             }
             $count++;
         }
-        // Astronomical fallback — append a timestamp to guarantee uniqueness.
         return $baseTitle . ' (' . time() . ')';
     }
 
     /**
      * Estimate recipients for a campaign using its stored segment settings.
-     *
-     * Routes through the same `Campaign::getSubscriberIdsCountBySegmentSettings`
-     * helper as `upsert-campaign.estimated_recipients` and the underlying
-     * estimator behind `estimate-dynamic-segment` (via ContactsQuery's filter
-     * translation) — so all three callers converge on the same number for the
-     * same filter (review bug #4).
      */
     private static function campaignRecipientsEstimate($campaign)
     {
@@ -479,35 +423,33 @@ class CampaignTools
         if (!$isNew) {
             $campaign = Campaign::find($campaignId);
             if (!$campaign) {
-                return MCPHelper::error('not_found', __('Campaign not found', 'fluent-crm'), ['campaign_id' => $campaignId]);
+                return MCPHelper::error('not_found', 'Campaign not found', ['campaign_id' => $campaignId]);
             }
-            $editableStatuses = ['draft', 'scheduled', 'pending-scheduled'];
+            // Drafts only, as in the Web UI. A scheduled campaign may already be sending, and its
+            // queued emails carry the subject and recipients from when the queue was built.
+            $editableStatuses = ['draft'];
             if (!in_array($campaign->status, $editableStatuses, true)) {
-                return MCPHelper::error('not_supported', __('Cannot edit campaign in current status', 'fluent-crm'), [
+                $isScheduled = in_array($campaign->status, ['scheduled', 'pending-scheduled'], true);
+                return MCPHelper::error('not_supported', $isScheduled
+                    ? 'This campaign is scheduled. Unschedule it first (change-campaign-status action=unschedule), edit it, then schedule it again.'
+                    : 'Only draft campaigns can be edited.', [
                     'status'           => $campaign->status,
                     'allowed_statuses' => $editableStatuses,
                 ]);
             }
         }
 
-        // Title is required for create.
         $title = isset($params['title']) ? sanitize_text_field((string) $params['title']) : '';
         if ($isNew && $title === '') {
-            return MCPHelper::error('invalid_param', __('title is required when creating a campaign', 'fluent-crm'));
+            return MCPHelper::error('invalid_param', 'title is required when creating a campaign');
         }
 
-        // Pre-flight validation. Must run before Campaign::create() so a
-        // bad recipients shape / design_template / unsupported keys never
-        // leaves an orphaned draft row behind (operator-test report
-        // 2026-05-07 #2).
+        // Validation runs before Campaign::create() so a bad payload leaves no orphan draft.
         $validation = self::validateUpsertInput($params);
         if (is_wp_error($validation)) {
             return $validation;
         }
 
-        // TRC-006: validate + sanitize the settings closed shapes BEFORE the
-        // draft is created, then merge the sanitized value (not raw params)
-        // below. A late settings failure must not leave an orphan draft.
         $sanitizedSettings = MCPHelper::sanitizeSettingsShape($params['settings'] ?? null);
         if (is_wp_error($sanitizedSettings)) {
             return $sanitizedSettings;
@@ -516,24 +458,19 @@ class CampaignTools
 
         $titleConflictWarning = null;
         if ($isNew) {
-            // Title uniqueness: by default we auto-suffix on conflict so
-            // an agent retrying after a transient error doesn't get stuck.
-            // Round 2 #10: when we suffix, surface a warning so the agent
-            // can tell the user "I created a copy named X". Strict mode
-            // (if_exists='error') keeps the hard-error behavior.
+            // A title conflict auto-suffixes with a warning, or errors when if_exists='error'.
             $ifExists = isset($params['if_exists']) ? sanitize_key((string) $params['if_exists']) : 'auto_suffix';
             $originalTitle = $title;
             if ($title !== '' && Campaign::where('title', $title)->exists()) {
                 if ($ifExists === 'error') {
-                    return MCPHelper::error('invalid_param', __('A campaign with that title already exists', 'fluent-crm'), [
+                    return MCPHelper::error('invalid_param', 'A campaign with that title already exists', [
                         'title' => $title,
                     ]);
                 }
                 $existingId = (int) Campaign::where('title', $title)->value('id');
                 $title = self::nextAvailableTitle($title);
                 $titleConflictWarning = sprintf(
-                    /* translators: 1: requested title, 2: existing campaign id, 3: actual title used */
-                    __('A campaign with title "%1$s" already exists (id %2$d). Created this one as "%3$s" instead. Pass if_exists="error" to make conflicts a hard failure.', 'fluent-crm'),
+                    'A campaign with title "%1$s" already exists (id %2$d). Created this one as "%3$s" instead. Pass if_exists="error" to make conflicts a hard failure.',
                     $originalTitle,
                     $existingId,
                     $title
@@ -542,17 +479,12 @@ class CampaignTools
             $campaign = Campaign::create(['title' => $title]);
             do_action('fluent_crm/campaign_created', $campaign);
 
-            // If we auto-suffixed, sync the new title back into $params so
-            // the passthru loop below doesn't overwrite the suffix with the
-            // original (review B4 round 3). Without this, the warning was
-            // lying — it said "Created as X (2)" but the saved title was
-            // still "X" because passthru clobbered it.
+            // Keep the suffixed title so the passthru below does not overwrite it.
             if ($titleConflictWarning) {
                 $params['title'] = $title;
             }
         }
 
-        // Build the update payload.
         $updateData = [];
         $passthru = ['title', 'email_subject', 'email_pre_header', 'email_body', 'design_template'];
         foreach ($passthru as $field) {
@@ -561,15 +493,10 @@ class CampaignTools
             }
         }
 
-        // design_template was already validated by validateUpsertInput()
-        // above; sanitize_key here is just to normalize for storage.
         if (isset($updateData['design_template']) && $updateData['design_template'] !== '') {
             $updateData['design_template'] = sanitize_key((string) $updateData['design_template']);
         }
 
-        // Shared allowlist with send-email-to-contact — unknown utm keys were
-        // already rejected in validateUpsertInput(); this no longer loops
-        // arbitrary keys into utm_<anything> columns (TRC-006 gate 4).
         if (!empty($params['utm']) && is_array($params['utm'])) {
             $utm = $params['utm'];
             if (array_key_exists('status', $utm)) {
@@ -585,7 +512,6 @@ class CampaignTools
             }
         }
 
-        // Settings — merge into existing.
         $settings = $campaign->settings ?: [];
         if (is_string($settings)) {
             $settings = (array) maybe_unserialize($settings);
@@ -595,23 +521,30 @@ class CampaignTools
             $settings = array_replace_recursive((array) $settings, $params['settings']);
         }
 
-        // Recipients — universal filter shape lands in `settings.subscribers`.
-        // Shape was already validated by validateUpsertInput(). Campaigns
-        // can ONLY persist tags + lists, so anything else would silently
-        // disappear (round-4 review P0 #1 — 3.5x audience inflation).
-        if (!empty($params['recipients']) && is_array($params['recipients'])) {
+        // Tag and list recipients belong to the "Lists & Tags" audience mode, as in the Web UI's
+        // Recipients step; the send path reads sending_filter first, so it is set with them.
+        $hasRecipients = !empty($params['recipients']) && is_array($params['recipients']);
+        $hasExclusions = !empty($params['exclude_recipients']) && is_array($params['exclude_recipients']);
+        $audienceType = $settings['sending_filter'] ?? 'list_tag';
+        if ($hasExclusions && !$hasRecipients && $audienceType !== 'list_tag') {
+            return MCPHelper::error('invalid_param', sprintf(
+                "This campaign's audience is '%s', which has no exclusion lists. Send recipients together with exclude_recipients to switch it to tags and lists, or change the audience in the FluentCRM admin.",
+                $audienceType
+            ), [
+                'audience_type' => $audienceType,
+                'use_instead'   => ['recipients', 'exclude_recipients'],
+            ]);
+        }
+
+        if ($hasRecipients) {
+            $settings['sending_filter'] = 'list_tag';
             $settings['subscribers'] = self::filterToCampaignSegment($params['recipients']);
         }
-        if (!empty($params['exclude_recipients']) && is_array($params['exclude_recipients'])) {
+        if ($hasExclusions) {
             $settings['excludedSubscribers'] = self::filterToCampaignSegment($params['exclude_recipients']);
         }
 
-        // If the agent passed a top-level design_template, propagate it into
-        // settings.template_config so the two stay in sync. Only fall the
-        // other direction (template_config -> top-level) when the agent did
-        // NOT specify design_template — otherwise the boot's default
-        // template_config (set to 'simple' on this install) would clobber
-        // the agent's choice (round 2 #29).
+        // Keep design_template and template_config in sync; an explicit design_template wins.
         if (isset($updateData['design_template']) && $updateData['design_template'] !== '') {
             if (!isset($settings['template_config']) || !is_array($settings['template_config'])) {
                 $settings['template_config'] = [];
@@ -626,10 +559,6 @@ class CampaignTools
 
         $campaign->fill($updateData)->save();
 
-        // Subjects (A/B): syncSubjects requires {key, value}; the agent
-        // can pass {value} alone (key auto-generated). Items missing a
-        // value are dropped by syncSubjects, so prepare a clean payload
-        // here. Operator-test report 2026-05-07 #7.
         if (!empty($params['subjects']) && is_array($params['subjects']) && method_exists($campaign, 'syncSubjects')) {
             $prepared = [];
             foreach (array_values($params['subjects']) as $i => $s) {
@@ -637,7 +566,8 @@ class CampaignTools
                     continue;
                 }
                 $value = sanitize_text_field((string) $s['value']);
-                $key   = !empty($s['key']) ? sanitize_text_field((string) $s['key']) : substr(md5($value . '|' . $i), 0, 16);
+                // `key` is the A/B weight Campaign::getSubject() picks by, so it defaults to 1.
+                $key   = isset($s['key']) && is_numeric($s['key']) ? (string) max(0, (int) $s['key']) : '1';
                 $item  = ['key' => $key, 'value' => $value];
                 if (!empty($s['id'])) {
                     $item['id'] = (int) $s['id'];
@@ -655,19 +585,14 @@ class CampaignTools
 
         do_action('fluent_crm/campaign_data_updated', $campaign, $params);
 
-        // Estimate recipients if a segment was provided so the agent sees the
-        // count in the same call.
         $estimated = null;
         $warnings = [];
         if (!empty($settings['subscribers']) || !empty($settings['excludedSubscribers'])) {
             $estimated = self::estimateRecipientsFromSettings($settings);
         }
 
-        if (empty($settings['excludedSubscribers'])) {
-            $warnings[] = __('No exclude_recipients set — campaign may include unsubscribed segments', 'fluent-crm');
-        }
         if (empty($params['email_pre_header']) && empty($campaign->email_pre_header)) {
-            $warnings[] = __('email_pre_header not set — better deliverability with a preheader', 'fluent-crm');
+            $warnings[] = 'email_pre_header not set: a preheader improves deliverability';
         }
         if ($titleConflictWarning) {
             $warnings[] = $titleConflictWarning;
@@ -685,13 +610,7 @@ class CampaignTools
     }
 
     /**
-     * Pre-flight validation for upsert-campaign — must run BEFORE any
-     * Campaign row is created so a bad payload never leaves an orphan
-     * draft (operator-test report 2026-05-07 #2). Centralizes:
-     *
-     *   - design_template enum (free includes only, no visual_builder)
-     *   - recipients shape (lists/tags/sending_filter only)
-     *   - exclude_recipients shape (same constraint)
+     * Validate upsert-campaign input before any Campaign row is created.
      *
      * @return true|\WP_Error
      */
@@ -701,16 +620,14 @@ class CampaignTools
             $designTemplate = sanitize_key((string) $params['design_template']);
             $allowed = array_keys(\FluentCrm\App\Modules\MCP\Tools\ContextTools::allowedDesignTemplates());
             if (!in_array($designTemplate, $allowed, true)) {
-                return MCPHelper::error('invalid_param', __('design_template not allowed via MCP', 'fluent-crm'), [
+                return MCPHelper::error('invalid_param', 'design_template not allowed via MCP', [
                     'design_template' => $designTemplate,
                     'allowed'         => $allowed,
                 ]);
             }
         }
 
-        // A present-but-non-object recipients/exclude would slip past the
-        // is_array guards below and be silently ignored — hard-error instead
-        // (direct REST callers bypass the adapter type check).
+        // A non-object recipients value would otherwise be silently ignored.
         foreach (['recipients', 'exclude_recipients'] as $rk) {
             if (array_key_exists($rk, $params) && $params[$rk] !== null && !is_array($params[$rk])) {
                 return MCPHelper::invalidTypeError($rk, 'an object');
@@ -731,23 +648,13 @@ class CampaignTools
             }
         }
 
-        // The `settings` passthrough is deliberately extensible and is merged
-        // with array_replace_recursive, so audience-targeting keys smuggled
-        // through it would bypass EVERY recipient check above — the rejection
-        // of unsupported `recipients` keys, and filterToCampaignSegment()'s
-        // id-resolution. Verified: settings={sending_filter:'dynamic_segment',
-        // dynamic_segment:{id:99}} persisted verbatim and flipped the campaign's
-        // targeting mode to a segment MCP never validated; settings.subscribers
-        // writes the recipient list raw when no `recipients` param is present.
-        // Same blast radius as the round-4 P0 audience-inflation bug, so these
-        // keys are refused wherever they appear.
+        // Audience-targeting keys in settings would bypass the recipient checks above.
         if (!empty($params['settings']) && is_array($params['settings'])) {
             $targeting = ['subscribers', 'excludedSubscribers', 'sending_filter', 'dynamic_segment', 'advanced_filters'];
             $smuggled  = array_values(array_intersect(array_keys($params['settings']), $targeting));
             if ($smuggled) {
                 return MCPHelper::error('invalid_param', sprintf(
-                    /* translators: %s: comma-separated rejected setting keys */
-                    __('settings may not carry audience-targeting keys: %s. Recipients are set through the `recipients` / `exclude_recipients` parameters (tags + lists only) so they can be validated; writing them through settings would skip that entirely. To target a status/engagement/contact-type segment, apply a temporary tag via apply-segments-to-contacts (dry_run first), use that tag in recipients, then remove it after the send.', 'fluent-crm'),
+                    'settings may not carry audience-targeting keys: %s. Recipients are set through the `recipients` / `exclude_recipients` parameters (tags + lists only) so they can be validated; writing them through settings would skip that entirely. To target a status/engagement/contact-type segment, apply a temporary tag via apply-tags-lists-to-contacts (dry_run first), use that tag in recipients, then remove it after the send.',
                     implode(', ', $smuggled)
                 ), [
                     'rejected_setting_keys' => $smuggled,
@@ -756,9 +663,6 @@ class CampaignTools
             }
         }
 
-        // TRC-006: reject unknown/mistyped utm keys before any write. settings
-        // are validated + sanitized in upsertCampaign so the sanitized value is
-        // what gets merged (not the raw params).
         $utmError = MCPHelper::validateUtm($params);
         if (is_wp_error($utmError)) {
             return $utmError;
@@ -768,21 +672,7 @@ class CampaignTools
     }
 
     /**
-     * Campaigns can target lists + tags only. The `recipients` object on
-     * upsert-campaign accepts the universal filter shape but anything
-     * other than {tags, lists, sending_filter} is silently dropped on
-     * persistence — and previously that drop didn't even produce a
-     * warning. Hard-error now so the agent can take the documented
-     * workaround (apply a temporary tag, target by tag, remove after
-     * send).
-     *
-     * Round-4 review P0 #1 — single most damaging bug, 3.5x audience
-     * inflation in one test.
-     *
-     * `sending_filter` is NOT in the supported set either: filterToCampaignSegment()
-     * only reads tags + lists, so accepting it would have been the same silent
-     * drop this method exists to prevent. Campaign targeting through MCP is
-     * list/tag only by design.
+     * Reject recipient keys other than lists and tags, which campaigns would silently drop.
      *
      * @param array  $recipients
      * @param string $paramName Either 'recipients' or 'exclude_recipients'
@@ -794,39 +684,22 @@ class CampaignTools
         $unsupported = array_values(array_diff(array_keys($recipients), $supported));
         if (!empty($unsupported)) {
             return MCPHelper::error('invalid_param', sprintf(
-                /* translators: 1: parameter name, 2: comma-separated unsupported keys */
-                __('%1$s only persists lists + tags on a campaign — these keys would be silently dropped: %2$s. To target a status/engagement/contact-type segment, apply a temporary tag via apply-segments-to-contacts (use dry_run first), use that tag in recipients, then remove it after the send completes.', 'fluent-crm'),
+                '%1$s only persists lists + tags on a campaign; these keys would be silently dropped: %2$s. To target a status/engagement/contact-type segment, apply a temporary tag via apply-tags-lists-to-contacts (use dry_run first), use that tag in recipients, then remove it after the send completes.',
                 $paramName,
                 implode(', ', $unsupported)
             ), [
                 'unsupported_keys' => $unsupported,
                 'supported_keys'   => $supported,
-                // Step 4 is deliberately gated on the SEND finishing, not on
-                // scheduling. change-campaign-status(action=schedule) only
-                // records the intent — recipients are materialized later by the
-                // cron processor, so detaching the tag right after scheduling
-                // shrinks the audience before it has been computed and the
-                // campaign goes out to a fraction of the intended list.
-                'workaround'       => '1) apply-segments-to-contacts(filter={...}, add_tags=["temp-X"], dry_run=true); 2) re-run without dry_run; 3) upsert-campaign(recipients={tags:["temp-X"]}); 4) change-campaign-status(action=schedule), then WAIT until get-campaign reports status=archived (recipients are materialized by the cron processor after scheduling — removing the tag before that shrinks the audience mid-send); 5) apply-segments-to-contacts(filter={tags:["temp-X"]}, remove_tags=["temp-X"]); 6) manage-tag(action=delete, tag_id=X)',
+                // Recipients are materialized by cron after scheduling, so the tag stays until the send finishes.
+                'workaround'       => '1) apply-tags-lists-to-contacts(filter={...}, add_tags=["temp-X"], dry_run=true); 2) re-run without dry_run; 3) upsert-campaign(recipients={tags:["temp-X"]}); 4) change-campaign-status(action=schedule), then WAIT until get-campaign reports status=archived (recipients are materialized by the cron processor after scheduling — removing the tag before that shrinks the audience mid-send); 5) apply-tags-lists-to-contacts(filter={tags:["temp-X"]}, remove_tags=["temp-X"]); 6) manage-tag(action=delete, tag_id=X)',
             ]);
         }
         return true;
     }
 
     /**
-     * Translate the universal filter shape to the flat
-     * [{list, tag}] array that Campaign settings.subscribers expects
-     * (see Campaign::getSubscribeIdsByListModel — its loop reads
-     * `$item['list']` and `$item['tag']` directly).
-     *
-     * Semantics match ContactsQuery:
-     *   - tags only        → [{list:'all', tag:N}, ...]            (tag IN [...])
-     *   - lists only       → [{list:N, tag:'all'}, ...]            (list IN [...])
-     *   - lists AND tags   → cross product so every (list, tag) pair lands
-     *                        in queryGroups, ANDed within a pair, ORed across
-     *
-     * Storage shape: array of {list, tag} pairs at the top level
-     * (NOT a nested {lists:[], tags:[]} object — that was the round-1 bug).
+     * Translate the filter shape into the flat [{list, tag}] pairs settings.subscribers stores.
+     * Lists and tags together become a cross product: AND within a pair, OR across pairs.
      */
     private static function filterToCampaignSegment($filter)
     {
@@ -889,22 +762,20 @@ class CampaignTools
         $action = sanitize_key((string) ($params['action'] ?? ''));
 
         if (!$campaignId) {
-            return MCPHelper::error('invalid_param', __('campaign_id is required', 'fluent-crm'));
+            return MCPHelper::error('invalid_param', 'campaign_id is required');
         }
         if (!in_array($action, ['schedule', 'unschedule', 'pause', 'resume', 'duplicate', 'delete'], true)) {
-            return MCPHelper::error('invalid_param', __('Invalid action', 'fluent-crm'));
+            return MCPHelper::error('invalid_param', 'Invalid action');
         }
 
-        // Bypass the type scope so one-off sends are reachable. Allowed
-        // actions on one-offs are restricted below — operator-test
-        // report 2026-05-07 #4.
+        // Bypass the type scope so one-off sends are reachable; they only allow delete.
         $campaign = Campaign::withoutGlobalScope('type')->find($campaignId);
         if (!$campaign) {
-            return MCPHelper::error('not_found', __('Campaign not found', 'fluent-crm'), ['campaign_id' => $campaignId]);
+            return MCPHelper::error('not_found', 'Campaign not found', ['campaign_id' => $campaignId]);
         }
 
         if ($campaign->type === 'custom_email_campaign' && $action !== 'delete') {
-            return MCPHelper::error('not_supported', __('One-off email sends only support action=delete. They do not have a marketing-campaign lifecycle (schedule/pause/resume/duplicate).', 'fluent-crm'), [
+            return MCPHelper::error('not_supported', 'One-off email sends only support action=delete. They do not have a marketing-campaign lifecycle (schedule/pause/resume/duplicate).', [
                 'campaign_id'      => $campaignId,
                 'campaign_type'    => 'one_off',
                 'allowed_actions'  => ['delete'],
@@ -928,13 +799,13 @@ class CampaignTools
                 return self::actionDelete($campaign);
         }
 
-        return MCPHelper::error('invalid_param', __('Unhandled action', 'fluent-crm'));
+        return MCPHelper::error('invalid_param', 'Unhandled action');
     }
 
     private static function actionSchedule($campaign, $params, $previousStatus)
     {
         if ($campaign->status !== 'draft') {
-            return MCPHelper::error('not_supported', __('Only draft campaigns can be scheduled', 'fluent-crm'), [
+            return MCPHelper::error('not_supported', 'Only draft campaigns can be scheduled', [
                 'status' => $campaign->status,
             ]);
         }
@@ -946,9 +817,8 @@ class CampaignTools
         } elseif ($sendingType === 'range_schedule') {
             $range = $params['schedule_range'] ?? [];
             if (!is_array($range) || count($range) !== 2) {
-                return MCPHelper::error('invalid_param', __('schedule_range must be [start, end]', 'fluent-crm'));
+                return MCPHelper::error('invalid_param', 'schedule_range must be [start, end]');
             }
-            // Each end gets the same tz-aware parse as a single scheduled_at.
             $rangeStart = MCPHelper::validateScheduledAt(sanitize_text_field($range[0]));
             if (is_wp_error($rangeStart)) {
                 return $rangeStart;
@@ -958,7 +828,7 @@ class CampaignTools
                 return $rangeEnd;
             }
             if ($rangeEnd->getTimestamp() <= $rangeStart->getTimestamp()) {
-                return MCPHelper::error('invalid_param', __('schedule_range end must be after the start time', 'fluent-crm'), [
+                return MCPHelper::error('invalid_param', 'schedule_range end must be after the start time', [
                     'start' => $rangeStart->format('Y-m-d H:i:s'),
                     'end'   => $rangeEnd->format('Y-m-d H:i:s'),
                 ]);
@@ -970,19 +840,17 @@ class CampaignTools
         } else {
             $rawInput = sanitize_text_field((string) ($params['scheduled_at'] ?? ''));
             if (!$rawInput) {
-                return MCPHelper::error('invalid_param', __('scheduled_at is required for sending_type=schedule', 'fluent-crm'));
+                return MCPHelper::error('invalid_param', 'scheduled_at is required for sending_type=schedule');
             }
             $dt = MCPHelper::validateScheduledAt($rawInput);
             if (is_wp_error($dt)) {
                 return $dt;
             }
-            // Store as a site-tz mysql string so MySQL has no ambiguity and
-            // the read path doesn't have to guess which tz the row is in
-            // (operator-test report 2026-05-07 #3).
+            // Stored as a site-local datetime string.
             $scheduleAt = $dt->format('Y-m-d H:i:s');
         }
 
-        // Auto-commit recipients if not yet set so we can read recipients_count.
+        // Compute recipients_count if not yet set.
         if (!$campaign->recipients_count) {
             $settings = is_array($campaign->settings) ? $campaign->settings : (array) maybe_unserialize($campaign->settings);
             if (!empty($settings['subscribers']) || !empty($settings['excludedSubscribers'])) {
@@ -993,10 +861,10 @@ class CampaignTools
         }
 
         if (!$campaign->recipients_count) {
-            return MCPHelper::error('validation_failed', __('No recipients found for this campaign', 'fluent-crm'));
+            return MCPHelper::error('validation_failed', 'No recipients found for this campaign');
         }
 
-        // Now apply the same transition the controller does.
+        // Same transition the controller applies.
         $settings = is_array($campaign->settings) ? $campaign->settings : (array) maybe_unserialize($campaign->settings);
 
         if ($scheduleAt === null) {
@@ -1029,10 +897,7 @@ class CampaignTools
             ];
         }
 
-        // Only seed trackers from site defaults when the campaign hasn't
-        // explicitly set them already (review #31). The previous
-        // unconditional override clobbered an agent's
-        // settings.click_tracker='yes' to the site default 'anonymous'.
+        // Seed trackers from site defaults only when the campaign has not set them.
         if (!isset($update['settings']['click_tracker']) || $update['settings']['click_tracker'] === '') {
             $update['settings']['click_tracker'] = fluentcrmTrackClicking();
         }
@@ -1043,13 +908,14 @@ class CampaignTools
 
         $updated = Campaign::where('id', $campaign->id)->where('status', 'draft')->update($update);
         if (!$updated) {
-            return MCPHelper::error('failed', __('Could not transition campaign — status changed concurrently', 'fluent-crm'));
+            return MCPHelper::error('failed', 'Could not transition campaign: status changed concurrently');
         }
 
         // Wipe pre-processed emails only after the draft-status transition wins.
         \FluentCrm\App\Models\CampaignEmail::where('campaign_id', $campaign->id)->delete();
         fluentcrm_update_campaign_meta($campaign->id, '_recipient_processed', 0);
         fluentcrm_update_campaign_meta($campaign->id, '_last_recipient_id', 0);
+        \FluentCrm\App\Services\CampaignProcessor::clearQueueFailures($campaign->id);
 
         $campaign = Campaign::find($campaign->id);
         fluentcrm_update_campaign_meta($campaign->id, '_campaign_sent_by', get_current_user_id());
@@ -1074,19 +940,43 @@ class CampaignTools
     private static function actionUnschedule($campaign, $previousStatus)
     {
         if (!in_array($campaign->status, ['scheduled', 'pending-scheduled', 'processing'], true)) {
-            return MCPHelper::error('not_supported', __('Campaign is not in a schedulable state', 'fluent-crm'), [
+            return MCPHelper::error('not_supported', 'Campaign is not in a schedulable state', [
                 'status' => $campaign->status,
             ]);
         }
 
+        // As REST unSchedule: a campaign already processing past its send time is being queued now.
+        if ($campaign->status === 'processing' && strtotime($campaign->scheduled_at) < current_time('timestamp')) {
+            return MCPHelper::error('not_supported', 'This campaign has started processing and can no longer be unscheduled. Pause it once it is sending.', [
+                'status'       => $campaign->status,
+                'scheduled_at' => MCPHelper::toIso8601($campaign->scheduled_at),
+            ]);
+        }
+
+        // As REST unSchedule: a campaign that has started sending is paused instead, keeping what
+        // was sent; unscheduling it would let the next schedule mail everyone again.
+        if ($campaign->hasStartedSending()) {
+            $campaign->pauseSending();
+
+            return [
+                'ok'              => true,
+                'action'          => 'unschedule',
+                'paused_instead'  => true,
+                'note'            => 'The campaign had already started sending, so it was paused instead of unscheduled. Emails already sent are kept; change-campaign-status action=resume sends the rest.',
+                'campaign'        => self::getCampaign(['campaign_id' => (int) $campaign->id]),
+                'previous_status' => $previousStatus,
+                'current_status'  => 'paused',
+            ];
+        }
+
         $campaign->status = 'draft';
-        // Clear the stale schedule timestamp so UIs (and get-campaign) don't
-        // misreport "scheduled for ..." after the campaign has been
-        // un-scheduled (review #32).
         $campaign->scheduled_at = null;
         $campaign->save();
 
-        \FluentCrm\App\Models\CampaignEmail::where('campaign_id', $campaign->id)->delete();
+        // Only unsent emails are removed; sent history is never deleted here.
+        \FluentCrm\App\Models\CampaignEmail::where('campaign_id', $campaign->id)
+            ->whereNotIn('status', \FluentCrm\App\Models\CampaignEmail::STARTED_STATUSES)
+            ->delete();
         \FluentCrm\App\Models\CampaignEmail::withoutGlobalScope('type')
             ->where('campaign_id', $campaign->id)
             ->whereIn('status', ['scheduled', 'scheduling'])
@@ -1104,7 +994,7 @@ class CampaignTools
     private static function actionPause($campaign, $previousStatus)
     {
         if ($campaign->status !== 'working') {
-            return MCPHelper::error('not_supported', __('Only working campaigns can be paused', 'fluent-crm'), [
+            return MCPHelper::error('not_supported', 'Only working campaigns can be paused', [
                 'status' => $campaign->status,
             ]);
         }
@@ -1126,7 +1016,7 @@ class CampaignTools
     private static function actionResume($campaign, $previousStatus)
     {
         if ($campaign->status !== 'paused') {
-            return MCPHelper::error('not_supported', __('Only paused campaigns can be resumed', 'fluent-crm'), [
+            return MCPHelper::error('not_supported', 'Only paused campaigns can be resumed', [
                 'status' => $campaign->status,
             ]);
         }
@@ -1152,7 +1042,7 @@ class CampaignTools
     {
         $newTitle = isset($params['new_title']) && $params['new_title'] !== ''
             ? sanitize_text_field((string) $params['new_title'])
-            : __('[Duplicate] ', 'fluent-crm') . $campaign->title;
+            : sprintf('[Duplicate] %s', $campaign->title);
 
         $newCampaign = [
             'title'            => $newTitle,
@@ -1198,7 +1088,7 @@ class CampaignTools
     private static function actionDelete($campaign)
     {
         if (!\FluentCrm\App\Services\PermissionManager::currentUserCan('fcrm_manage_email_delete')) {
-            return MCPHelper::error('forbidden', __('Deleting campaigns requires fcrm_manage_email_delete', 'fluent-crm'));
+            return MCPHelper::error('forbidden', 'Deleting campaigns requires fcrm_manage_email_delete');
         }
 
         $campaignId = (int) $campaign->id;

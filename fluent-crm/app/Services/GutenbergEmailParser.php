@@ -47,7 +47,7 @@ class GutenbergEmailParser
             $blocks = $this->parseBlocksManually($content);
         }
 
-        $blockHtmls = $this->renderBlocks($blocks);
+        $blockHtmls = self::stripSchemeBeforeSmartcodeLinks($this->renderBlocks($blocks));
 
         $css = $this->generateInlineStyles();
 
@@ -56,6 +56,30 @@ class GutenbergEmailParser
         return $css . $blockHtmls;
     }
 
+
+    /**
+     * Turn href="https://{{...}}" back into href="{{...}}".
+     *
+     * WordPress's link popover prepends a scheme to whatever URL is chosen, so linking text or an
+     * image to a URL smartcode such as {{wp.url}} saved "https://{{wp.url}}", and the email got a
+     * dead "https://https://site" link. Buttons were already guarded in the editor; this covers
+     * every link, including emails saved before the fix.
+     *
+     * Only smartcodes that hold a full URL (their name ends in "url" or "href": {{wp.url}},
+     * {{crm.unsubscribe_url}}, ##web_preview_url##, {{ld.course_href}}): a link built from a
+     * field holding a host, such as https://{{contact.custom.domain}}, keeps its scheme.
+     *
+     * @param string $html
+     * @return string
+     */
+    public static function stripSchemeBeforeSmartcodeLinks($html)
+    {
+        return (string)preg_replace(
+            '/(href=["\'])https?:\/\/((?:\{\{[^{}|\r\n]*(?:url|href)(?:\|[^{}\r\n]*)?}}|##[^#|\r\n]*(?:url|href)(?:\|[^#\r\n]*)?##))(["\'])/i',
+            '$1$2$3',
+            (string)$html
+        );
+    }
 
     private function collectInlineStyles($id, $attrs, $blockName = '')
     {
@@ -541,7 +565,6 @@ class GutenbergEmailParser
             $innerHTML = implode('', array_filter($block['innerContent'], 'is_string'));
         }
 
-        // Handle different block types
         switch ($blockName) {
             case 'core/block':
                 return $this->renderSyncedPattern($attrs, $isNested);
@@ -894,11 +917,8 @@ class GutenbergEmailParser
     }
 
     /**
-     * Build a list item's inner HTML, re-inserting nested list blocks.
-     *
-     * The block parser strips nested core/list blocks out of a list item's
-     * innerHTML, leaving null placeholders in innerContent. Without this
-     * reconstruction, every nested list level is lost from the sent email.
+     * Build a list item's inner HTML, re-inserting nested lists at the null
+     * placeholders the block parser leaves in innerContent.
      *
      * @param array $block Parsed core/list-item block.
      * @return string
@@ -933,8 +953,7 @@ class GutenbergEmailParser
     }
 
     /**
-     * Render a nested list as a bare <ul>/<ol>, without the table wrapper
-     * used for root-level lists (a table is not valid inside an <li>).
+     * Render a nested list as a bare <ul>/<ol> (a table is not valid inside an <li>).
      *
      * @param array $listBlock Parsed core/list block nested inside a list item.
      * @return string
@@ -947,8 +966,7 @@ class GutenbergEmailParser
             return '';
         }
 
-        // Nested lists never pass through renderBlock(), so the shared visibility
-        // checks have to be applied here as well as on root-level lists.
+        // Nested lists bypass renderBlock(), so visibility is checked here.
         if ($this->shouldOmitBlockFromEmail($attrs)) {
             return '';
         }
@@ -1353,12 +1371,8 @@ class GutenbergEmailParser
     }
 
     /**
-     * Escape button URLs without stripping smartcodes before the parser phase.
-     *
-     * Campaign smartcodes are parsed after Gutenberg blocks are rendered, so running
-     * esc_url() on a smartcode URL here removes the curly braces and makes the later
-     * parser miss it. Keep only smartcode-bearing safe-protocol URLs intact with
-     * esc_attr(); static URLs and unsafe protocols still go through esc_url().
+     * Escape button URLs without stripping smartcodes, which are parsed after block rendering.
+     * Safe-protocol URLs with smartcodes use esc_attr(); everything else goes through esc_url().
      */
     private function escapeButtonUrl($url)
     {
@@ -1520,7 +1534,23 @@ class GutenbergEmailParser
             }
         }
 
-        $buttonAttrs = Arr::get($this->getFirstButtonBlock($block), 'attrs', []);
+        $buttonBlock = $this->getFirstButtonBlock($block);
+        $buttonAttrs = Arr::get($buttonBlock, 'attrs', []);
+
+        // core/button keeps its text and link in its HTML, not in its comment attributes.
+        $buttonInnerHTML = Arr::get($buttonBlock, 'innerHTML', '');
+        if (!empty($buttonInnerHTML)) {
+            if (preg_match('/<a[^>]*href=["\']([^"\']+)["\'][^>]*>/i', $buttonInnerHTML, $urlMatch)) {
+                $buttonUrl = $urlMatch[1];
+            }
+            if (preg_match('/<a[^>]*>(.*?)<\/a>/is', $buttonInnerHTML, $textMatch)) {
+                $parsedText = trim(wp_strip_all_tags($textMatch[1]));
+                if ($parsedText) {
+                    $buttonText = $parsedText;
+                }
+            }
+        }
+
         $buttonElementId = uniqid('block-', false);
         $buttonAttrs['elem_id'] = $buttonElementId;
 
@@ -1631,18 +1661,20 @@ class GutenbergEmailParser
             $subscriber = apply_filters('fluent_crm/get_current_block_condition_subscriber', $subscriber);
         }
 
-        // Keep content visible in preview/test contexts when subscriber is unknown.
-        if (!$subscriber) {
+        // Keep content visible in preview/test contexts when subscriber is unknown; a public page
+        // renders for an anonymous visitor, who has no tags.
+        if (!$subscriber && !BlockParserHelper::isAnonymousViewer()) {
             return $content;
         }
 
         $tagIds = isset($attrs['tag_ids']) && is_array($attrs['tag_ids']) ? $attrs['tag_ids'] : [];
         if (!$tagIds) {
-            return '';
+            // No tags selected means no condition, the same as block visibility.
+            return $content;
         }
 
         $checkType = $this->normalizeConditionalCheckType(isset($attrs['condition_type']) ? $attrs['condition_type'] : 'show_if_tag_exist');
-        $tagMatched = method_exists($subscriber, 'hasAnyTagId') ? $subscriber->hasAnyTagId($tagIds) : false;
+        $tagMatched = $subscriber && method_exists($subscriber, 'hasAnyTagId') ? $subscriber->hasAnyTagId($tagIds) : false;
 
         if ($checkType === 'show_if_tag_exist') {
             return $tagMatched ? $content : '';
@@ -1691,18 +1723,13 @@ class GutenbergEmailParser
 
         $html = $this->renderBlocks($blocks, $nested);
 
-        // A synced pattern renders as a bare list of blocks, so the pattern's own
-        // responsive visibility has no element to live on. Give it an email-safe
-        // carrier table only when hiding is actually configured, so untouched
-        // patterns keep their existing markup. wrapInTable() applies the classes
-        // and the desktop MSO guard the same way it does for root blocks.
+        // Wrap the pattern in a carrier table only when responsive hiding is configured.
         $visibilityClasses = array_filter((array)Arr::get($attrs, 'fcrmVisibilityClasses', []));
         if (!$visibilityClasses || trim($html) === '') {
             return $html;
         }
 
-        // is_root stays false so the wrapper never repeats the root column
-        // padding already applied by the pattern's own inner blocks.
+        // is_root stays false so the root column padding is not applied twice.
         return $this->wrapInTable($html, [
             'fcrmVisibilityClasses' => $visibilityClasses,
             'is_root'               => false,
@@ -1861,7 +1888,7 @@ class GutenbergEmailParser
             $subscriber = apply_filters('fluent_crm/get_current_block_condition_subscriber', $subscriber);
         }
 
-        if (!$subscriber) {
+        if (!$subscriber && !BlockParserHelper::isAnonymousViewer()) {
             return true;
         }
 
@@ -1870,7 +1897,7 @@ class GutenbergEmailParser
             return true;
         }
 
-        $tagMatched = $subscriber->hasAnyTagId($tagIds);
+        $tagMatched = $subscriber ? $subscriber->hasAnyTagId($tagIds) : false;
 
         if ($conditionType === 'show_if_tag_exist') {
             return $tagMatched;
@@ -2089,41 +2116,28 @@ class GutenbergEmailParser
     }
 
     /**
-     * Render core/media-text as an email-safe two-column table.
-     *
-     * Image only: video media yields no media cell. The media and text sit in
-     * real side-by-side table cells so vertical-align centers the shorter column
-     * against the taller one (matching the editor). Reuses the .fc_media_* /
-     * .has_bg_image CSS in block-styles.php / common-style.php, and stacks on
-     * mobile via the .fce_stacked rules there when isStackedOnMobile is on.
+     * Render core/media-text as an email-safe two-column table. Video media yields no media cell.
      *
      * @param array  $innerBlocks Text-side child blocks.
-     * @param array  $attrs       Block attributes (mediaWidth, mediaPosition,
-     *                            verticalAlignment, isStackedOnMobile, imageFill,
-     *                            mediaLink, plus background/spacing collected on elem_id).
+     * @param array  $attrs       Block attributes.
      * @param string $innerHTML   Saved block markup containing the media <figure>.
      * @return string
      */
     private function renderMediaText($innerBlocks, $attrs, $innerHTML)
     {
-        // Extract the media <figure> from the saved markup. Image only: keep the
-        // figure only when it actually contains an <img>, so video media (or an
-        // empty media slot) yields no media cell and the text spans full width.
+        // Only an image figure produces a media cell.
         $figure = '';
         if (preg_match('/<figure[^>]*>.*?<\/figure>/s', (string)$innerHTML, $figureMatch)
             && strpos($figureMatch[0], '<img') !== false) {
             $figure = $figureMatch[0];
         }
 
-        // Render the text side from child blocks.
         $content = !empty($innerBlocks) ? $this->renderBlocks($innerBlocks, true) : '';
 
-        // Nothing renderable → emit nothing, consistent with other renderers.
         if (!$figure && !trim((string)$content)) {
             return '';
         }
 
-        // Geometry.
         $mediaWidth = (int)Arr::get($attrs, 'mediaWidth', 50);
         $mediaWidth = max(0, min(100, $mediaWidth));
         $contentWidth = 100 - $mediaWidth;
@@ -2136,33 +2150,23 @@ class GutenbergEmailParser
         $hasImageFill = (bool)Arr::get($attrs, 'imageFill');
         $imageFillClass = $hasImageFill ? 'has_bg_image' : 'no_image_fill';
 
-        // "Crop image to fill" renders the media as a background image on the
-        // figure while the <img> is hidden (opacity:0 via .has_bg_image CSS).
-        // The editor does not inline that background-image, so derive it from the
-        // <img> src (with focal point) to guarantee the image shows in email.
         if ($figure && $hasImageFill) {
             $figure = $this->applyMediaTextImageFill($figure, $attrs);
         }
 
-        // Optional media link — wrap the figure. escapeButtonUrl keeps smartcodes intact.
         if ($figure && ($mediaLink = Arr::get($attrs, 'mediaLink'))) {
             $figure = '<a href="' . $this->escapeButtonUrl($mediaLink) . '">' . $figure . '</a>';
         }
 
-        // Use real side-by-side table cells (not floated tables) so vertical-align
-        // centers the shorter column against the taller one — matching the editor.
+        // Real table cells (not floats) so vertical-align works.
         $vAlignStyle = 'vertical-align: ' . $verticalAlignment . ';';
 
-        // Media cell (only when an image figure exists).
         $mediaCell = '';
         if ($figure) {
             $mediaStyle = $vAlignStyle . ' width: ' . $mediaWidth . '%;';
             $mediaCell = '<td class="fc_media_table ' . esc_attr($imageFillClass) . '" width="' . $mediaWidth . '%" valign="' . esc_attr($verticalAlignment) . '" style="' . esc_attr($mediaStyle) . '">' . $figure . '</td>';
         }
 
-        // Text cell. Without media it spans full width. A horizontal gutter on the
-        // media-facing side mirrors the editor's column gap; no vertical padding so
-        // the text aligns with the image height instead of being pushed down.
         $textWidth = $figure ? $contentWidth : 100;
         $textStyle = $vAlignStyle . ' width: ' . $textWidth . '%;';
         if ($figure) {
@@ -2170,11 +2174,9 @@ class GutenbergEmailParser
         }
         $textCell = '<td class="fc_media_text" width="' . $textWidth . '%" valign="' . esc_attr($verticalAlignment) . '" style="' . esc_attr($textStyle) . '">' . $content . '</td>';
 
-        // mediaPosition controls source order (image-left vs image-right).
         $cells = ($figure && $mediaPosition === 'right') ? ($textCell . $mediaCell) : ($mediaCell . $textCell);
 
-        // Outer row. The block elem_id carries background-color / spacing that
-        // collectInlineStyles() already emitted as #elem_id { ... }.
+        // Background and spacing come from the #elem_id rules collectInlineStyles() emitted.
         $id = $attrs['elem_id'] ?? '';
         $rowClass = 'fce_row fc_row_media_text';
         if ($isStackedOnMobile) {
@@ -2187,11 +2189,8 @@ class GutenbergEmailParser
     }
 
     /**
-     * Inject a background-image on the media-text figure for "Crop image to fill".
-     *
-     * The .has_bg_image CSS hides the <img> (opacity:0) and shows the figure's
-     * background instead. We source the background from the <img> src and use the
-     * block focal point for background-position, merging into any existing style.
+     * Inject a background-image from the <img> src and focal point for "Crop image to fill".
+     * The .has_bg_image CSS hides the <img> itself.
      *
      * @param string $figure Media <figure> markup containing an <img>.
      * @param array  $attrs  Block attributes (focalPoint).
@@ -2214,7 +2213,6 @@ class GutenbergEmailParser
 
         $bgStyle = 'background-image: url(\'' . esc_url($src) . '\'); background-position: ' . $position . '; background-size: cover; background-repeat: no-repeat;';
 
-        // Merge into the figure's existing style attribute, or add one.
         if (preg_match('/(<figure\b[^>]*\sstyle=")([^"]*)(")/i', $figure, $styleMatch)) {
             $existing = rtrim(trim($styleMatch[2]), ';');
             $merged = $existing === '' ? $bgStyle : $existing . '; ' . $bgStyle;
@@ -2556,8 +2554,7 @@ class GutenbergEmailParser
             $existingStyle = rtrim(trim($matches[2]), ';');
             $newStyle = $existingStyle ? $existingStyle . '; ' . $style : $style;
 
-            // Use str_replace (not preg_replace) so existing style content cannot be
-            // misread as a regex backreference in the replacement string.
+            // str_replace, so style content is not read as a regex backreference.
             return str_replace($matches[0], ' style=' . $quote . $newStyle . $quote, $tag);
         }
 
@@ -2843,7 +2840,7 @@ class GutenbergEmailParser
 
             // Get theme colors using the same method as AdminMenu.php
             if (class_exists('\FluentCrm\App\Services\Helper')) {
-                $themeColors = \FluentCrm\App\Services\Helper::getThemeColorPalette();
+                $themeColors = \FluentCrm\App\Services\Helper::getEmailColorPalette();
                 if (!empty($themeColors)) {
                     foreach ($themeColors as $colorData) {
                         if (isset($colorData['slug']) && isset($colorData['color'])) {
@@ -2896,9 +2893,6 @@ class GutenbergEmailParser
             }
         }
 
-        // No match across the color map, global settings, or theme.json. Return empty so the
-        // block renders without an inline color rather than emitting a wrong hardcoded hex.
-        // (The previous fallback table used placeholder values that did not match real themes.)
         return '';
     }
 

@@ -54,21 +54,6 @@ class TemplatePolicy extends BasePolicy
         return $this->currentUserCan('fcrm_manage_email_templates');
     }
 
-    // public function getDefaultCampaignTemplate(Request $request)
-    // {
-    //     return $this->currentUserCan('fcrm_read_emails') || $this->currentUserCan('fcrm_manage_email_templates');
-    // }
-
-    // public function setDefaultCampaignTemplate(Request $request)
-    // {
-    //     return $this->currentUserCan('fcrm_manage_email_templates');
-    // }
-
-    // public function deleteDefaultCampaignTemplate(Request $request)
-    // {
-    //     return $this->currentUserCan('fcrm_manage_email_templates');
-    // }
-
     public function delete(Request $request)
     {
         return $this->templates($request) && $this->currentUserCan('fcrm_manage_email_delete');

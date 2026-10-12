@@ -39,8 +39,7 @@ class ListsController extends Controller
         $lists = $paginatedLists->items();
 
         if (!$request->get('exclude_counts')) {
-            // One grouped pivot-join query for the whole page instead of two
-            // COUNT queries per list.
+            // One grouped pivot-join query for the whole page.
             $listIds = [];
             foreach ($lists as $list) {
                 $listIds[] = $list->id;
@@ -48,8 +47,7 @@ class ListsController extends Controller
 
             $counts = [];
             if ($listIds) {
-                // Raw expressions bypass the query grammar, so the subscribers
-                // table has to be prefixed by hand here.
+                // Raw expressions bypass the grammar, so the table is prefixed by hand.
                 global $wpdb;
                 $subscribersTable = $wpdb->prefix . 'fc_subscribers';
 
@@ -156,7 +154,7 @@ class ListsController extends Controller
         return $this->send([
             'lists'   => $list,
             'item' => $list,
-            'message' => __('Successfully saved the list.', 'fluent-crm')
+            'message' => __('The list has been saved.', 'fluent-crm')
         ]);
     }
 
@@ -174,8 +172,9 @@ class ListsController extends Controller
             'title' => 'required|string|max:192'
         ]);
 
-        if(!empty($allData['slug'])) {
-            $allData['slug'] = Helper::slugify($allData['title']);
+        // Keep the sent slug, cleaned the same way create() does; an empty one keeps the stored slug below.
+        if (!empty($allData['slug'])) {
+            $allData['slug'] = sanitize_title($allData['slug'], 'display');
         }
 
         if ($id == 0 && $request->get('update_by') == 'slug' && !empty($allData['slug'])) {
@@ -218,7 +217,7 @@ class ListsController extends Controller
 
         return $this->send([
             'lists'   => $list,
-            'message' => __('Successfully saved the list.', 'fluent-crm'),
+            'message' => __('The list has been saved.', 'fluent-crm'),
         ]);
     }
 
@@ -262,7 +261,7 @@ class ListsController extends Controller
         }
 
         return $this->sendSuccess([
-            'message' => __('Provided Lists have been successfully created', 'fluent-crm'),
+            'message' => __('The lists have been created.', 'fluent-crm'),
             'ids'     => $createdIds
         ]);
     }
@@ -281,7 +280,7 @@ class ListsController extends Controller
         do_action('fluentcrm_list_deleted', $id);
 
         return $this->send([
-            'message' => __('Successfully removed the list.', 'fluent-crm')
+            'message' => __('The list has been deleted.', 'fluent-crm')
         ]);
     }
 
@@ -298,7 +297,7 @@ class ListsController extends Controller
         }
 
         return $this->sendSuccess([
-            'message' => __('Selected Lists have been removed permanently', 'fluent-crm'),
+            'message' => __('Selected lists have been permanently removed', 'fluent-crm'),
         ]);
 
     }

@@ -35,7 +35,7 @@ class MigratorController extends Controller
 
         if (!$driverClassName) {
             return $this->sendError([
-                'message' => __('Sorry no driver found for the selected CRM', 'fluent-crm')
+                'message' => __('Sorry, no driver found for the selected CRM', 'fluent-crm')
             ]);
         }
 
@@ -47,14 +47,13 @@ class MigratorController extends Controller
 
         if (is_wp_error($result)) {
             return $this->sendError([
-                // Transport diagnostics can reveal internal hosts to delegated
-                // CRM settings managers. Keep this public API response generic.
+                // Keep the error generic; transport diagnostics can reveal internal hosts.
                 'message' => __('Unable to verify the CRM credentials. Please check the URL and API key.', 'fluent-crm'),
             ], 422);
         }
 
         return [
-            'message' => __('Your provided API key is valid', 'fluent-crm')
+            'message' => __('The API key is valid', 'fluent-crm')
         ];
     }
 
@@ -66,7 +65,7 @@ class MigratorController extends Controller
 
         if (!$driverClassName) {
             return $this->sendError([
-                'message' => __('Sorry no driver found for the selected CRM', 'fluent-crm')
+                'message' => __('Sorry, no driver found for the selected CRM', 'fluent-crm')
             ]);
         }
 
@@ -92,7 +91,7 @@ class MigratorController extends Controller
 
         if (!$driverClassName) {
             return $this->sendError([
-                'message' => __('Sorry no driver found for the selected CRM', 'fluent-crm')
+                'message' => __('Sorry, no driver found for the selected CRM', 'fluent-crm')
             ]);
         }
 
@@ -124,7 +123,7 @@ class MigratorController extends Controller
 
         if (!$driverClassName) {
             return $this->sendError([
-                'message' => __('Sorry no driver found for the selected CRM', 'fluent-crm')
+                'message' => __('Sorry, no driver found for the selected CRM', 'fluent-crm')
             ]);
         }
 

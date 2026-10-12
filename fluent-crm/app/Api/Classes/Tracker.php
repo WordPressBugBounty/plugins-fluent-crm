@@ -43,21 +43,19 @@ final class Tracker
             return new \WP_Error('not_enabled', 'Event Tracker is not enabled');
         }
 
-        // find the subscriber
         $subscriber = $this->getSubscriber($data);
 
         if (is_wp_error($subscriber)) {
             return $subscriber;
         }
 
-        // validate the data
         if (empty($data['event_key']) || empty($data['title'])) {
             return new \WP_Error('invalid_data', 'Invalid data provided. key and event are required');
         }
 
-        // take only first 200 characters
-        $data['event_key'] = substr($data['event_key'], 0, 192);
-        $data['title'] = substr($data['title'], 0, 192);
+        // mb_substr so a cut multibyte character does not make sanitize_text_field() blank the value.
+        $data['event_key'] = mb_substr((string)$data['event_key'], 0, 192);
+        $data['title'] = mb_substr((string)$data['title'], 0, 192);
 
         $eventData = [
             'provider'      => sanitize_text_field(Arr::get($data, 'provider', 'custom')),
@@ -69,7 +67,6 @@ final class Tracker
         ];
 
         if ($repeatable) {
-            // check if exist
             $event = \FluentCrm\App\Models\EventTracker::where('subscriber_id', $subscriber->id)
                 ->where('event_key', $eventData['event_key'])
                 ->where('title', $eventData['title'])
@@ -91,7 +88,7 @@ final class Tracker
 
     private function getSubscriber($data)
     {
-        if (!empty($data['subscriber'])) {
+        if (!empty($data['subscriber']) && $data['subscriber'] instanceof \FluentCrm\App\Models\Subscriber) {
             return $data['subscriber'];
         }
 

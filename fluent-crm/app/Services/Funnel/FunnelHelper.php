@@ -15,19 +15,12 @@ class FunnelHelper
 {
     /**
      * Meta key holding an automation's sticky note.
-     *
-     * Deliberately stored as its own meta row rather than inside `Funnel::settings`,
-     * because saveFunnelSequence() overwrites `settings` wholesale from the client's
-     * posted copy — a note saved after page load would be erased by the next step save.
+     * Kept outside `Funnel::settings`, which saveFunnelSequence() overwrites wholesale.
      */
     const STICKY_NOTE_META_KEY = 'sticky_note';
 
     /**
-     * Normalize a sticky note payload for storage.
-     *
-     * The note is plain text by design: it renders through v-text, so no markup is
-     * allowed in or out. Returns null when the note is effectively empty, which the
-     * caller should treat as "delete the note".
+     * Normalize a plain-text sticky note for storage. Returns null for an empty note (delete it).
      *
      * @param mixed $content Raw note body from the request.
      * @return array|null {content: string, updated_by: int, updated_at: string}
@@ -35,12 +28,10 @@ class FunnelHelper
     public static function sanitizeStickyNote($content)
     {
         $content = sanitize_textarea_field((string)$content);
-        // Collapse whitespace-only submissions ("\n\n") into a real clear.
         if ($content === '' || trim($content) === '') {
             return null;
         }
 
-        // Bound the length so a pasted document can't bloat every funnel list response.
         if (mb_strlen($content) > 2000) {
             $content = mb_substr($content, 0, 2000);
         }
@@ -48,17 +39,14 @@ class FunnelHelper
         return [
             'content'    => $content,
             'updated_by' => get_current_user_id(),
-            // WP local time, matching Funnel::$updated_at (Model::freshTimestamp) so the
-            // note's "edited" time is comparable to the automation's own timestamps.
+            // Site time, matching Funnel::$updated_at.
             'updated_at' => current_time('mysql')
         ];
     }
 
     /**
-     * Read a funnel's sticky note in the shape the editor expects.
-     *
-     * Tolerates the legacy/simple case of a bare string having been stored, and always
-     * returns a display-ready author name so the frontend needs no user lookup.
+     * Read a funnel's sticky note in the shape the editor expects, including the author name.
+     * Accepts a legacy bare-string value.
      *
      * @param Funnel $funnel
      * @return array|null
@@ -94,6 +82,111 @@ class FunnelHelper
         ];
     }
 
+    /**
+     * Move a contact to a step of their automation and run from there now.
+     *
+     * Shared by the Web UI "Advance to Step" (REST forceAdvanceSubscriber) and MCP advance_now.
+     * A goal the contact was waiting on is recorded as skipped. The processor always resumes
+     * after a stored step, so the first step of a Yes/No branch cannot be reached through the
+     * cursor: that branch is entered the way the conditional itself does it, through
+     * FunnelProcessor::initChildSequences(). Any other step resumes from the step before it in
+     * the same branch (or top level).
+     *
+     * @param FunnelSubscriber $funnelSubscriber
+     * @param FunnelSequence   $target     a step of the same automation
+     * @param string           $skipNote   note on the skipped goal metric
+     * @return true|\WP_Error
+     */
+    public static function advanceSubscriberToSequence($funnelSubscriber, $target, $skipNote)
+    {
+        if (in_array($funnelSubscriber->status, ['completed', 'cancelled', 'pending'], true)) {
+            return new \WP_Error('invalid_status', sprintf(
+                /* translators: %s: status of the contact in the automation */
+                esc_html__('Cannot advance a contact with status: %s', 'fluent-crm'),
+                $funnelSubscriber->status
+            ));
+        }
+
+        if ((int)$target->funnel_id !== (int)$funnelSubscriber->funnel_id) {
+            return new \WP_Error('not_found', __('Target sequence not found', 'fluent-crm'));
+        }
+
+        if ($funnelSubscriber->status === 'waiting') {
+            $benchmarkSeq = FunnelSequence::find($funnelSubscriber->next_sequence_id);
+            if ($benchmarkSeq) {
+                FunnelMetric::updateOrCreate(
+                    [
+                        'funnel_id'     => (int)$funnelSubscriber->funnel_id,
+                        'sequence_id'   => $benchmarkSeq->id,
+                        'subscriber_id' => (int)$funnelSubscriber->subscriber_id,
+                    ],
+                    [
+                        'benchmark_value'    => 0,
+                        'benchmark_currency' => 'USD',
+                        'status'             => 'skipped',
+                        'notes'              => $skipNote,
+                    ]
+                );
+                self::changeFunnelSubSequenceStatus($funnelSubscriber->id, $benchmarkSeq->id, 'skipped');
+            }
+        }
+
+        // The step before the target in its own branch, or at the top level.
+        $prevQuery = FunnelSequence::where('funnel_id', (int)$funnelSubscriber->funnel_id)
+            ->where('sequence', '<', $target->sequence)
+            ->orderBy('sequence', 'DESC');
+        if ($target->parent_id) {
+            $prevQuery->where('parent_id', $target->parent_id)
+                ->where('condition_type', $target->condition_type);
+        } else {
+            $prevQuery->where(function ($q) {
+                $q->whereNull('parent_id')->orWhere('parent_id', '0');
+            });
+        }
+        $prevSequence = $prevQuery->first();
+
+        $processor = new FunnelProcessor();
+
+        if ($target->parent_id && !$prevSequence) {
+            $parent = FunnelSequence::where('id', $target->parent_id)
+                ->where('funnel_id', (int)$funnelSubscriber->funnel_id)
+                ->first();
+            $subscriber = Subscriber::find($funnelSubscriber->subscriber_id);
+            if (!$parent || !$subscriber) {
+                return new \WP_Error('not_found', __('Target sequence not found', 'fluent-crm'));
+            }
+
+            $funnelSubscriber->last_sequence_id = $parent->id;
+            $funnelSubscriber->next_sequence_id = $target->id;
+            $funnelSubscriber->next_sequence = $target->sequence;
+            $funnelSubscriber->status = 'active';
+            $funnelSubscriber->next_execution_time = current_time('mysql');
+            $funnelSubscriber->save();
+
+            // The same contact-status guard processFunnelAction() applies on every other target.
+            $funnel = Funnel::find((int)$funnelSubscriber->funnel_id);
+            $forceRun = $funnel && Arr::get($funnel->settings, '__force_run_actions') === 'yes';
+            if (!in_array($subscriber->status, ['subscribed', 'transactional'], true) && !$forceRun) {
+                FunnelSubscriber::where('id', $funnelSubscriber->id)->update(['status' => 'cancelled']);
+                return true;
+            }
+
+            $processor->initChildSequences($parent, $target->condition_type === 'yes', $subscriber, $funnelSubscriber->id, null);
+            return true;
+        }
+
+        $funnelSubscriber->last_sequence_id = $prevSequence ? $prevSequence->id : 0;
+        $funnelSubscriber->next_sequence_id = $target->id;
+        $funnelSubscriber->next_sequence = $target->sequence;
+        $funnelSubscriber->status = 'active';
+        $funnelSubscriber->next_execution_time = current_time('mysql');
+        $funnelSubscriber->save();
+
+        $processor->processFunnelAction($funnelSubscriber);
+
+        return true;
+    }
+
     public static function changeFunnelSubSequenceStatus($funnelSubId, $sequenceId, $status = 'complete')
     {
         return FunnelSubscriber::where('id', $funnelSubId)
@@ -109,11 +202,11 @@ class FunnelHelper
         return [
             [
                 'id'    => 'update',
-                'title' => __('Update if Exist', 'fluent-crm')
+                'title' => __('Update if Exists', 'fluent-crm')
             ],
             [
                 'id'    => 'skip_all_if_exist',
-                'title' => __('Skip this automation if contact already exist', 'fluent-crm')
+                'title' => __('Skip this automation if the contact already exists', 'fluent-crm')
             ]
         ];
     }
@@ -138,6 +231,39 @@ class FunnelHelper
     public static function createOrUpdateContact($data)
     {
         return FluentCrmApi('contacts')->createOrUpdate($data);
+    }
+
+    /**
+     * The contact an automation goal (benchmark) runs for, without touching consent.
+     *
+     * Goal handlers fire for every matching event on the site, whether or not the person is in
+     * the automation. An existing contact is returned unchanged, so a goal never subscribes or
+     * confirms anyone. A new contact is created only when the goal lets new contacts enter
+     * (can_enter is not "no"), and as "transactional": they get this automation's emails but
+     * not marketing campaigns, which go to subscribed contacts only.
+     *
+     * @param array  $subscriberData contact fields from the event (email required)
+     * @param object $benchMark      the goal step
+     * @return \FluentCrm\App\Models\Subscriber|null
+     */
+    public static function contactForBenchmark($subscriberData, $benchMark)
+    {
+        $email = (string)Arr::get($subscriberData, 'email');
+        if (!is_email($email)) {
+            return null;
+        }
+
+        if ($existing = self::getSubscriber($email)) {
+            return $existing;
+        }
+
+        if (Arr::get((array)$benchMark->settings, 'can_enter') === 'no') {
+            return null;
+        }
+
+        $subscriberData['status'] = 'transactional';
+
+        return self::createOrUpdateContact($subscriberData) ?: null;
     }
 
     public static function getUserRoles($keyed = false)
@@ -197,7 +323,6 @@ class FunnelHelper
 
     public static function syncLists($subscriber, $lists = [])
     {
-        // Syncing
         if ($lists) {
             $subscriber->attachLists($lists);
         }
@@ -208,11 +333,11 @@ class FunnelHelper
         return [
             'first_name' => [
                 'type'  => 'value_options',
-                'label' => __('First Name', 'fluent-crm')
+                'label' => __('First name', 'fluent-crm')
             ],
             'last_name'  => [
                 'type'  => 'value_options',
-                'label' => __('Last Name', 'fluent-crm')
+                'label' => __('Last name', 'fluent-crm')
             ],
             'email'      => [
                 'type'  => 'value_options',
@@ -238,7 +363,7 @@ class FunnelHelper
             ],
             'postal_code'    => [
                 'type'  => 'value_options',
-                'label' => __('Postal Code', 'fluent-crm')
+                'label' => __('Postal code', 'fluent-crm')
             ],
             'city'           => [
                 'type'  => 'value_options',
@@ -250,7 +375,7 @@ class FunnelHelper
             ],
             'country'        => [
                 'type'  => 'value_options',
-                'label' => __('country', 'fluent-crm')
+                'label' => __('Country', 'fluent-crm')
             ],
             'phone'          => [
                 'type'  => 'value_options',
@@ -285,18 +410,37 @@ class FunnelHelper
         return true;
     }
 
+    /**
+     * Save an automation's settings and steps from the editor payload.
+     *
+     * All writes run in one transaction: a step's saving filter can reject the save partway through,
+     * and without the rollback the funnel was left published with only some of its steps written.
+     *
+     * @param int $funnelId
+     * @param array $data Editor payload (sequences, funnel_settings, conditions, funnel_title, status, funnel_description)
+     * @return Funnel
+     * @throws \Exception When the payload is invalid or a step's saving filter rejects it; nothing is saved.
+     */
     public static function saveFunnelSequence($funnelId, $data)
     {
-        /*
-         * Step deletion below is diff-driven: every existing sequence not present in the
-         * posted list is deleted — and for email steps that cascades into the funnel
-         * campaign and its full send/open/click history. A request whose `sequences`
-         * key is missing or malformed (stripped body, client bug, truncating proxy)
-         * must therefore ABORT before any write, never be coerced to "empty list".
-         * Only an explicit, valid `[]` is an intentional clear.
-         */
+        $db = fluentCrmDb();
+        $db->beginTransaction();
+        try {
+            $funnel = self::writeFunnelSequence($funnelId, $data);
+            $db->commit();
+        } catch (\Throwable $e) {
+            $db->rollBack();
+            throw $e;
+        }
+
+        return $funnel;
+    }
+
+    private static function writeFunnelSequence($funnelId, $data)
+    {
+        // Steps missing from the payload are deleted, so a missing or malformed payload aborts before any write.
         if (!array_key_exists('sequences', $data)) {
-            throw new \Exception(esc_html__('The sequences payload is missing. Funnel steps were not saved.', 'fluent-crm'));
+            throw new \Exception(esc_html__('The sequences payload is missing. Automation steps were not saved.', 'fluent-crm'));
         }
 
         $sequences = $data['sequences'];
@@ -305,15 +449,10 @@ class FunnelHelper
         }
 
         if (!is_array($sequences)) {
-            throw new \Exception(esc_html__('The sequences payload is malformed. Funnel steps were not saved.', 'fluent-crm'));
+            throw new \Exception(esc_html__('The sequences payload is malformed. Automation steps were not saved.', 'fluent-crm'));
         }
 
-        /*
-         * The engine's branch handling supports exactly ONE level of conditionals.
-         * The editor blocks nesting client-side, but imported/REST payloads can carry
-         * it — and a persisted nested conditional silently skips the remainder of the
-         * outer branch at run time. Reject it here instead.
-         */
+        // The engine supports exactly one level of conditionals.
         foreach ($sequences as $sequenceItem) {
             if (Arr::get($sequenceItem, 'type') != 'conditional') {
                 continue;
@@ -321,11 +460,13 @@ class FunnelHelper
             foreach ((array)Arr::get($sequenceItem, 'children', []) as $branchChildren) {
                 foreach ((array)$branchChildren as $childSequence) {
                     if (is_array($childSequence) && Arr::get($childSequence, 'type') == 'conditional') {
-                        throw new \Exception(esc_html__('Nested conditional blocks are not supported. Funnel steps were not saved.', 'fluent-crm'));
+                        throw new \Exception(esc_html__('Nested conditional blocks are not supported. Automation steps were not saved.', 'fluent-crm'));
                     }
                 }
             }
         }
+
+        PrivilegedSteps::assertCanSave($sequences, (int)$funnelId);
 
         $funnelSettings = \json_decode(Arr::get($data, 'funnel_settings'), true);
         $funnelConditions = \json_decode(Arr::get($data, 'conditions', '[]'), true);
@@ -343,26 +484,18 @@ class FunnelHelper
         if (is_array($funnelConditions)) {
             $funnel->conditions = $funnelConditions;
         }
-        // Only accept known statuses; a missing/arbitrary value must not silently
-        // unpublish the automation (a NULL status freezes every in-flight subscriber).
+        // Only known statuses are accepted; a NULL status freezes in-flight subscribers.
         $requestedStatus = Arr::get($data, 'status');
         if (in_array($requestedStatus, ['draft', 'published'], true)) {
             $funnel->status = $requestedStatus;
         }
-        // Always write updated_at so it reflects when sequences were last saved
         $funnel->updated_at = current_time('mysql');
         $funnel->save();
 
-        /*
-         * Only touch the description when the payload actually carries the field.
-         * Not every caller sends it — the editor's jQuery AJAX fallback save omits
-         * it entirely — and an omitted field must not delete a description the user
-         * never edited. An empty value that IS sent still clears it, so the editor
-         * can deliberately remove a description.
-         */
+        // An omitted description is left alone; an empty one clears it.
         if (array_key_exists('funnel_description', $data)) {
             $rawDescription = Arr::get($data, 'funnel_description');
-            // The note is plain text by design, so a non-scalar payload clears it.
+            // A non-scalar description payload clears it.
             $funnelDescription = is_scalar($rawDescription)
                 ? sanitize_textarea_field((string)$rawDescription)
                 : '';
@@ -373,6 +506,11 @@ class FunnelHelper
             }
         }
 
+        // Step order before this save, to re-point contacts whose next step gets deleted.
+        $previousSteps = FunnelSequence::where('funnel_id', $funnel->id)
+            ->orderBy('sequence', 'ASC')
+            ->get(['id', 'parent_id', 'condition_type']);
+
         $sequenceIds = [];
         $cDelay = 0;
         $delay = 0;
@@ -380,7 +518,6 @@ class FunnelHelper
         $indexCount = 0;
 
         foreach ($sequences as $index => $sequence) {
-            // it's creatable
             $sequence['funnel_id'] = $funnel->id;
             $sequence['status'] = 'published';
             $sequence['conditions'] = [];
@@ -405,7 +542,6 @@ class FunnelHelper
             $sequence['id'] = self::createOrUpdateSequence($sequence);
             $sequenceIds[] = $sequence['id'];
 
-            // We have to handle the children if it's conditional block
             if ($sequence['type'] == 'conditional') {
                 $childIds = self::saveChildSequences($sequence, $funnel);
                 $indexCount += count($childIds);
@@ -438,12 +574,9 @@ class FunnelHelper
                     'next_execution_time' => current_time('mysql')
                 ]);
 
-            // Clear dangling step pointers for in-flight subscribers (active rows
-            // included): after the delete, a next_sequence_id referencing a removed
-            // step would make the processor fall back to the stale next_sequence
-            // ordinal — which, after renumbering, points at a DIFFERENT step. With
-            // the pointer cleared, the engine recomputes the position from
-            // last_sequence_id instead.
+            self::repointToSurvivingSteps($funnel->id, $previousSteps, $deletingSequences, $sequenceIds);
+
+            // Clear pointers to deleted steps; the engine then resumes from last_sequence_id.
             FunnelSubscriber::where('funnel_id', $funnel->id)
                 ->whereIn('status', ['active', 'waiting'])
                 ->whereNotNull('next_sequence_id')
@@ -452,9 +585,7 @@ class FunnelHelper
                     'next_sequence_id' => null
                 ]);
 
-            // Any active row left with neither a pointer nor an execution time is
-            // invisible to the cron query (whereNotNull next_execution_time) and
-            // would be stuck forever — schedule it for the next tick.
+            // Active rows with no pointer and no execution time are invisible to cron; schedule them.
             FunnelSubscriber::where('funnel_id', $funnel->id)
                 ->where('status', 'active')
                 ->whereNull('next_sequence_id')
@@ -464,8 +595,7 @@ class FunnelHelper
                 ]);
         }
 
-        // Sync next_sequence integer after renumbering — active/waiting subscribers
-        // may have stale values from before the re-save
+        // Resync next_sequence ordinals after renumbering.
         global $wpdb;
         $subscribersTable = $wpdb->prefix . 'fc_funnel_subscribers';
         $sequencesTable = $wpdb->prefix . 'fc_funnel_sequences';
@@ -485,8 +615,161 @@ class FunnelHelper
         return $funnel;
     }
 
+    /**
+     * Move contacts whose next step was deleted on to the first surviving step after it.
+     *
+     * Without this the pointer was only cleared, and when the contact's last step was deleted too
+     * the engine resumed from a stale position number and skipped a step that still exists. The
+     * replacement is the next surviving step in the old order on the same path: the same branch
+     * for a branch step, the main path for a top-level step. Contacts with no surviving step after
+     * theirs are left to the existing cleanup.
+     *
+     * @param int $funnelId
+     * @param \FluentCrm\Framework\Support\Collection $previousSteps steps before the save, in order
+     * @param \FluentCrm\Framework\Support\Collection $deletedSteps steps removed by the save
+     * @param int[] $keptIds step ids that remain
+     */
+    private static function repointToSurvivingSteps($funnelId, $previousSteps, $deletedSteps, $keptIds)
+    {
+        $keptIds = array_map('intval', $keptIds);
+        $order = $previousSteps->values();
+
+        foreach ($deletedSteps as $deleted) {
+            $position = $order->search(function ($step) use ($deleted) {
+                return (int)$step->id === (int)$deleted->id;
+            });
+            if ($position === false) {
+                continue;
+            }
+
+            $replacement = null;
+            for ($i = $position + 1; $i < $order->count(); $i++) {
+                $candidate = $order[$i];
+                if (!in_array((int)$candidate->id, $keptIds, true)) {
+                    continue;
+                }
+                $samePath = $deleted->parent_id
+                    ? ((int)$candidate->parent_id === (int)$deleted->parent_id && $candidate->condition_type === $deleted->condition_type)
+                    : !$candidate->parent_id;
+                if ($samePath || ($deleted->parent_id && !$candidate->parent_id)) {
+                    $replacement = FunnelSequence::find($candidate->id);
+                    break;
+                }
+            }
+
+            if (!$replacement) {
+                continue;
+            }
+
+            FunnelSubscriber::where('funnel_id', $funnelId)
+                ->whereIn('status', ['active', 'waiting'])
+                ->where('next_sequence_id', $deleted->id)
+                ->update([
+                    'next_sequence_id' => $replacement->id,
+                    'next_sequence'    => $replacement->sequence
+                ]);
+        }
+
+        self::repointBranchCursors($funnelId, $order, $deletedSteps, $keptIds);
+    }
+
+    /**
+     * Keep contacts whose last completed step was deleted inside a Yes/No branch in that branch.
+     *
+     * The engine resumes after last_sequence_id, and only a step inside the branch makes it
+     * continue there; with that step gone it fell back to top-level steps and skipped the rest of
+     * the branch. The cursor moves to the nearest surviving earlier step of the same branch. When
+     * none is left, the contact is pointed at the branch's condition, which runs again (its
+     * metric is cleared) and enters the matching branch from its first surviving step.
+     *
+     * @param int $funnelId
+     * @param \FluentCrm\Framework\Support\Collection $order the automation's steps before the save, in order
+     * @param \FluentCrm\Framework\Support\Collection $deletedSteps
+     * @param int[] $keptIds
+     */
+    private static function repointBranchCursors($funnelId, $order, $deletedSteps, $keptIds)
+    {
+        // The nearest kept step before $step at the same level (same branch, or top level).
+        $earlierSibling = function ($step) use ($order, $keptIds) {
+            $position = $order->search(function ($s) use ($step) {
+                return (int)$s->id === (int)$step->id;
+            });
+            for ($i = ($position === false ? -1 : $position - 1); $i >= 0; $i--) {
+                $candidate = $order[$i];
+                $sameLevel = $step->parent_id
+                    ? ((int)$candidate->parent_id === (int)$step->parent_id && $candidate->condition_type === $step->condition_type)
+                    : !$candidate->parent_id;
+                if ($sameLevel && in_array((int)$candidate->id, $keptIds, true)) {
+                    return $candidate;
+                }
+            }
+            return null;
+        };
+
+        foreach ($deletedSteps as $deleted) {
+            if (!$deleted->parent_id) {
+                continue;
+            }
+
+            $rows = FunnelSubscriber::where('funnel_id', $funnelId)
+                ->whereIn('status', ['active', 'waiting'])
+                ->where('last_sequence_id', $deleted->id);
+            if (!(clone $rows)->exists()) {
+                continue;
+            }
+
+            if ($cursor = $earlierSibling($deleted)) {
+                $rows->update(['last_sequence_id' => $cursor->id]);
+                continue;
+            }
+
+            $condition = in_array((int)$deleted->parent_id, $keptIds, true) ? FunnelSequence::find($deleted->parent_id) : null;
+            if (!$condition) {
+                continue;
+            }
+            $before = $earlierSibling($condition);
+            if (!$before && $condition->parent_id) {
+                continue; // a condition nested first in another branch: left as it was
+            }
+
+            // The engine runs a step only when it records the step's metric, so the condition's
+            // metric is removed to let it run again (it is recorded again when it does).
+            // A subquery, not a list of ids: the affected contacts can be the automation's whole audience.
+            $deletedId = (int)$deleted->id;
+            FunnelMetric::where('funnel_id', $funnelId)
+                ->where('sequence_id', $condition->id)
+                ->whereIn('subscriber_id', function ($q) use ($funnelId, $deletedId) {
+                    $q->from('fc_funnel_subscribers')
+                        ->select('subscriber_id')
+                        ->where('funnel_id', $funnelId)
+                        ->whereIn('status', ['active', 'waiting'])
+                        ->where('last_sequence_id', $deletedId);
+                })
+                ->delete();
+
+            $rows->update([
+                'last_sequence_id' => $before ? $before->id : 0,
+                'next_sequence_id' => $condition->id,
+                'next_sequence'    => $condition->sequence
+            ]);
+        }
+    }
+
+    /**
+     * Create a step, or update one that belongs to the automation being saved.
+     *
+     * A step id from another automation (a crafted or stale payload) is saved as a new step here,
+     * so it can never rewrite and move that automation's step.
+     *
+     * @param array $sequence step data; funnel_id is the automation being saved
+     * @return int the step id
+     */
     private static function createOrUpdateSequence($sequence)
     {
+        if (!empty($sequence['id']) && !FunnelSequence::where('id', $sequence['id'])->where('funnel_id', $sequence['funnel_id'])->exists()) {
+            unset($sequence['id']);
+        }
+
         if (empty($sequence['id'])) {
             $sequence['created_by'] = get_current_user_id();
             $createdSequence = FunnelSequence::create($sequence);
@@ -501,7 +784,7 @@ class FunnelHelper
         $sequenceId = $sequence['id'];
         $data = Arr::only($sequence, (new FunnelSequence())->getFillable());
 
-        FunnelSequence::where('id', $sequenceId)->update($data);
+        FunnelSequence::where('id', $sequenceId)->where('funnel_id', $sequence['funnel_id'])->update($data);
 
         return $sequenceId;
     }
@@ -522,8 +805,7 @@ class FunnelHelper
         $time = (int) Arr::get($settings, 'wait_time_amount');
 
         if ($unit == 'months') {
-            // Months are not a fixed number of seconds, so anchor to the
-            // current time to get a calendar-accurate offset (e.g. +2 months).
+            // Months vary in length, so anchor to the current time.
             $now = current_time('timestamp');
             $delay = strtotime('+' . $time . ' months', $now) - $now;
         } else {
@@ -609,9 +891,7 @@ class FunnelHelper
                     $dateTime = null;
                 }
                 if ($dateTime) {
-                    // Anchor to the SITE-LOCAL year and only roll forward once the whole
-                    // birthday has passed: a contact entering this step ON their birthday
-                    // (the common case) must target today, not next year.
+                    // Site-local year; roll forward only after the whole birthday has passed.
                     $localNow = current_time('timestamp');
                     $localYear = (int)gmdate('Y', $localNow);
                     $monthDay = gmdate('m-d', strtotime($dateTime));
@@ -648,8 +928,7 @@ class FunnelHelper
         $time = (int) Arr::get($settings, 'wait_time_amount');
 
         if ($unit == 'months') {
-            // Months are not a fixed number of seconds, so anchor to the
-            // current time to get a calendar-accurate offset (e.g. +2 months).
+            // Months vary in length, so anchor to the current time.
             $now = current_time('timestamp');
             $waitTimes = strtotime('+' . $time . ' months', $now) - $now;
         } else {

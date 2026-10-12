@@ -196,10 +196,7 @@ class ProductListRenderer
     }
 
     /**
-     * Prepare product price markup for email/block-editor visual output.
-     *
-     * WooCommerce sale price HTML includes screen-reader helper spans. Remove
-     * those snippet-visible labels while keeping visible sale prices readable.
+     * Prepare product price markup for email output, stripping WooCommerce screen-reader spans.
      *
      * @param string $priceHtml Raw product price HTML.
      * @param string $fallback Fallback text when no price is available.

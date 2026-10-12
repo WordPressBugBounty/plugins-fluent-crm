@@ -12,26 +12,11 @@ class CartImporter
 {
     // Customers processed per request (page size)
     const PER_PAGE = 150;
-    // public function __construct()
-    // {
-    //     $this->importKey = 'fluent_cart';
-    //     parent::__construct();
-    // }
-
 
     private static function getPluginName()
     {
         return 'FluentCart';
     }
-
-    // public function getInfo()
-    // {
-    //     return [
-    //         'label'    => $this->getPluginName(),
-    //         'logo'     => fluentCrmMix('images/woo.svg'),
-    //         'disabled' => false
-    //     ];
-    // }
 
     public static function processUserDriver($config, $request)
     {
@@ -39,7 +24,6 @@ class CartImporter
 
         if ($summary) {
 
-            // Initialize defaults to avoid undefined variables in fallback returns
             $formattedCustomers = [];
             $total = 0;
 
@@ -48,22 +32,12 @@ class CartImporter
             $type = Arr::get($config, 'import_type');
 
             if ($type == 'customers_sync') {
-                // $customersQuery = fluentCrmDb()->table('wc_customer_lookup');
-                // $total = $customersQuery->count();
-                // $formattedUsers = $customersQuery->select(['first_name', 'last_name', 'email'])->limit(5)->get();
-
-                // foreach ($formattedUsers as $formattedUser) {
-                //     $formattedUser->name = trim($formattedUser->first_name . ' ' . $formattedUser->last_name);
-                // }
 
             } else if ($type == 'product_tags') {
                 $productIds = [];
                 foreach ($config['product_type_maps'] as $map) {
                     $productIds[] = absint($map['field_key']);
                 }
-
-                // get customers who purchased these products from fluent cart 
-                // get orderIds from 
 
                 $customers = CartHelper::getCustomersByProductIds($productIds, 0, 100000);
 
@@ -129,11 +103,11 @@ class CartImporter
             ],
             'fields' => [
                 'product_type_maps' => [
-                    'label'              => __('Please map your Product and associate FluentCRM Tags', 'fluent-crm'),
+                    'label'              => __('Map your products to FluentCRM tags', 'fluent-crm'),
                     'type'               => 'form-many-drop-down-mapper',
                     /* translators: %s: the external commerce plugin name */
                     'local_label'        => sprintf(__('Select %s Product', 'fluent-crm'), self::getPluginName()),
-                    'remote_label'       => __('Select FluentCRM Tag that will be applied', 'fluent-crm'),
+                    'remote_label'       => __('Select the FluentCRM tag that will be applied', 'fluent-crm'),
                     /* translators: %s: the external commerce plugin name */
                     'local_placeholder'  => sprintf(__('Select %s Product', 'fluent-crm'), self::getPluginName()),
                     'remote_placeholder' => __('Select FluentCRM Tag', 'fluent-crm'),
@@ -153,7 +127,7 @@ class CartImporter
                 'sync_import_html'  => [
                     'type'       => 'html-viewer',
                     'heading'    => __('FluentCart Data Sync', 'fluent-crm'),
-                    'info'       => __('You can sync all your FluentCart Customers into FluentCRM and all future customers and purchase data will be synced.', 'fluent-crm').'<br />'.__('After this sync you can import by product by product and provide appropriate tags', 'fluent-crm'),
+                    'info'       => __('Sync all your FluentCart customers into FluentCRM. Future customers and purchase data will also be synced.', 'fluent-crm').'<br />'.__('After this sync, you can import product by product and apply the appropriate tags.', 'fluent-crm'),
                     'dependency' => [
                         'depends_on' => 'import_type',
                         'operator'   => '=',
@@ -180,7 +154,6 @@ class CartImporter
         $inputs = wp_parse_args($inputs, [
             'lists'              => [],
             'tags'               => [],
-            // keep backward compatibility but use `status` key everywhere
             'status'             => 'subscribed',
             'double_optin_email' => 'no',
             'import_silently'    => 'yes'
@@ -213,11 +186,9 @@ class CartImporter
         $startTime = time();
         $runTime = 20; // seconds
 
-        // normalize and initialize paging
         $perPage = self::PER_PAGE;
         $page = max(1, absint($page));
 
-        // reset counters on first page to start a fresh run
         if ($page === 1) {
             fluentcrm_update_option('_fluent_cart_sync_count', 0);
             fluentcrm_update_option('_fluent_cart_import_current_page', 1);
@@ -225,15 +196,13 @@ class CartImporter
 
         $customers = CartHelper::getCustomersByProductIds($productIds, ($page - 1) * $perPage, $perPage);
 
-        // Even if the current page has no customers (e.g., last sparse page),
-        // advance the page pointer to avoid getting stuck reprocessing the same page.
+        // Advance the page pointer even on an empty page so the run cannot stall.
         if (empty($customers)) {
             fluentcrm_update_option('_fluent_cart_import_current_page', $page);
             return self::getSyncStatus();
         }
 
         $importedCustomers = [];
-        // pushing all customers without tags
         foreach ($customers as $customer) {
             $subscribers = CartHelper::prepareSubscriberData($customer);
             if($customer->user_id) {
@@ -248,7 +217,6 @@ class CartImporter
                 $sendDoubleOptin
             );
 
-            // keeping track of imported customers
             $purchasedProducts = self::purchasedProductsOfImportedCustomer($customer->id, $productIds);
             $assignedTags = self::mapCustomerTags($purchasedProducts, $productTagMaps);
 
@@ -260,7 +228,6 @@ class CartImporter
                 'tags' => $assignedTags
             ];
 
-            // update tags for the subscriber
             if ($assignedTags) {
                  $importedSubscriber = Subscriber::where('email', $subscribers['email'])->first();
                  if ($importedSubscriber) {
@@ -274,8 +241,6 @@ class CartImporter
 
         fluentcrm_update_option('_fluent_cart_sync_count', $totalSynced);
         fluentcrm_update_option('_fluent_cart_import_current_page', $page);
-
-         // check time limit
 
         if (time() - $startTime > $runTime) {
             return self::getSyncStatus();
@@ -300,8 +265,6 @@ class CartImporter
     private static function purchasedProductsOfImportedCustomer($customerId, $productIds)
     {
         $allProductsIds =  CartHelper::getPurchasedProductsByCustomerId($customerId);
-        // check in products
-        // getPurchasedProductsByCustomerId() returns a Collection via pluck(), convert to array for array_intersect()
         return array_intersect($allProductsIds->toArray(), $productIds); // return only those products which are in productIds
     }
 
@@ -310,7 +273,6 @@ class CartImporter
         $total = fluentcrm_get_option('_fluent_cart_product_tag_total_count', 0);
         $perPage = self::PER_PAGE;
 
-        // Calculate page-based progress for the frontend
         $totalPages = max(1, (int) ceil($total / max(1, $perPage)));
         $currentPage = (int) fluentcrm_get_option('_fluent_cart_import_current_page', 1);
         $currentPage = max(1, min($currentPage, $totalPages));
@@ -318,9 +280,7 @@ class CartImporter
         $hasMore = $currentPage < $totalPages;
 
         return [
-            // Total number of pages to import
             'page_total'   => $totalPages,
-            // Total records for reference
             'record_total' => $total,
             'has_more'     => $hasMore,
             'current_page' => $currentPage,

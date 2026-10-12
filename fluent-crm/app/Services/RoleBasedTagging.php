@@ -42,23 +42,23 @@ class RoleBasedTagging
     public function getFields()
     {
         return [
-            'title'     => __('WP User Role Based Tag Mapping', 'fluent-crm'),
+            'title'     => __('WordPress role-based tag mapping', 'fluent-crm'),
             'sub_title' => __('Assign or remove tags when a contact is assigned to a user role.', 'fluent-crm'),
             'fields'    => [
                 'status'       => [
                     'type'           => 'inline-checkbox',
                     'label'          => '',
-                    'checkbox_label' => __('Enable Role Based Tag Mapping', 'fluent-crm'),
+                    'checkbox_label' => __('Enable role-based tag mapping', 'fluent-crm'),
                     'checkbox_description' => __('Assign or remove tags when a contact is assigned to a user role.', 'fluent-crm'),
                     'true_label'     => 'yes',
                     'false_label'    => 'no'
                 ],
                 'tag_mappings' => [
                     'type'             => 'tag-add-remove-mapping',
-                    'label'            => __('Map Role and associate tags', 'fluent-crm'),
+                    'label'            => __('Map Roles to Tags', 'fluent-crm'),
                     'selector_label'   => __('Target User Role', 'fluent-crm'),
-                    'add_tag_label'    => __('Tags to be added', 'fluent-crm'),
-                    'remove_tag_label' => __('Tags to be removed', 'fluent-crm'),
+                    'add_tag_label'    => __('Tags to Add', 'fluent-crm'),
+                    'remove_tag_label' => __('Tags to Remove', 'fluent-crm'),
                     'selector_options' => FunnelHelper::getUserRoles(),
                     'dependency'       => [
                         'depends_on' => 'status',

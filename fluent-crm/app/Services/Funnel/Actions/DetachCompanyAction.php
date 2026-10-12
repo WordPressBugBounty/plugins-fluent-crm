@@ -19,7 +19,7 @@ class DetachCompanyAction extends BaseAction
     {
         return [
             'category' => __('CRM', 'fluent-crm'),
-            'title'       => __('Remove From Company', 'fluent-crm'),
+            'title'       => __('Remove from company', 'fluent-crm'),
             'description' => __('Remove this contact from the selected company', 'fluent-crm'),
             'icon' => 'fc-icon-removed_list',//fluentCrmMix('images/funnel_icons/list_remove.svg'),
             'settings'    => [
@@ -32,7 +32,7 @@ class DetachCompanyAction extends BaseAction
     {
         return [
             'title'     => __('Remove Contact from the Selected Company', 'fluent-crm'),
-            'sub_title' => __('Select Company that you want to remove from targeted Contact', 'fluent-crm'),
+            'sub_title' => __('Select the company you want to remove the contact from', 'fluent-crm'),
             'fields'    => [
                 'company' => [
                     'type'        => 'option_selectors',

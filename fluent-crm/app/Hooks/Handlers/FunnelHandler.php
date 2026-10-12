@@ -59,17 +59,9 @@ class FunnelHandler
     public function register()
     {
         /*
-         * Core funnel items must register before the early active-trigger pass
-         * so their fluentcrm_funnel_arg_num_* filters are available at init
-         * priority 2. This lets core events fired by other init priority 10
-         * callbacks, such as LifterLMS user registration, enter funnels.
-         *
-         * Pro integrations can register trigger arg-count filters before init priority 2.
-         * Register those ready triggers early so events fired during init priority 10,
-         * such as EDD manual order status updates, are not missed.
-         *
-         * The fallback pass at priority 20 preserves the existing behavior for triggers
-         * whose arg-count filters are not available during the early pass.
+         * Funnel items register at init@1 so their fluentcrm_funnel_arg_num_* filters exist for the
+         * init@2 early pass, which catches events fired at init@10. Triggers whose arg-count filter
+         * is not registered yet are attached by the init@20 pass.
          */
         add_action('init', [$this, 'registerFunnelItems'], 1);
         add_action('init', [$this, 'registerEarlyActiveTriggers'], 2);
@@ -79,9 +71,6 @@ class FunnelHandler
 
     /**
      * Register core funnel actions, benchmarks, triggers, and free Pro placeholders once.
-     *
-     * This runs before registerEarlyActiveTriggers() so core trigger arg-count filters
-     * are present when active funnel listeners are attached before other init@10 callbacks.
      *
      * @return void
      */
@@ -125,11 +114,7 @@ class FunnelHandler
                 continue;
             }
 
-            /*
-             * Early registration is only safe when the trigger's arg-count filter is
-             * already registered. Otherwise the priority 20 pass will register it
-             * after handle() has initialized the core trigger filters.
-             */
+            // The early pass only attaches triggers whose arg-count filter is already registered.
             $argNumFilterName = 'fluentcrm_funnel_arg_num_' . $triggerName;
             if ($onlyRegisteredArgFilters && !has_filter($argNumFilterName)) {
                 continue;
@@ -143,11 +128,7 @@ class FunnelHandler
             $this->registeredFunnelTriggers[$triggerName] = true;
         }
 
-        /*
-         * EDD also exposes edd_complete_purchase after a successful payment.
-         * Keep the existing fallback, but attach it only once and only after the
-         * main EDD payment-status trigger has been registered.
-         */
+        // edd_complete_purchase fallback, attached once after edd_update_payment_status.
         if (
             isset($this->registeredFunnelTriggers['edd_update_payment_status']) &&
             empty($this->registeredTriggerFallbacks['edd_complete_purchase'])
@@ -161,10 +142,7 @@ class FunnelHandler
     }
 
     /**
-     * Skip stored EDD automation hooks when the active EDD install is unsupported.
-     *
-     * Existing EDD funnel data should remain stored, but EDD runtime dispatch must
-     * not be registered unless the site is running EDD 3 or newer.
+     * Skip stored EDD automation hooks unless the site runs EDD 3 or newer.
      *
      * @param string $triggerName
      * @return bool
@@ -211,9 +189,7 @@ class FunnelHandler
     {
         $triggerNameBase = $triggerName;
 
-        // Per-request memoization: bulk operations (tagging 50k contacts) route every
-        // contact's event through here — re-querying published funnels/benchmarks per
-        // event adds 100k+ identical queries even when no funnel matches the trigger.
+        // Per-request memoization; bulk operations route every contact's event through here.
         static $triggerCache = [];
 
         if (!isset($triggerCache[$triggerNameBase])) {
@@ -259,11 +235,7 @@ class FunnelHandler
     }
 
     /**
-     * Claim the funnel-processor lock so two runners can't process the same
-     * queue concurrently. Backed by an atomic conditional UPDATE on wp_options
-     * (Helper::acquireDbLock) on every environment — not wp_cache_add(), which
-     * is not atomic under all object-cache drop-ins (e.g. LiteSpeed) and would
-     * let concurrent runners all acquire the lock. See Helper::acquireDbLock().
+     * Claim the funnel-processor lock via Helper::acquireDbLock().
      */
     private function acquireFunnelProcessorLock()
     {
@@ -366,16 +338,11 @@ class FunnelHandler
 
         if (!$hasPermission) {
             wp_send_json([
-                'message' => __('Sorry, You do not have permission to do this action', 'fluent-crm')
+                'message' => __('Sorry, you do not have permission to perform this action', 'fluent-crm')
             ], 422);
         }
 
-        $request = FluentCrm('request');
-        $data = $request->all();
-
-        if (array_key_exists('sequences', $data)) {
-            $data['sequences'] = wp_unslash($data['sequences']);
-        }
+        $data = FluentCrm('request')->all();
 
         try {
             $funnel = FunnelHelper::saveFunnelSequence($data['funnel_id'], $data);
@@ -387,7 +354,7 @@ class FunnelHandler
 
         wp_send_json([
             'sequences' => FunnelHelper::getFunnelSequences($funnel, true),
-            'message'   => __('Sequence successfully updated', 'fluent-crm')
+            'message'   => __('The sequence has been updated.', 'fluent-crm')
         ]);
     }
 
@@ -399,7 +366,7 @@ class FunnelHandler
 
         if (!$hasPermission) {
             wp_send_json([
-                'message' => __('Sorry, You do not have permission to do this action', 'fluent-crm')
+                'message' => __('Sorry, you do not have permission to perform this action', 'fluent-crm')
             ], 422);
         }
 
@@ -459,7 +426,7 @@ class FunnelHandler
 
         if (!$hasPermission) {
             wp_send_json([
-                'message' => __('Sorry, You do not have permission to do this action', 'fluent-crm')
+                'message' => __('Sorry, you do not have permission to perform this action', 'fluent-crm')
             ], 422);
         }
 

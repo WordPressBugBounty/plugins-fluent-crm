@@ -158,8 +158,18 @@ class AutoSubscribeHandler
             do_action('fluentcrm_woo_review_comment_post', $commentId, $isApproved, $commentData);
         }
 
+        $settings = (new AutoSubscribe())->getCommentSettings();
+        if (Arr::get($settings, 'status') != 'yes') {
+            return false;
+        }
+
         $isChecked = Arr::get($_REQUEST, 'wp-comment-fc-consent') == 'yes';
         if (!$isChecked) {
+            return false;
+        }
+
+        // A guest commenter cannot claim a registered user's email: the contact would link to that account.
+        if (!Arr::get($commentData, 'user_id') && get_user_by('email', (string)Arr::get($commentData, 'comment_author_email'))) {
             return false;
         }
 
@@ -174,8 +184,6 @@ class AutoSubscribeHandler
         }
 
         $subscriberData = array_filter($subscriberData);
-
-        $settings = (new AutoSubscribe())->getCommentSettings();
 
         if ($listId = Arr::get($settings, 'target_list')) {
             $subscriberData['lists'] = [$listId];
@@ -242,8 +250,7 @@ class AutoSubscribeHandler
 
             if ($newSubscriber) {
                 // A contact already owns the new address: move the WP-user link to it.
-                // $oldSubscriber may not exist at all (the old address never had a
-                // contact) — dereferencing it unguarded 500s the whole profile update.
+                // $oldSubscriber may not exist.
                 if ($oldSubscriber && $oldSubscriber->id != $newSubscriber->id) {
                     fluentCrmDb()->table('fc_subscribers')
                         ->where('id', $oldSubscriber->id)
@@ -286,9 +293,7 @@ class AutoSubscribeHandler
                     ->where('id', $oldSubscriber->id)
                     ->update($updateData);
 
-                // The raw query-builder update bypasses model events, so fire the
-                // email-changed hook explicitly — Cleanup@handleContactEmailChanged
-                // re-snapshots queued fc_campaign_emails rows to the new address.
+                // The raw update bypasses model events, so fire the email-changed hook explicitly.
                 do_action('fluent_crm/contact_email_changed', Subscriber::find($oldSubscriber->id), $oldEmail);
 
                 return $updated;

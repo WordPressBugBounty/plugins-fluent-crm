@@ -94,7 +94,7 @@ class FluentCartTrackingInit
         $nonce = Arr::get($_REQUEST, '_nonce');
         if (!wp_verify_nonce($nonce, 'fc_ab_fct_cart_nonce')) {
             wp_send_json([
-                'message' => __('Security check failed. Invalid nonce.', 'fluent-crm')
+                'message' => __('Your session could not be verified. Refresh the page and try again.', 'fluent-crm')
             ], 403);
         }
 
@@ -108,7 +108,7 @@ class FluentCartTrackingInit
         setcookie('fc_ab_cart_skip_track', 'yes', time() + (86400 * $cookieDays), COOKIEPATH, COOKIE_DOMAIN);
 
         wp_send_json([
-            'message' => __('You have opted out from cart tracking', 'fluent-crm')
+            'message' => __('You have opted out of cart tracking', 'fluent-crm')
         ]);
     }
 
@@ -135,15 +135,10 @@ class FluentCartTrackingInit
 
         $checkoutData = $fctCart->checkout_data ?: [];
 
-        // Calculate totals for the table columns (FluentCart stores amounts in cents).
-        // $subtotal is the items' price BEFORE any discount.
+        // FluentCart stores amounts in cents. $subtotal is before any discount.
         $subtotal = $fctCart->getItemsSubtotal();
 
-        // Coupon and per-item manual discounts are stored on each cart item as
-        // discount_total (manual_discount + coupon_discount). The old code only read
-        // custom_checkout_data.discount_total, which is empty for normal frontend
-        // coupons, so the coupon was never reflected in the cart total. Sum the per-item
-        // discounts plus any checkout-level (manual/upgrade/prorate) discounts.
+        // Per-item discount_total (manual + coupon) plus checkout-level manual/upgrade/prorate discounts.
         $itemsDiscountTotal = array_sum(array_map(function ($item) {
             return (int)Arr::get($item, 'discount_total', 0);
         }, $fctCart->cart_data ?: []));
@@ -156,8 +151,7 @@ class FluentCartTrackingInit
         $shippingTotal = (int)$fctCart->getShippingTotal();
         $taxTotal = (int)Arr::get($checkoutData, 'tax_data.tax_total', 0);
 
-        // Use FluentCart's authoritative total so the displayed Cart Total matches the
-        // checkout exactly (coupons, fees, shipping and tax all included).
+        // FluentCart's own total, so it matches checkout exactly.
         $total = (int)$fctCart->getEstimatedTotal();
 
         if ($total <= 0) {
@@ -180,9 +174,7 @@ class FluentCartTrackingInit
             $fullName = trim($contact->first_name . ' ' . $contact->last_name);
         }
 
-        // Build a per-coupon breakdown (code + discounted value) for the cart details view.
-        // FluentCart stores the applied codes on $fctCart->coupons and the amount each code
-        // saved (in cents) on checkout_data.__per_coupon_discounts, keyed by code.
+        // Per-coupon savings (cents) live in checkout_data.__per_coupon_discounts, keyed by code.
         $perCouponDiscounts = Arr::get($checkoutData, '__per_coupon_discounts', []);
         $couponDetails = [];
         foreach (($fctCart->coupons ?: []) as $couponCode) {
@@ -360,13 +352,8 @@ class FluentCartTrackingInit
             return;
         }
 
-        $abCartId = $order->getMeta('_fc_ab_cart_id');
-        if (!$abCartId) {
-            return;
-        }
-
-        $abCart = AbandonCartModel::find($abCartId);
-        if (!$abCart || $abCart->provider !== 'fluent_cart') {
+        $abCart = AbandonCartModel::query()->where('order_id', $order->id)->where('provider', 'fluent_cart')->first();
+        if (!$abCart) {
             return;
         }
 
@@ -379,8 +366,8 @@ class FluentCartTrackingInit
             return;
         }
 
-        $lostStatuses = ['failed', 'canceled'];
-        if (in_array($newStatus, $lostStatuses, true)) {
+        // A failed payment (declined card) keeps the cart open so the recovery email still goes out.
+        if ($newStatus === 'canceled' && $abCart->status !== 'recovered') {
             $this->handleCartLost($abCart, $order);
         }
     }
@@ -459,7 +446,7 @@ class FluentCartTrackingInit
                     ->where('funnel_id', $abCart->automation_id)
                     ->update([
                         'status' => 'cancelled',
-                        'notes'  => __('Automatically cancelled because the cart has been lost', 'fluent-crm')
+                        'notes'  => __('Automatically canceled because the cart has been lost', 'fluent-crm')
                     ]);
             }
         }
@@ -488,7 +475,7 @@ class FluentCartTrackingInit
             ->whereIn('status', ['active', 'pending', 'paused'])
             ->update([
                 'status' => 'cancelled',
-                'notes'  => __('Automatically cancelled because a cart has been recovered', 'fluent-crm')
+                'notes'  => __('Automatically canceled because a cart has been recovered', 'fluent-crm')
             ]);
     }
 
@@ -513,7 +500,7 @@ class FluentCartTrackingInit
             ->whereIn('status', ['active', 'pending', 'paused'])
             ->update([
                 'status' => 'cancelled',
-                'notes'  => __('Automatically cancelled because a cart has been recovered', 'fluent-crm')
+                'notes'  => __('Automatically canceled because a cart has been recovered', 'fluent-crm')
             ]);
     }
 
@@ -690,7 +677,7 @@ class FluentCartTrackingInit
 
         if (!$abCart) {
             if (defined('FLUENTCRM_PREVIEWING_EMAIL')) {
-                return __('Dynamic Text will be available on real email', 'fluent-crm');
+                return __('Dynamic text will appear in the real email', 'fluent-crm');
             }
 
             return $defaultValue;

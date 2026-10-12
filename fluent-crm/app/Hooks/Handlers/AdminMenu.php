@@ -4,6 +4,7 @@ namespace FluentCrm\App\Hooks\Handlers;
 
 use FluentCrm\App\Models\Lists;
 use FluentCrm\App\Models\Tag;
+use FluentCrm\App\Services\ContactQuickPins;
 use FluentCrm\App\Services\DbPerformanceService;
 use FluentCrm\App\Services\Helper;
 use FluentCrm\App\Services\PermissionManager;
@@ -200,14 +201,17 @@ class AdminMenu
                 array($this, 'render')
             );
 
-            add_submenu_page(
-                'fluentcrm-admin',
-                __('Reports', 'fluent-crm'),
-                __('Reports', 'fluent-crm'),
-                $dashboardPermission,
-                'fluentcrm-admin#/reports',
-                array($this, 'render')
-            );
+            // Reports reads both settings-guarded (commerce) and dashboard-guarded (charts) routes.
+            if (in_array('fcrm_view_dashboard', $permissions)) {
+                add_submenu_page(
+                    'fluentcrm-admin',
+                    __('Reports', 'fluent-crm'),
+                    __('Reports', 'fluent-crm'),
+                    $dashboardPermission,
+                    'fluentcrm-admin#/reports',
+                    array($this, 'render')
+                );
+            }
 
             add_submenu_page(
                 'fluentcrm-admin',
@@ -297,7 +301,7 @@ class AdminMenu
                 $extraHtml = ' ' . sprintf(
                         wp_kses(
                         /* translators: %1$s: Opening <a> tag linking to FluentCRM cron job docs. %2$s: Closing </a> tag. */
-                            __('Server-Side Cron Job is not enabled %1$sView Documentation%2$s.', 'fluent-crm'),
+                            __('Server-side cron job is not enabled. %1$sView Documentation%2$s.', 'fluent-crm'),
                             array(
                                 'a' => array(
                                     'href'   => array(),
@@ -312,7 +316,7 @@ class AdminMenu
                     );
             }
             /* translators: %s: the FluentCRM website URL (used in the href of the link) */
-            return sprintf(wp_kses(__('Thank you for using <a href="%s">FluentCRM</a>.', 'fluent-crm'), array('a' => array('href' => array()))), esc_url($url)) . '<span title="based on your WP timezone settings" style="margin-left: 10px;" data-timestamp="' . current_time('timestamp') . '" id="fc_server_timestamp"></span>. ' . $extraHtml;
+            return sprintf(wp_kses(__('Thank you for using <a href="%s">FluentCRM</a>.', 'fluent-crm'), array('a' => array('href' => array()))), esc_url($url)) . '<span title="' . esc_attr__('Based on your WordPress timezone settings', 'fluent-crm') . '" style="margin-left: 10px;" data-timestamp="' . current_time('timestamp') . '" id="fc_server_timestamp"></span>. ' . $extraHtml;
         });
 
         add_filter('update_footer', function ($text) {
@@ -360,7 +364,7 @@ class AdminMenu
                         'key'         => 'all_contacts',
                         'label'       => __('All Contacts', 'fluent-crm'),
                         'permalink'   => $urlBase . 'subscribers',
-                        'description' => __('Browse all your subscribers and customers', 'fluent-crm'),
+                        'description' => __('Browse all your contacts and customers', 'fluent-crm'),
                         'icon'        => '<svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
                         <path d="M5 3.75C4.65482 3.75 4.375 4.02982 4.375 4.375V5.625H5.625V5H14.375V15H5.625V14.375H4.375V15.625C4.375 15.9702 4.65482 16.25 5 16.25H15C15.3452 16.25 15.625 15.9702 15.625 15.625V4.375C15.625 4.02982 15.3452 3.75 15 3.75H5ZM8.125 12.5C8.125 11.4644 8.96444 10.625 10 10.625C11.0356 10.625 11.875 11.4644 11.875 12.5H8.125ZM10 10C9.30963 10 8.75 9.44037 8.75 8.75C8.75 8.05964 9.30963 7.5 10 7.5C10.6904 7.5 11.25 8.05964 11.25 8.75C11.25 9.44037 10.6904 10 10 10ZM6.25 8.125V6.875H3.75V8.125H6.25ZM6.25 9.375V10.625H3.75V9.375H6.25ZM6.25 13.125V11.875H3.75V13.125H6.25Z" fill="currentColor"/>
                         </svg>'
@@ -374,7 +378,7 @@ class AdminMenu
                     'key'         => 'lists',
                     'label'       => __('Lists', 'fluent-crm'),
                     'permalink'   => $urlBase . 'contact-groups/lists',
-                    'description' => __('Browse and Manage your lists associate with contact', 'fluent-crm'),
+                    'description' => __('Browse and manage your contact lists', 'fluent-crm'),
                     'icon'        => '<svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
                         <path d="M7 4H16.75V5.5H7V4ZM4.375 5.875C4.07663 5.875 3.79048 5.75647 3.5795 5.5455C3.36853 5.33452 3.25 5.04837 3.25 4.75C3.25 4.45163 3.36853 4.16548 3.5795 3.9545C3.79048 3.74353 4.07663 3.625 4.375 3.625C4.67337 3.625 4.95952 3.74353 5.1705 3.9545C5.38147 4.16548 5.5 4.45163 5.5 4.75C5.5 5.04837 5.38147 5.33452 5.1705 5.5455C4.95952 5.75647 4.67337 5.875 4.375 5.875ZM4.375 11.125C4.07663 11.125 3.79048 11.0065 3.5795 10.7955C3.36853 10.5845 3.25 10.2984 3.25 10C3.25 9.70163 3.36853 9.41548 3.5795 9.2045C3.79048 8.99353 4.07663 8.875 4.375 8.875C4.67337 8.875 4.95952 8.99353 5.1705 9.2045C5.38147 9.41548 5.5 9.70163 5.5 10C5.5 10.2984 5.38147 10.5845 5.1705 10.7955C4.95952 11.0065 4.67337 11.125 4.375 11.125ZM4.375 16.3C4.07663 16.3 3.79048 16.1815 3.5795 15.9705C3.36853 15.7595 3.25 15.4734 3.25 15.175C3.25 14.8766 3.36853 14.5905 3.5795 14.3795C3.79048 14.1685 4.07663 14.05 4.375 14.05C4.67337 14.05 4.95952 14.1685 5.1705 14.3795C5.38147 14.5905 5.5 14.8766 5.5 15.175C5.5 15.4734 5.38147 15.7595 5.1705 15.9705C4.95952 16.1815 4.67337 16.3 4.375 16.3ZM7 9.25H16.75V10.75H7V9.25ZM7 14.5H16.75V16H7V14.5Z" fill="currentColor"/>
                         </svg>'
@@ -383,7 +387,7 @@ class AdminMenu
                     'key'         => 'tags',
                     'label'       => __('Tags', 'fluent-crm'),
                     'permalink'   => $urlBase . 'contact-groups/tags',
-                    'description' => __('Browse and Manage your tags associate with contact', 'fluent-crm'),
+                    'description' => __('Browse and manage your contact tags', 'fluent-crm'),
                     'icon'        => '<svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
 <path d="M9.17489 2.57495L16.5991 3.6362L17.6596 11.0612L10.7656 17.9552C10.625 18.0958 10.4343 18.1748 10.2354 18.1748C10.0365 18.1748 9.84578 18.0958 9.70514 17.9552L2.28014 10.5302C2.13953 10.3896 2.06055 10.1988 2.06055 9.99995C2.06055 9.80108 2.13953 9.61035 2.28014 9.4697L9.17489 2.57495ZM9.70514 4.16645L3.87089 9.99995L10.2354 16.3637L16.0689 10.5302L15.2739 4.96145L9.70514 4.16645ZM11.2951 8.93945C11.0138 8.65799 10.8557 8.27629 10.8558 7.87831C10.8559 7.68125 10.8947 7.48613 10.9701 7.30409C11.0456 7.12204 11.1561 6.95664 11.2955 6.81733C11.4349 6.67801 11.6003 6.56751 11.7824 6.49213C11.9645 6.41675 12.1596 6.37797 12.3567 6.37801C12.7546 6.37808 13.1363 6.53624 13.4176 6.8177C13.699 7.09916 13.857 7.48087 13.857 7.87884C13.8569 8.27682 13.6987 8.65846 13.4173 8.93983C13.1358 9.22119 12.7541 9.37921 12.3561 9.37914C11.9581 9.37907 11.5765 9.22091 11.2951 8.93945Z" fill="currentColor"/>
 </svg>'
@@ -394,7 +398,7 @@ class AdminMenu
                         'key'         => 'companies',
                         'label'       => __('Companies', 'fluent-crm'),
                         'permalink'   => $urlBase . 'contact-groups/companies',
-                        'description' => __('Browse and Manage contact business/companies', 'fluent-crm'),
+                        'description' => __('Browse and manage your contacts\' companies', 'fluent-crm'),
                         'icon'        => '<svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
 <path d="M16.75 15.25H18.25V16.75H1.75V15.25H3.25V4C3.25 3.80109 3.32902 3.61032 3.46967 3.46967C3.61032 3.32902 3.80109 3.25 4 3.25H11.5C11.6989 3.25 11.8897 3.32902 12.0303 3.46967C12.171 3.61032 12.25 3.80109 12.25 4V15.25H15.25V9.25H13.75V7.75H16C16.1989 7.75 16.3897 7.82902 16.5303 7.96967C16.671 8.11032 16.75 8.30109 16.75 8.5V15.25ZM4.75 4.75V15.25H10.75V4.75H4.75ZM6.25 9.25H9.25V10.75H6.25V9.25ZM6.25 6.25H9.25V7.75H6.25V6.25Z" fill="currentColor"/>
 </svg>'
@@ -431,7 +435,7 @@ class AdminMenu
                     'key'         => 'all_campaigns',
                     'label'       => __('Campaigns', 'fluent-crm'),
                     'permalink'   => $urlBase . 'email/campaigns',
-                    'description' => __('Send Email Broadcast to your selected subscribers by tags, lists or segment', 'fluent-crm'),
+                    'description' => __('Send email broadcasts to selected contacts by tag, list, or dynamic segment', 'fluent-crm'),
                     'icon'        => '<svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
                         <path d="M8.125 13.125C8.125 13.125 12.5 13.75 14.375 15.625H15C15.3452 15.625 15.625 15.3452 15.625 15V11.2106C16.1641 11.0719 16.5625 10.5824 16.5625 10C16.5625 9.41756 16.1641 8.92812 15.625 8.78937V5C15.625 4.65482 15.3452 4.375 15 4.375H14.375C12.5 6.25 8.125 6.875 8.125 6.875H5.625C4.93464 6.875 4.375 7.43464 4.375 8.125V11.875C4.375 12.5654 4.93464 13.125 5.625 13.125H6.25L6.875 16.25H8.125V13.125ZM9.375 7.91325C9.80206 7.82162 10.3297 7.69496 10.8996 7.52733C11.9484 7.21884 13.2812 6.73289 14.375 5.98411V14.0159C13.2812 13.2671 11.9484 12.7812 10.8996 12.4727C10.3297 12.3051 9.80206 12.1784 9.375 12.0868V7.91325ZM5.625 8.125H8.125V11.875H5.625V8.125Z" fill="currentColor"/>
                         </svg>'
@@ -440,7 +444,7 @@ class AdminMenu
                     'key'         => 'recurring_campaigns',
                     'label'       => __('Recurring Campaigns', 'fluent-crm'),
                     'permalink'   => $urlBase . 'email/recurring-campaigns',
-                    'description' => __('Send automated daily or weekly emails of your dynamic data like new blog posts', 'fluent-crm'),
+                    'description' => __('Send automated daily or weekly emails with dynamic content, such as new blog posts', 'fluent-crm'),
                     'icon'        => '<svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
                         <path d="M15.5313 12.3274C16.0179 11.1711 16.1299 9.89137 15.8516 8.66813C15.5732 7.4449 14.9185 6.33966 13.9795 5.5078C13.0404 4.67595 11.8643 4.15931 10.6164 4.03053C9.36853 3.90175 8.11167 4.16731 7.02253 4.78986L6.27853 3.48711C7.41675 2.83657 8.70567 2.49589 10.0167 2.49905C11.3277 2.5022 12.615 2.8491 13.75 3.50511C17.1175 5.44911 18.4075 9.61161 16.8378 13.0826L17.8443 13.6631L14.7205 15.3236L14.5968 11.7881L15.5313 12.3274V12.3274ZM4.46878 7.67286C3.98214 8.82914 3.87012 10.1089 4.14847 11.3321C4.42682 12.5553 5.08154 13.6606 6.02058 14.4924C6.95963 15.3243 8.13577 15.8409 9.38365 15.9697C10.6315 16.0985 11.8884 15.8329 12.9775 15.2104L13.7215 16.5131C12.5833 17.1637 11.2944 17.5043 9.98338 17.5012C8.67237 17.498 7.38511 17.1511 6.25003 16.4951C2.88253 14.5511 1.59253 10.3886 3.16228 6.91761L2.15503 6.33786L5.27878 4.67736L5.40253 8.21286L4.46803 7.67361L4.46878 7.67286ZM11.0613 12.1211L8.93803 10.0001L6.81703 12.1211L5.75653 11.0606L8.93878 7.87911L11.0605 10.0001L13.1823 7.87911L14.2428 8.93961L11.0605 12.1211H11.0613Z" fill="currentColor"/>
                         </svg>'
@@ -449,7 +453,7 @@ class AdminMenu
                     'key'         => 'email_sequences',
                     'label'       => __('Sequences', 'fluent-crm'),
                     'permalink'   => $urlBase . 'email/sequences',
-                    'description' => __('Create Multiple Emails and Send in order as a Drip Email Campaign', 'fluent-crm'),
+                    'description' => __('Create a series of emails and send them in order as a drip campaign', 'fluent-crm'),
                     'icon'        => '<svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
                         <path d="M17.5 10.75H16V6.4285L10.054 11.7535L4 6.412V15.25H11.5V16.75H3.25C3.05109 16.75 2.86032 16.671 2.71967 16.5303C2.57902 16.3897 2.5 16.1989 2.5 16V4C2.5 3.80109 2.57902 3.61032 2.71967 3.46967C2.86032 3.32902 3.05109 3.25 3.25 3.25H16.75C16.9489 3.25 17.1397 3.32902 17.2803 3.46967C17.421 3.61032 17.5 3.80109 17.5 4V10.75ZM4.38325 4.75L10.0457 9.7465L15.6265 4.75H4.38325ZM16.75 14.5H19V16H16.75V18.25H15.25V16H13V14.5H15.25V12.25H16.75V14.5Z" fill="currentColor"/>
                         </svg>'
@@ -524,8 +528,8 @@ class AdminMenu
 
         // WhatsApp Menu — registered by Pro plugin via fluent_crm/core_menu_items filter
 
-        if (in_array('fcrm_manage_settings', $permissions)) {
-
+        // Reports reads both settings-guarded (commerce) and dashboard-guarded (charts) routes.
+        if (in_array('fcrm_manage_settings', $permissions) && in_array('fcrm_view_dashboard', $permissions)) {
             $menuItems[] = [
                 'key'       => 'reports',
                 'label'     => __('Reports', 'fluent-crm'),
@@ -548,7 +552,9 @@ class AdminMenu
                     ],
                 ],
             ];
+        }
 
+        if (in_array('fcrm_manage_settings', $permissions)) {
             $menuItems[] = [
                 'key'       => 'settings',
                 'label'     => __('Settings', 'fluent-crm'),
@@ -599,38 +605,8 @@ class AdminMenu
     {
         $this->unloadOtherScripts();
 
-        /*
-         * Printed here, inline, rather than on a later hook.
-         *
-         * An import map is honoured only if it precedes every module load or
-         * preload in the document; a browser that meets one afterwards rejects
-         * the map outright — Firefox says so in as many words:
-         *
-         *   Import maps are not allowed after a module load or preload has
-         *   started.
-         *
-         * Once rejected, every bare @fluentcrm/* specifier is unmapped and the
-         * addon bundles that import them die on load, which surfaces as blank
-         * addon screens while core's own screens are fine (core does not import
-         * those specifiers — it is the thing they point at).
-         *
-         * This used to run on admin_head at priority 0, which is early only
-         * among admin_head callbacks. WordPress prints the enqueued head
-         * scripts on admin_print_scripts, and admin-header.php fires that
-         * BEFORE admin_head — so any other plugin with a module script in the
-         * head already beat us, and whether the map survived came down to which
-         * plugins a site happened to have active.
-         *
-         * loadCssJs() runs from loadAssets() on admin_enqueue_scripts priority
-         * 1, which is the first action inside <head> and ahead of
-         * admin_print_styles, admin_print_scripts and admin_head alike. Nothing
-         * but WordPress's own inline classic script precedes it, so printing
-         * now is what actually guarantees the map comes first.
-         *
-         * The trade is that fluent_crm/module_import_map must be filtered by
-         * then. Nothing filters it today, and a plugin registering it at load
-         * time — the normal case — is registered long before this runs.
-         */
+        // The import map must precede every module script, so it is printed here on
+        // admin_enqueue_scripts, before admin_print_scripts and admin_head.
         $this->printModuleImportMap();
 
         // Inject Vite client for HMR in development mode
@@ -638,21 +614,10 @@ class AdminMenu
             \FluentCrm\App\Vite::injectViteClient();
         }, 1);
 
-        // NOTE: HTML-level <link rel="modulepreload"> hints were attempted
-        // and reverted. Hosting layers that fingerprint asset URLs (the
-        // 3.0.5 trigger) would rewrite the preload hrefs but NOT the
-        // chunk-to-chunk import URLs Vite bakes at build time — leading
-        // to URL divergence and module duplication at the chunk level
-        // (the same root cause as 3.0.5, one level down the chunk tree).
-        // Route preloading now happens via Vite-baked dynamic import()
-        // calls in resources/admin/app.js's preload callback, which
-        // guarantees URL parity. See docs/app-entry-refactor-roadmap.md.
+        // No <link rel="modulepreload"> hints; URL-fingerprinting CDNs would duplicate modules.
 
         wp_enqueue_script('fluentcrm_global_admin', fluentCrmMix('admin/js/global_admin.js'), array('jquery'), $this->version);
         wp_enqueue_script('fluentcrm_admin_app_boot', fluentCrmMix('admin/js/boot.js'), array(), $this->version);
-
-        // Ensure block editor styles are loaded
-        // wp_enqueue_style('wp-block-editor'); // may not needed as we are using editor styles in the react app
 
         $this->emailBuilderBlockInit();
 
@@ -704,15 +669,6 @@ class AdminMenu
      * Print the import map that lets addon plugins share core's Vue,
      * Element Plus and UI-kit instances.
      *
-     * Addons build their bundles with `vue` / `element-plus` marked external
-     * and rewritten to these bare specifiers, so nothing site-specific is
-     * baked into an addon's JS — the plugin folder name, the site URL and the
-     * cache-busting version all stay here, in PHP, where they are known.
-     *
-     * Sharing the instance is not an optimisation: Element Plus installs onto
-     * core's app instance and communicates through provide/inject, so a
-     * second Vue copy inside an addon bundle renders broken components.
-     *
      * @return void
      */
     public function printModuleImportMap()
@@ -733,10 +689,7 @@ class AdminMenu
             return;
         }
 
-        // Not wp_json_encode()'d into an attribute — this is element *content*,
-        // and the only escaping that matters is keeping "</script" out of it.
-        // JSON_HEX_TAG turns < and > into \u003C / \u003E, which is valid JSON
-        // and inert inside <script>.
+        // JSON_HEX_TAG keeps "</script" out of the element content.
         $json = wp_json_encode(
             ['imports' => $imports],
             JSON_HEX_TAG | JSON_UNESCAPED_SLASHES
@@ -747,37 +700,7 @@ class AdminMenu
 
     /**
      * Cache-busted URL for one of the addon-facing shared entries.
-     *
-     * A shared entry and the chunks it imports must be served as ONE cache
-     * generation. Their internal imports are stamped with ?ver=PLUGIN_VERSION
-     * at build time by chunkCacheBustPlugin (vite.config.mjs); the import map
-     * URL is the only edge in that graph PHP emits, so without the same stamp
-     * it is the one unversioned edge. A browser could then pair a fresh
-     * admin/shared/element-plus.js with a cached vendor-element-plus.js — or
-     * the reverse, since vendor-element-plus.js is overwritten in place on
-     * every release, so a stale ?ver= request is answered with the new body.
-     * Either pairing crosses builds, and the mangled cross-chunk symbol names
-     * do not survive that:
-     *
-     *     SyntaxError: The requested module '../../vendor-element-plus.js?ver=X'
-     *     does not provide an export named 'eD'
-     *
-     * Stamped unconditionally, not just in production: `env => dev` with no
-     * Vite server running still resolves through the manifest to built assets,
-     * which is exactly when the stamp matters. Harmless when the dev server IS
-     * running — verified against Vite 5.4: the query reaches the module id (it
-     * shows up in the sourcemap `sources`) but not resolution, so both the bare
-     * and the stamped URL re-export from the same optimised dep
-     * (/node_modules/.vite/deps/element-plus.js?v=…) and there is still exactly
-     * one Element Plus instance.
-     *
-     * Safe against the 3.0.5 double-instance rule because nothing inside core
-     * imports these entries, making the import map their only URL —
-     * dev/audit-entry-exports.js pins maxStaticImporters and
-     * maxDynamicImporters to 0 on all four to keep that true.
-     *
-     * Applied before the `fluent_crm/module_import_map` filter, so a third
-     * party adding its own specifier owns its own cache-busting.
+     * The ?ver stamp matches the one chunkCacheBustPlugin bakes into their chunk imports.
      *
      * @param string $asset Asset path relative to the build output root.
      * @return string
@@ -882,13 +805,9 @@ class AdminMenu
             'contact_prefixes'                    => Helper::getContactPrefixes(),
             'contact_custom_fields'               => fluentcrm_get_custom_contact_fields(),
             'server_time'                         => current_time('mysql'),
-            // Only users who can manage settings can hit the repair endpoint
-            // (SettingsPolicy → fcrm_manage_settings), so only they get a real
-            // health signal. Everyone else gets `true` — and the health check is
-            // skipped via short-circuit — so the SPA never fires a repair the
-            // server would just reject. For permitted users this is a cheap
-            // cached read (one fc_meta option) on the happy path; when it is
-            // false, app.js fires a one-off background repair on boot.
+            // Schedule pickers say which timezone their times are in.
+            'site_timezone'                       => wp_timezone_string(),
+            // Real signal only for users who can run the repair (fcrm_manage_settings).
             'db_index_health_ok'                  => !PermissionManager::currentUserCan('fcrm_manage_settings') || !DbPerformanceService::hasBrokenIndex(false),
             'crm_pro_url'                         => 'https://fluentcrm.com/?utm_source=plugin&utm_medium=admin&utm_campaign=promo',
             /**
@@ -984,6 +903,8 @@ class AdminMenu
             'available_lists'                     => $formattedLists,
             'available_funnel_label_colors'       => Helper::funnelLabelColors(),
             'available_contact_statuses'          => fluentcrm_subscriber_statuses(true),
+            // This user's pinned list/tag quick filters on the contacts list.
+            'contact_quick_pins'                  => ContactQuickPins::get(get_current_user_id()),
             'available_contact_editable_statuses' => fluentcrm_subscriber_editable_statuses(true),
             // Free ships the flag off; the Pro Messaging module overrides both of
             // these through the fluent_crm/admin_vars filter when the channel is on.
@@ -1067,24 +988,18 @@ class AdminMenu
         $vendorStyle = 'admin/css/style.css';
 
         if ($isRtl) {
-            // Keep loading the base bundles in RTL mode; dedicated *-rtl build files
-            // are not produced in this Vite pipeline. RTL-specific tweaks live in
-            // admin_rtl.css and are loaded as an additive override below.
+            // No *-rtl builds exist; admin_rtl.css is an additive override.
             // $appGlobalCss = 'admin/css/app_global-rtl.css'; // TODO:: The CSS file does not exist.
             wp_enqueue_style('fluentcrm_app_rtl', fluentCrmMix('admin/css/admin_rtl.css'), [], $this->version);
-            // style.css works for both LTR and RTL — Element Plus handles RTL natively via dir="rtl"
         }
 
-        // Legacy fluentcrm-admin.css eliminated — all styles now in app3.css.
-        // Register empty handle for backward compatibility (add-ons may depend on it).
+        // Empty handle kept for add-ons that depend on it.
         wp_register_style('fluentcrm_admin_app', false);
         wp_enqueue_style('fluentcrm_admin_app');
 
         wp_enqueue_style('fluentcrm_app_global', fluentCrmMix($appGlobalCss), array(), $this->version);
         wp_enqueue_style('fluentcrm_admin_app1', fluentCrmMix($v3Css), array(), $this->version);
-        // style.css is a build-only artifact (merged Vue/Element Plus chunk CSS).
-        // In dev mode, Vite injects this CSS via HMR automatically.
-        // Element Plus CSS is wrapped in @layer, so overrides always win regardless of load order.
+        // style.css is build-only; Vite injects it in dev mode.
         if (!\FluentCrm\App\Vite::underDevelopment()) {
             wp_enqueue_style('fluentcrm_vendor', fluentCrmMix($vendorStyle), array(), $this->version);
         }

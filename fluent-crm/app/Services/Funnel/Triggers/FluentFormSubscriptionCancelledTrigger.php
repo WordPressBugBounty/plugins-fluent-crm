@@ -26,8 +26,8 @@ class FluentFormSubscriptionCancelledTrigger extends BaseTrigger
     {
         return [
             'category'    => __('Fluent Forms', 'fluent-crm'),
-            'label'       => __('Subscription Cancelled (Fluent Forms)', 'fluent-crm'),
-            'description' => __('This Funnel will be initiated when a subscription is cancelled via Fluent Forms.', 'fluent-crm'),
+            'label'       => __('Subscription Canceled (Fluent Forms)', 'fluent-crm'),
+            'description' => __('This automation will start when a subscription is canceled via Fluent Forms.', 'fluent-crm'),
             'icon'        => 'fc-icon-fluentforms',
         ];
     }
@@ -42,8 +42,8 @@ class FluentFormSubscriptionCancelledTrigger extends BaseTrigger
     public function getSettingsFields($funnel)
     {
         return [
-            'title'     => __('Subscription Cancelled Funnel', 'fluent-crm'),
-            'sub_title' => __('This Funnel will be initiated when a subscription is cancelled via Fluent Forms.', 'fluent-crm'),
+            'title'     => __('Subscription Canceled Automation', 'fluent-crm'),
+            'sub_title' => __('This automation will start when a subscription is canceled via Fluent Forms.', 'fluent-crm'),
             'fields'    => [
                 'subscription_status' => [
                     'type'        => 'select',
@@ -59,11 +59,11 @@ class FluentFormSubscriptionCancelledTrigger extends BaseTrigger
                         ]
                     ],
                     'label'       => __('Subscription Status', 'fluent-crm'),
-                    'placeholder' => __('Select Status', 'fluent-crm')
+                    'placeholder' => __('Select status', 'fluent-crm')
                 ],
                 'subscription_status_info' => [
                     'type'       => 'html',
-                    'info'       => sprintf('<b>%s</b>', __('An automated double-opt-in email will be sent if the contact is new or not already subscribed.', 'fluent-crm')),
+                    'info'       => sprintf('<b>%s</b>', __('An automated double opt-in email will be sent if the contact is new or not already subscribed.', 'fluent-crm')),
                     'dependency' => [
                         'depends_on' => 'subscription_status',
                         'operator'   => '=',
@@ -96,13 +96,13 @@ class FluentFormSubscriptionCancelledTrigger extends BaseTrigger
                 'type'        => 'multi-select',
                 'label'   => __('Target Forms', 'fluent-crm'),
                 'options' => $this->getForms($funnel),
-                'inline_help' => __('Keep it blank to run for any form', 'fluent-crm')
+                'inline_help' => __('Leave blank to run for any form', 'fluent-crm')
             ],
             'run_multiple'       => [
                 'type'        => 'yes_no_check',
                 'label'       => '',
-                'check_label' => __('Restart the Automation Multiple times for a contact for this event. (Only enable if you want to restart automation for the same contact)', 'fluent-crm'),
-                'inline_help' => __('If you enable, then it will restart the automation for a contact if the contact already in the automation. Otherwise, It will just skip if already exist', 'fluent-crm')
+                'check_label' => __('Allow this event to restart the automation for the same contact', 'fluent-crm'),
+                'inline_help' => __('If enabled, it will restart the automation for a contact who is already in it. Otherwise, the contact will be skipped.', 'fluent-crm')
             ]
         ];
     }
@@ -113,10 +113,15 @@ class FluentFormSubscriptionCancelledTrigger extends BaseTrigger
 
         $userId = $submission->user_id;
 
-        $subscriberData = FunnelHelper::prepareUserData($userId);
+        $subscriberData = $userId ? FunnelHelper::prepareUserData($userId) : [];
 
+        // Payment forms do not need a login, so most subscribers are guests: use the submission's email.
         if (empty($subscriberData['email'])) {
-            return;
+            $email = self::emailFromSubmission($submission, $subscription->form_id ?? ($submission->form_id ?? 0));
+            if (!$email) {
+                return;
+            }
+            $subscriberData = ['email' => $email];
         }
 
         $willProcess = $this->isProcessable($funnel, $subscription, $subscriberData);
@@ -135,6 +140,44 @@ class FluentFormSubscriptionCancelledTrigger extends BaseTrigger
             'source_trigger_name' => $this->triggerName,
             'source_ref_id'       => $subscription->id
         ]);
+    }
+
+    /**
+     * The payer's email in a Fluent Forms submission: the form's configured payment email field
+     * (Payment Settings, "Customer Email"), else the "email" field, else the first valid email.
+     *
+     * @param object $submission fluentform_submissions row
+     * @param int    $formId
+     * @return string
+     */
+    private static function emailFromSubmission($submission, $formId = 0)
+    {
+        $response = is_array($submission->response) ? $submission->response : json_decode((string)$submission->response, true);
+        if (!is_array($response)) {
+            return '';
+        }
+
+        // A form can also ask for other addresses (a friend, a guardian); the payment one is the payer.
+        $paymentHelper = '\FluentForm\App\Modules\Payments\PaymentHelper';
+        if ($formId && class_exists($paymentHelper) && method_exists($paymentHelper, 'getFormSettings')) {
+            $field = Arr::get((array)$paymentHelper::getFormSettings((int)$formId, 'admin'), 'receipt_email');
+            $email = $field ? Arr::get($response, $field) : '';
+            if (is_string($email) && is_email($email)) {
+                return $email;
+            }
+        }
+
+        if (!empty($response['email']) && is_string($response['email']) && is_email($response['email'])) {
+            return $response['email'];
+        }
+
+        foreach ($response as $value) {
+            if (is_string($value) && is_email($value)) {
+                return $value;
+            }
+        }
+
+        return '';
     }
 
     private function isProcessable($funnel, $subscription, $subscriberData)

@@ -38,15 +38,7 @@ class OptionsController extends Controller
             $response = [];
 
             foreach ($options as $method) {
-                // Only invoke this controller's own zero-argument option providers.
-                // Gating on method_exists() alone let the `fields` param call ANY
-                // method on the controller: ones that require a Request argument
-                // (getAjaxOptions/getTaxonomyTerms/getCascadeSelections) fataled with
-                // an ArgumentCountError, inherited framework helpers ran unintentionally,
-                // and `index` recursed into itself. Restricting by shape (public,
-                // non-static, no required args, declared on this class) admits every
-                // legitimate option getter — current or future — without an explicit
-                // name list, so no caller can be silently broken.
+                // Security: only call this class's own public, non-static, zero-argument getters.
                 if ($method === 'index' || !method_exists($this, $method)) {
                     continue;
                 }
@@ -353,7 +345,6 @@ class OptionsController extends Controller
         $options = [];
 
         if ($optionKey == 'woo_categories') {
-            // woocommerce categories
             if (defined('WC_PLUGIN_FILE')) {
                 $cat_args = array(
                     'taxonomy'   => 'product_cat',
@@ -562,7 +553,6 @@ class OptionsController extends Controller
 
             $items = $objectModel
                 ->when($search, function ($query) use ($search) {
-                    // Escape LIKE wildcards (%, _) so the term matches literally.
                     global $wpdb;
                     return $query->where('title', 'LIKE', '%' . $wpdb->esc_like($search) . '%');
                 })
@@ -662,7 +652,6 @@ class OptionsController extends Controller
         }
 
         if ($optionKey == 'post_type') {
-            // we need to verify the post type access permission here
             if (!current_user_can('edit_posts')) {
                 return [
                     'options' => []

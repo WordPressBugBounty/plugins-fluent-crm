@@ -82,12 +82,8 @@ class FileSystem
     }
 
     /**
-     * Resolve only the opaque filenames created by this class' upload flow.
-     *
-     * CSV import requests arrive after upload and therefore contain a client
-     * supplied value. Requiring the generated prefix, a plain filename, and a
-     * real path inside the dedicated directory prevents a later request from
-     * turning that value into an arbitrary read or delete path.
+     * Resolve only the opaque filenames created by this class's upload flow.
+     * The filename is client supplied, so it must be prefixed, plain, and resolve inside the upload directory.
      *
      * @param mixed $file Upload filename returned by _put().
      * @return string Absolute path to a regular file in the FluentCRM upload directory.
