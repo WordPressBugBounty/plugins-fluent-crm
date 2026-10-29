@@ -2,6 +2,7 @@
 
 namespace FluentCrm\App\Models;
 
+use FluentCrm\App\Services\Helper;
 use FluentCrm\Framework\Database\Orm\Builder;
 
 class Label extends Model
@@ -34,7 +35,7 @@ class Label extends Model
 
     public function getSettingsAttribute($value)
     {
-        return \maybe_unserialize($value);
+        return Helper::safeUnserialize($value);
     }
 
     public function setSettingsAttribute($value)

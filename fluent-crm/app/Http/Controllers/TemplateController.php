@@ -321,7 +321,8 @@ class TemplateController extends Controller
 
         if ($actionName == 'change_template_status') {
             $newStatus = sanitize_text_field($request->get('status', ''));
-            if (!$newStatus) {
+            // The list only shows publish/draft templates; anything else would hide them.
+            if (!in_array($newStatus, ['publish', 'draft'], true)) {
                 return $this->sendError([
                     'message' => __('Please select a status', 'fluent-crm')
                 ]);
@@ -635,7 +636,8 @@ class TemplateController extends Controller
         $restApi = $restBase.'/wp-json/wp/v2/email-templates?per_page=50';
 
         $response = wp_remote_get($restApi, [
-            'sslverify' => false,
+            // Verify TLS for the public catalog; a FC_TEMPLATE_API_DOMAIN override may be a local dev host.
+            'sslverify' => !defined('FC_TEMPLATE_API_DOMAIN'),
         ]);
 
         if (is_wp_error($response)) {

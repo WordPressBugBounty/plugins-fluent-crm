@@ -273,8 +273,10 @@ class FluentCartTrackingInit
             }
         }
 
-        // Try with billing email
-        if ($billingEmail) {
+        // Try with billing email, only for a logged-in user who owns it. Anyone can type an
+        // email at checkout, so a guest match would take over another customer's cart.
+        $currentUser = wp_get_current_user();
+        if ($billingEmail && $currentUser->ID && strcasecmp($currentUser->user_email, $billingEmail) === 0) {
             $record = AbandonCartModel::where('email', $billingEmail)
                 ->where('provider', 'fluent_cart')
                 ->whereIn('status', ['pending', 'opt_out', 'draft', 'processing'])

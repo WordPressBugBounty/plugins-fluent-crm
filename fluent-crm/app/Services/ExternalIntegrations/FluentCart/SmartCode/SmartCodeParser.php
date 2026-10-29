@@ -63,19 +63,75 @@ class SmartCodeParser {
     }
 
 
+    /**
+     * Last resolved customer payload: ['subscriber' => object, 'email' => string, 'funnel_sub' => mixed,
+     * 'customer' => array|null]. One entry only, so it cannot grow across a long-running campaign worker.
+     */
+    private static $customerCache = null;
+
+    /**
+     * Resolve {{cart_customer.*}}. ShortcodeParser calls this once per token, so the customer payload
+     * (including a miss) is resolved once per subscriber and reused for the rest of that subscriber's tokens.
+     */
     public static function parseCartCustomer($code, $valueKey, $defaultValue, $subscriber)
     {
-        
+        $customer = self::getCartCustomer($subscriber);
+
+        if (!$customer) {
+            return $defaultValue;
+        }
+
+        return self::parseCustomerProps($customer, $valueKey, $defaultValue);
+    }
+
+    /**
+     * Load the FluentCart customer for a subscriber as an array, or null when none can be found.
+     * Cached for the most recent subscriber object (same object, email and funnel record), so a new
+     * recipient always triggers a fresh lookup.
+     */
+    private static function getCartCustomer($subscriber)
+    {
+        $cache = self::$customerCache;
+
+        if (
+            $cache
+            && $cache['subscriber'] === $subscriber
+            && $cache['email'] === $subscriber->email
+            && $cache['funnel_sub'] === $subscriber->funnel_subscriber_id
+        ) {
+            return $cache['customer'];
+        }
+
+        $customer = self::loadCartCustomer($subscriber);
+
+        self::$customerCache = [
+            'subscriber' => $subscriber,
+            'email'      => $subscriber->email,
+            'funnel_sub' => $subscriber->funnel_subscriber_id,
+            'customer'   => $customer,
+        ];
+
+        return $customer;
+    }
+
+    /**
+     * Uncached customer lookup: the Customer model by email first, then the customer on the
+     * automation's order payload.
+     *
+     * @return array|null
+     */
+    private static function loadCartCustomer($subscriber)
+    {
+        // Try to load customer directly from Customer model
         $customer = \FluentCart\App\Models\Customer::where('email', $subscriber->email)->first();
         if ($customer) {
-            return self::parseCustomerProps($customer->toArray(), $valueKey, $defaultValue);
+            return $customer->toArray();
         }
-        
 
         // Fall back to the order payload.
         $order = self::loadOwnOrder($subscriber);
         if (!$order || !isset($order['order']['customer'])) {
-            return $defaultValue;
+            return null;
         }
 
         $orderCustomer = is_array($order['order']['customer'])
@@ -84,11 +140,7 @@ class SmartCodeParser {
             ? $order['order']['customer']->toArray()
             : []);
 
-        if (!$orderCustomer) {
-            return $defaultValue;
-        }
-
-        return self::parseCustomerProps($orderCustomer, $valueKey, $defaultValue);
+        return $orderCustomer ?: null;
     }
 
     /**
@@ -183,13 +235,12 @@ class SmartCodeParser {
             case 'note':
                 return $order['note'];
             case 'completed_at':
-                return $order['completed_at'];
+            case 'created_at':
+                return self::formatSiteDate($order[$valueKey] ?? '', $defaultValue, true);
             case 'total_refund':
                 return Helper::toDecimal($order['total_refund']);
             case 'uuid':
                 return $order['uuid'];
-            case 'created_at':
-                return $order['created_at'];
             case 'total_paid':
                 return Helper::toDecimal($order['total_paid']);
             case 'shipping_status':
@@ -250,6 +301,37 @@ class SmartCodeParser {
 
     }
 
+    /**
+     * A FluentCart GMT date as an absolute date in the site's timezone and date format.
+     *
+     * Email bodies are parsed when the email is queued, so relative text ("3 years ago") would be
+     * frozen into the email. wp_date() shows the real UTC timestamp as the site's day, as Pro's
+     * WooCommerce smartcodes do.
+     *
+     * OrderResource serializes the order's created_at as ISO 8601 with an offset, while other
+     * columns stay a GMT `Y-m-d H:i:s`. The appended ' UTC' applies only to a value without an offset.
+     *
+     * @param string $gmtDate      GMT `Y-m-d H:i:s`, or ISO 8601 with an offset
+     * @param string $defaultValue smartcode fallback for an empty, zero or unreadable date
+     * @param bool   $withTime     also print the site's time format, for order timestamps
+     * @return string
+     */
+    private static function formatSiteDate($gmtDate, $defaultValue, $withTime = false)
+    {
+        $timestamp = $gmtDate ? strtotime($gmtDate . ' UTC') : false;
+        // A zero date ('0000-00-00 00:00:00') parses to a negative timestamp.
+        if (!$timestamp || $timestamp < 0) {
+            return $defaultValue;
+        }
+
+        $format = get_option('date_format');
+        if ($withTime) {
+            $format .= ' ' . get_option('time_format');
+        }
+
+        return wp_date($format, $timestamp);
+    }
+
     public static function parseCustomerProps($customer, $valueKey, $defaultValue)
     {
         if (!$customer) {
@@ -269,15 +351,19 @@ class SmartCodeParser {
             case 'status':
                 return $customer['status'];
             case 'purchase_value':
-                return $customer['purchase_value'];
+                // Use `ltv` (net paid minus refunds, in cents), the value FluentCart shows as the
+                // customer's "Lifetime Value". `purchase_value` is a stale per-currency map.
+                return isset($customer['ltv']) ? Helper::toDecimal($customer['ltv']) : $defaultValue;
             case 'purchase_count':
                 return $customer['purchase_count'];
             case 'first_purchase_date':
-                return $customer['first_purchase_date'];
             case 'last_purchase_date':
-                return $customer['last_purchase_date'];
+                return self::formatSiteDate($customer[$valueKey] ?? '', $defaultValue);
             case 'aov':
-                return $customer['aov'];
+                // Computed (ltv / purchase_count, in cents) like FluentCart does: the stored `aov`
+                // column can be NULL or stale.
+                $count = (int) ($customer['purchase_count'] ?? 0);
+                return ($count && isset($customer['ltv'])) ? Helper::toDecimal($customer['ltv'] / $count) : $defaultValue;
             case 'notes':
                 return $customer['notes'];
             case 'uuid':

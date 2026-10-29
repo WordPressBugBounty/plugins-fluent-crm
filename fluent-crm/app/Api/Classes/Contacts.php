@@ -8,6 +8,7 @@ use FluentCrm\App\Models\CustomContactField;
 use FluentCrm\App\Models\Subscriber;
 use FluentCrm\App\Models\SubscriberMeta;
 use FluentCrm\App\Services\ContactsQuery;
+use FluentCrm\App\Services\Helper;
 use FluentCrm\Framework\Support\Arr;
 
 /**
@@ -75,7 +76,7 @@ class Contacts
             }
 
             $user = get_user_by('ID', $userIdOrEmail);
-            if (!$user) {
+            if (!Helper::isUserEmailVerified($user)) {
                 return false;
             }
             $userIdFallback = $user->ID;
@@ -166,7 +167,10 @@ class Contacts
         $userId = get_current_user_id();
         if ($userId) {
             $user = get_user_by('ID', $userId);
-            $currentContact = $this->instance->where('user_id', $user->ID)->orWhere('email', $user->user_email)->first();
+            $currentContact = $this->instance->where('user_id', $user->ID)->first();
+            if (!$currentContact && Helper::isUserEmailVerified($user)) {
+                $currentContact = $this->instance->where('email', $user->user_email)->first();
+            }
         }
 
         if (!$currentContact && $useSecureCookie) {

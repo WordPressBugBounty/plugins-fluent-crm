@@ -18,6 +18,7 @@ class PermissionManager
          *
          *     @type array {
          *         @type string $title   The title of the permission.
+         *         @type string $description Optional. Shown as a tooltip; says what else the permission reveals.
          *         @type array  $depends An array of permissions that this permission depends on.
          *         @type string $group   The group to which this permission belongs.
          *     }
@@ -26,6 +27,7 @@ class PermissionManager
         return apply_filters('fluent_crm/readable_permissions', [
             'fcrm_view_dashboard'             => [
                 'title'   => __('CRM Dashboard', 'fluent-crm'),
+                'description' => __('The dashboard also shows the latest contacts, automations and campaigns with their details, even without the matching view permissions.', 'fluent-crm'),
                 'depends' => [],
                 'group'   => 'dashboard'
             ],
@@ -71,11 +73,13 @@ class PermissionManager
             ],
             'fcrm_read_emails'                => [
                 'title'   => __('View emails', 'fluent-crm'),
+                'description' => __('Also shows the contact details of everyone who received an email or is in an email sequence, even without the View contacts permission.', 'fluent-crm'),
                 'depends' => [],
                 'group'   => 'emailing'
             ],
             'fcrm_manage_emails'              => [
                 'title'   => __('Write and send emails', 'fluent-crm'),
+                'description' => __('Test emails and previews are filled in with real contact data, even without the View contacts permission.', 'fluent-crm'),
                 'depends' => [
                     'fcrm_read_emails'
                 ],
@@ -98,11 +102,13 @@ class PermissionManager
             ],
             'fcrm_read_funnels'               => [
                 'title'   => __('View automations', 'fluent-crm'),
+                'description' => __('Also shows the contact details of everyone in an automation, even without the View contacts permission.', 'fluent-crm'),
                 'depends' => [],
                 'group'   => 'automations'
             ],
             'fcrm_write_funnels'              => [
                 'title'   => __('Create and edit automations', 'fluent-crm'),
+                'description' => __('Test webhooks send real contact data, even without the View contacts permission.', 'fluent-crm'),
                 'depends' => [
                     'fcrm_read_funnels'
                 ],

@@ -2,6 +2,8 @@
 
 namespace FluentCrm\App\Models;
 
+use FluentCrm\App\Services\Helper;
+
 /**
  *  FunnelSequence Model - DB Model for Automation Sequences
  *
@@ -70,29 +72,40 @@ class FunnelSequence extends Model
 
     public function setSettingsAttribute($settings)
     {
-        if (is_array($settings)) {
-            $this->attributes['settings'] = \maybe_serialize($settings);
-        } else {
-            $this->attributes['settings'] = $settings;
-        }
+        $this->attributes['settings'] = self::serializeArrayValue($settings);
     }
 
     public function getSettingsAttribute($settings)
     {
-        return \maybe_unserialize($settings);
+        return Helper::safeUnserialize($settings);
     }
 
     public function setConditionsAttribute($conditions)
     {
-        if (is_array($conditions)) {
-            $this->attributes['conditions'] = \maybe_serialize($conditions);
-        } else {
-            $this->attributes['conditions'] = $conditions;
-        }
+        $this->attributes['conditions'] = self::serializeArrayValue($conditions);
     }
 
     public function getConditionsAttribute($conditions)
     {
-        return \maybe_unserialize($conditions);
+        return Helper::safeUnserialize($conditions);
+    }
+
+    /**
+     * Serialize step settings or conditions, always as an array.
+     *
+     * New steps reach this setter with request data, so a string is decoded without
+     * building objects instead of being stored as is (PHP Object Injection).
+     * A pre-serialized array string keeps working; any other value is stored as [].
+     *
+     * @param mixed $value Array, serialized string, or anything else from the caller.
+     * @return string Serialized array.
+     */
+    private static function serializeArrayValue($value)
+    {
+        if (is_string($value)) {
+            $value = Helper::safeUnserialize($value);
+        }
+
+        return \maybe_serialize(is_array($value) ? $value : []);
     }
 }

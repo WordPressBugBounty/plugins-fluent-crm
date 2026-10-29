@@ -17,42 +17,66 @@ use FluentCrm\Framework\Support\Arr;
  */
 class DocsController extends Controller
 {
-    private $restApi = 'https://fluentcrm.com/wp-json/wp/v2/';
+    /**
+     * The docs site is a static VitePress build: sitemap.xml lists every page and
+     * "<slug>.json" returns that page as {slug, title, category, url, html, ...}.
+     */
+    private $docsHost = 'https://docs.fluentcrm.com/';
+
+    private $indexCacheKey = 'fluentcrm_all_docs_v2';
+
+    /**
+     * Pages left out of the in-app library (the changelog alone is >200KB).
+     */
+    private $excludedSlugs = ['change-log'];
 
     public function index()
     {
+        $docs = get_transient($this->indexCacheKey);
 
-        $formattedDocs = $this->getDocsPerChunk($this->restApi . 'docs?per_page=100', 'fluentcrm_all_docs');
-        $moreDocs = $this->getDocsPerChunk($this->restApi . 'docs?per_page=100&offset=100', 'fluentcrm_all_docs_2');
+        if (!is_array($docs) || !$docs) {
+            $docs = $this->fetchAllDocs();
 
-        if ($moreDocs) {
-            $formattedDocs = array_merge($formattedDocs, $moreDocs);
+            // Empty or failed fetches are not cached, so the next load retries.
+            if ($docs) {
+                set_transient($this->indexCacheKey, $docs, WEEK_IN_SECONDS);
+            }
         }
 
         return [
-            'docs' => $formattedDocs
+            'docs' => $docs
         ];
     }
 
+    /**
+     * @param string $docId doc slug, e.g. "setting-up-campaign"
+     */
     public function getDoc($docId)
     {
-        $request = wp_remote_get($this->restApi . 'docs/' . $docId);
+        $slug = sanitize_title($docId);
+        $cacheKey = 'fluentcrm_doc_' . md5($slug);
 
-        if (is_wp_error($request)) {
-            return [
-                'content'  => 'sorry, we could not fetch the doc at this moment. Please try again',
-                'is_error' => true
-            ];
+        $doc = get_transient($cacheKey);
+
+        if (!is_array($doc)) {
+            $response = wp_remote_get($this->docsHost . rawurlencode($slug) . '.json', ['timeout' => 15]);
+            $doc = $this->formatDoc(
+                is_wp_error($response) || wp_remote_retrieve_response_code($response) !== 200
+                    ? null
+                    : json_decode(wp_remote_retrieve_body($response), true)
+            );
+
+            if (!$doc) {
+                return [
+                    'content'  => 'sorry, we could not fetch the doc at this moment. Please try again',
+                    'is_error' => true
+                ];
+            }
+
+            set_transient($cacheKey, $doc, WEEK_IN_SECONDS);
         }
 
-        $doc = json_decode(wp_remote_retrieve_body($request), true);
-
-        return [
-            'title'   => sanitize_text_field($doc['title']['rendered']),
-            'content' => links_add_target(Helper::sanitizeHtml($doc['content']['rendered'])),
-            'link'    => esc_url($doc['link']),
-            'id'      => $doc['id']
-        ];
+        return $doc;
     }
 
     public function getAddons(Request $request)
@@ -160,36 +184,89 @@ class DocsController extends Controller
         return file_exists(WP_PLUGIN_DIR . '/' . $plugin);
     }
 
-    private function getDocsPerChunk($url, $chunkKey)
+    /**
+     * Fetch every page listed in the docs sitemap, in parallel.
+     *
+     * @return array formatted docs, empty if the sitemap is unreachable
+     */
+    private function fetchAllDocs()
     {
-        return fluentCrmGetFromCache($chunkKey, function () use ($url) {
-            $request = wp_remote_get($url);
+        $sitemap = wp_remote_get($this->docsHost . 'sitemap.xml', ['timeout' => 15]);
 
-            if (is_wp_error($request)) {
-                return [];
+        if (is_wp_error($sitemap) || wp_remote_retrieve_response_code($sitemap) !== 200) {
+            return [];
+        }
+
+        preg_match_all('#<loc>' . preg_quote($this->docsHost, '#') . '([a-z0-9-]+)</loc>#', wp_remote_retrieve_body($sitemap), $matches);
+
+        $requests = [];
+        foreach (array_diff(array_unique($matches[1]), $this->excludedSlugs) as $slug) {
+            $requests[$slug] = ['url' => $this->docsHost . $slug . '.json'];
+        }
+
+        if (!$requests) {
+            return [];
+        }
+
+        $requestsClass = class_exists('\WpOrg\Requests\Requests') ? '\WpOrg\Requests\Requests' : '\Requests';
+        $responses = $requestsClass::request_multiple($requests, ['timeout' => 20]);
+
+        $docs = [];
+        foreach ($responses as $response) {
+            // Failed requests come back as exception objects without a body.
+            if (empty($response->success) || $response->status_code !== 200) {
+                continue;
             }
 
-            $docs = json_decode(wp_remote_retrieve_body($request), true);
-
-            $formattedDocs = [];
-
-            foreach ($docs as $doc) {
-
-                if (empty($doc['title'])) {
-                    continue;
-                }
-
-                $primaryCategory = Arr::get($doc, 'taxonomy_info.doc_category.0', ['value' => 'none', 'label' => 'Other']);
-                $formattedDocs[] = [
-                    'title'    => sanitize_text_field($doc['title']['rendered']),
-                    'content'  => links_add_target(Helper::sanitizeHtml($doc['content']['rendered'])),
-                    'link'     => esc_url($doc['link']),
-                    'category' => wp_kses_post_deep($primaryCategory)
-                ];
+            $doc = $this->formatDoc(json_decode($response->body, true));
+            if ($doc) {
+                $docs[] = $doc;
             }
-            
-            return $formattedDocs;
-        }, WEEK_IN_SECONDS);
+        }
+
+        return $docs;
+    }
+
+    /**
+     * Normalize one docs-site page into the shape the admin UI reads.
+     *
+     * @param mixed $raw decoded "<slug>.json" payload
+     * @return array|null null when the payload is not a doc
+     */
+    private function formatDoc($raw)
+    {
+        if (!is_array($raw) || empty($raw['slug']) || empty($raw['title']) || !isset($raw['html'])) {
+            return null;
+        }
+
+        $link = esc_url(Arr::get($raw, 'url', $this->docsHost . $raw['slug']));
+        $category = sanitize_title(Arr::get($raw, 'category', 'other'));
+
+        // In-page "#anchor" links would otherwise change the admin's hash route.
+        $html = preg_replace('/href="#/', 'href="' . esc_url($link) . '#', $raw['html']);
+
+        return [
+            'id'       => sanitize_title($raw['slug']),
+            'title'    => sanitize_text_field($raw['title']),
+            'content'  => links_add_target(Helper::sanitizeHtml($html)),
+            'link'     => $link,
+            'category' => [
+                'value' => $category,
+                'label' => $this->categoryLabel($category)
+            ]
+        ];
+    }
+
+    private function categoryLabel($category)
+    {
+        $labels = [
+            'devloper'            => __('Developer', 'fluent-crm'),
+            'sms-module'          => __('SMS Module', 'fluent-crm'),
+            'whatsapp-module'     => __('WhatsApp Module', 'fluent-crm'),
+            'fluentcrm-essentials' => __('FluentCRM Essentials', 'fluent-crm'),
+        ];
+
+        return $labels[$category] ?? ucwords(str_replace('-', ' ', $category));
     }
 
 }

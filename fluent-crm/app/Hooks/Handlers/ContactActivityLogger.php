@@ -47,7 +47,9 @@ class ContactActivityLogger
             return;
         }
 
-        $subscriber = Subscriber::where('email', $user->user_email)->first();
+        $subscriber = Helper::isUserEmailVerified($user)
+            ? Subscriber::where('email', $user->user_email)->first()
+            : Subscriber::where('user_id', $user->ID)->first();
 
         if (!$subscriber) {
             return;

@@ -451,6 +451,7 @@ class PrefFormHandler
             }
 
             if (in_array('last_name', $generalFields)) {
+                // Contacts may manage preferences without supplying a last name.
                 $nameFields['last_name'] = [
                     'type'     => 'input',
                     'name'     => 'last_name',
@@ -459,7 +460,7 @@ class PrefFormHandler
                         'type'        => 'text',
                         'placeholder' => __('Last name', 'fluent-crm')
                     ],
-                    'required' => true,
+                    'required' => false,
                     'label'    => Arr::get($labels, 'last_name', 'Last Name'),
                     'value'    => $subscriber->last_name
                 ];

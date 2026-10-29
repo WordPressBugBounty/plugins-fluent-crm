@@ -77,11 +77,12 @@ class FormsController extends Controller
 
         $formIds = array_unique($formIds);
         $page = $request->get('page', 1);
-        $limit = $request->get('per_page', 10);
+        // 0 divided by zero in the page math below; same ceiling as Model::getPerPage().
+        $limit = max(1, min(1000, intval($request->get('per_page', 10))));
         $offset = ($page - 1) * $limit;
 
         $forms = [];
-
+        $total = 0;
 
         if ($formIds) {
             $crmBaseUrl = fluentcrm_menu_url_base();
@@ -95,6 +96,9 @@ class FormsController extends Controller
                 global $wpdb;
                 $allFormsQuery->where('title', 'LIKE', '%' . $wpdb->esc_like($search) . '%');
             }
+            // Count the forms that exist and match the search, not every connected form id.
+            $total = $allFormsQuery->clone()->count();
+
             $allForms = $allFormsQuery->orderBy('id', 'DESC')
                 ->limit($limit)
                 ->offset($offset)
@@ -133,17 +137,20 @@ class FormsController extends Controller
                     'associate_tags'  => implode(', ', $associateTags),
                     'associate_lists' => $associateList,
                     'shortcode'       => '[fluentform id="' . $form->id . '"]',
+                    // Fluent Forms' own per-form checks for its editor/settings and entries screens.
+                    'can_edit'        => Acl::hasPermission('fluentform_forms_manager', $form->id),
+                    'can_view_entries' => Acl::hasPermission('fluentform_entries_viewer', $form->id),
                     'edit_url'        => admin_url('admin.php?page=fluent_forms&route=editor&form_id=' . $form->id),
                     'preview_url'     => site_url('?fluent_forms_pages=1&design_mode=1&preview_id=' . $form->id)
                 ];
             }
         }
 
-        $total = count($formIds);
-
         return [
-            'installed' => true,
-            'forms'     => [
+            'installed'       => true,
+            // create() requires this too; the page uses it to show the Create button.
+            'can_create_form' => Acl::hasPermission('fluentform_forms_manager'),
+            'forms'           => [
                 'data'      => $forms,
                 'page'      => $page,
                 'per_page'  => $limit,
@@ -155,12 +162,44 @@ class FormsController extends Controller
 
     public function create(Request $request)
     {
+        if (!defined('FLUENTFORM')) {
+            return $this->sendError([
+                'message' => __('Fluent Forms is not installed', 'fluent-crm')
+            ]);
+        }
+
+        // This writes straight into Fluent Forms' tables, so it must hold Fluent Forms' own
+        // permission, not only the CRM "Manage Forms" one.
+        if (!Acl::hasPermission('fluentform_forms_manager')) {
+            return $this->sendError([
+                'message' => __('You do not have permission to create forms', 'fluent-crm')
+            ], 403);
+        }
+
+        $request->merge([
+            'title' => sanitize_text_field((string)$request->get('title'))
+        ]);
+
         $form = $this->validate($request->all(), [
             'template_id'   => 'required',
             'title'         => 'required|unique:fluentform_forms',
             'selected_tags' => 'required',
             'selected_list' => 'required'
         ]);
+
+        // The feed applies these to every public submission: keep only tags and a list that exist.
+        $tagIds = array_filter(array_map('intval', (array)$form['selected_tags']));
+        $form['selected_tags'] = $tagIds ? array_map('intval', Tag::whereIn('id', $tagIds)->pluck('id')->toArray()) : [];
+        $form['selected_list'] = (int)$form['selected_list'];
+        // Same rule the feed uses to read double_opt_in (FILTER_VALIDATE_BOOLEAN), so on/YES/TRUE stay on.
+        $form['double_optin'] = (bool)Arr::isTrue($form, 'double_optin');
+
+        if (!$form['selected_tags'] || !Lists::find($form['selected_list'])) {
+            return $this->sendError([
+                'message' => __('Please select an existing tag and list', 'fluent-crm')
+            ], 422);
+        }
+
         $template = $this->getSelectedTemplate($form['template_id']);
         $now = current_time('mysql');
         $formData = [
@@ -387,7 +426,8 @@ class FormsController extends Controller
         }
 
         $page = $request->get('page', 1);
-        $limit = $request->get('per_page', 10);
+        // 0 divided by zero in the page math below; same ceiling as Model::getPerPage().
+        $limit = max(1, min(1000, intval($request->get('per_page', 10))));
         $offset = ($page - 1) * $limit;
         $search = sanitize_text_field($request->get('search', ''));
         if ($search) {

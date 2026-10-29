@@ -18,7 +18,7 @@
         </div>
         <div class="fc_field">
             <label for="fc_last_name"><?php esc_html_e('Last name', 'fluent-crm'); ?></label>
-            <input id="fc_last_name" required value="<?php echo esc_html($subscriber->last_name); ?>" placeholder="<?php esc_attr_e('Last name', 'fluent-crm'); ?>" class="fc_input_control" type="text" name="last_name"/>
+            <input id="fc_last_name" value="<?php echo esc_html($subscriber->last_name); ?>" placeholder="<?php esc_attr_e('Last name', 'fluent-crm'); ?>" class="fc_input_control" type="text" name="last_name"/>
         </div>
 
         <?php if ($list_options): ?>

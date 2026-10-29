@@ -122,14 +122,6 @@ class DashboardController extends Controller
                 'learn_more'  => 'https://fluentcrm.com/integrations/woocommerce-marketing-automation/',
                 'base_title'  => __('Get more from your WooCommerce store with FluentCRM Pro', 'fluent-crm')
             ];
-            $recommendations[] = [
-                'provider'    => 'WooCommerce',
-                'title'       => __('Do more with WooCommerce + FluentCRM', 'fluent-crm'),
-                'description' => __('Integrate FluentCRM with WooCommerce to segment customers by purchase behavior and send targeted emails, onboarding emails, cross-promotions, and more.', 'fluent-crm'),
-                'btn_text'    => __('Upgrade to Pro', 'fluent-crm'),
-                'learn_more'  => 'https://fluentcrm.com/integrations/woocommerce-marketing-automation/',
-                'base_title'  => __('Get more from your WooCommerce store with FluentCRM Pro', 'fluent-crm')
-            ];
         }
 
         if (Helper::isEdd3()) {
@@ -223,9 +215,9 @@ class DashboardController extends Controller
             ];
         } else if (class_exists('\Restrict_Content_Pro')) {
             $recommendations[] = [
-                'provider'    => 'Restrict Content Pro',
-                'title'       => __('Do more with Restrict Content Pro + FluentCRM', 'fluent-crm'),
-                'description' => __('Integrate Restrict Content Pro with FluentCRM to segment members by membership level and send targeted emails, onboarding emails, membership cross-promotions, and more.', 'fluent-crm'),
+                'provider'    => 'Kadence Memberships',
+                'title'       => __('Do more with Kadence Memberships + FluentCRM', 'fluent-crm'),
+                'description' => __('Integrate Kadence Memberships (formerly Restrict Content Pro) with FluentCRM to segment members by membership level and send targeted emails, onboarding emails, membership cross-promotions, and more.', 'fluent-crm'),
                 'btn_text'    => __('Upgrade to Pro', 'fluent-crm'),
                 'base_title'  => __('Get more from your membership site with FluentCRM Pro', 'fluent-crm')
             ];

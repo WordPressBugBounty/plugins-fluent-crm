@@ -129,7 +129,7 @@ class ProFunnelItems
 
         if (class_exists('\Restrict_Content_Pro')) {
             $triggers['rcp_membership_post_activate'] = [
-                'category'    => 'Restrict Content Pro',
+                'category'    => 'Kadence Memberships',
                 'label'       => 'Membership Enrolled',
                 'icon'        => 'fc-icon-rcp_membership_level',
                 'description' => 'This funnel runs when a member is added to a membership level',
@@ -137,7 +137,7 @@ class ProFunnelItems
             ];
 
             $triggers['rcp_transition_membership_status_expired'] = [
-                'category'    => 'Restrict Content Pro',
+                'category'    => 'Kadence Memberships',
                 'label'       => 'Membership Expired',
                 'icon'        => 'fc-icon-rcp_membership_cancle',
                 'description' => 'This funnel runs when a membership expires',
@@ -145,7 +145,7 @@ class ProFunnelItems
             ];
 
             $triggers['rcp_membership_post_cancel'] = [
-                'category'    => 'Restrict Content Pro',
+                'category'    => 'Kadence Memberships',
                 'label'       => 'Membership Canceled',
                 'icon'        => 'fc-icon-rcp_membership_cancle',
                 'description' => 'This funnel runs when a membership is canceled',
@@ -487,6 +487,15 @@ class ProFunnelItems
         }
 
         if (defined('WC_PLUGIN_FILE')) {
+            $blocks['fcrm_create_woo_coupon'] = [
+                'is_pro'      => true,
+                'type'        => 'action',
+                'category'    => 'WooCommerce',
+                'title'       => 'Create Coupon',
+                'description' => 'Create WooCommerce Coupon Code',
+                'icon'        => 'fc-icon-woo',
+            ];
+
             $blocks['fcrm_woo_is_purchased'] = [
                 'is_pro'      => true,
                 'type'        => 'conditional',

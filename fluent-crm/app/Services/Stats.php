@@ -14,15 +14,19 @@ class Stats
     public function getCounts()
     {
         // Raw counts are cached for 5 minutes; titles are built per request for the viewer's locale.
-        $counts = fluentCrmGetFromCache('dashboard_stat_counts', function () {
-            return [
+        // A transient, not wp_cache: without a persistent object cache wp_cache lasts one request,
+        // so the five COUNTs (two over fc_campaign_emails) ran on every dashboard load.
+        $counts = get_transient('fluent_crm_dashboard_stat_counts');
+        if (!is_array($counts)) {
+            $counts = [
                 'total_subscribers' => Subscriber::where('status', 'subscribed')->count(),
                 'total_campaigns'   => Campaign::count(),
                 'email_sent'        => CampaignEmail::whereIn('status', CampaignEmail::SENT_STATUSES)->count(),
                 'total_automations' => Funnel::where('status', 'published')->count(),
                 'email_pending'     => CampaignEmail::whereIn('status', ['pending', 'scheduled', 'processing'])->count()
             ];
-        }, 300);
+            set_transient('fluent_crm_dashboard_stat_counts', $counts, 300);
+        }
 
         $data = [
             'total_subscribers' => [

@@ -114,6 +114,8 @@ $app->addAction('fluentcrm_subscriber_status_to_subscribed', 'Cleanup@resetSoftB
 $app->addAction('delete_user', 'Cleanup@handleUserDelete', 10, 3);
 $app->addAction('fluent_crm/company_deleted', 'Cleanup@handleCompanyDelete', 10, 1);
 $app->addAction('after_password_reset', 'Cleanup@handleUserPasswordChanged', 10, 1);
+$app->addAction('after_password_reset', 'Cleanup@clearUnverifiedEmail', 5, 1);
+$app->addAction('profile_update', 'Cleanup@flagUnverifiedEmailChange', 20, 2);
 
 add_action('fluent_crm/debug_log', function ($logData) {
     if (!is_array($logData) || empty($logData['title'])) {
@@ -139,6 +141,17 @@ add_action('wp_ajax_nopriv_fluentcrm-post-campaigns-emails-processing', function
         \FluentCrm\App\Hooks\Handlers\Scheduler::processFiveMinutes();
     }
 
+    wp_send_json_success([
+        'message' => 'success',
+        'time'    => time()
+    ]);
+});
+
+// Continues a funnel processor run that stopped with due jobs left. The processor lock is the guard.
+add_action('wp_ajax_nopriv_fluentcrm-post-automation-processing', function () {
+    do_action('fluent_crm_process_automation');
+
+    nocache_headers();
     wp_send_json_success([
         'message' => 'success',
         'time'    => time()

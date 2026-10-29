@@ -176,11 +176,14 @@ class TagsController extends Controller
             ]);
         }
 
-        $tag = Tag::where('id', $id)->update([
+        Tag::where('id', $id)->update([
             'title'       => sanitize_text_field($allData['title']),
             'slug'        => $allData['slug'],
             'description' => sanitize_textarea_field(Arr::get($allData, 'description')),
         ]);
+
+        // update() returns a row count; listeners of the hook below expect the model.
+        $tag = Tag::find($id);
 
         do_action('fluentcrm_tag_updated', $id);
 

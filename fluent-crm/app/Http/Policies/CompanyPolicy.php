@@ -46,6 +46,23 @@ class CompanyPolicy extends BasePolicy
         return $this->verifyRequest($request);
     }
 
+    /**
+     * Company field schema is site configuration, gated like the contact custom-field routes
+     * (CustomFieldsPolicy) rather than by the tag/list manager capability.
+     *
+     * @param  \FluentCrm\Framework\Http\Request\Request $request
+     * @return Boolean
+     */
+    public function saveCustomGlobalFields(Request $request)
+    {
+        return $this->isEnabled() && $this->currentUserCan('fcrm_manage_settings');
+    }
+
+    public function updateCustomFieldGroupName(Request $request)
+    {
+        return $this->saveCustomGlobalFields($request);
+    }
+
     public function detachSubscribers(Request $request)
     {
         return $this->verifyRequest($request);

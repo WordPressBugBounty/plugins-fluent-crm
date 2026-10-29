@@ -12,6 +12,23 @@ use FluentCrm\Framework\Support\Arr;
 
 class FunnelProcessor
 {
+    /**
+     * True while followUpSequenceActions() works through its batch. Email actions then only
+     * queue their rows; the every-minute mailer sends them, so automation processing and
+     * sending stay two independent jobs.
+     *
+     * @var bool
+     */
+    public static $isBatchRun = false;
+
+    /**
+     * Email sends a batch run deferred to the mailer (one per contact job). The run reports it
+     * as `queued`, so the caller starts a sending cycle only when there is something to send.
+     *
+     * @var int
+     */
+    public static $queuedEmailJobs = 0;
+
     private $subscribersCache = [];
 
     private $sequenceFunnelCache = [];
@@ -412,17 +429,65 @@ class FunnelProcessor
             $maxProcessingSeconds = 1;
         }
 
-        foreach ($jobs as $job) {
-            if ((time() - $startingAt) > $maxProcessingSeconds) {
-                break;
+        // Keep PHP's hard limit above the processing window, so the loop stops on its own check.
+        Helper::raiseTimeLimit($maxProcessingSeconds + 30);
+
+        self::$isBatchRun = true;
+        self::$queuedEmailJobs = 0;
+
+        try {
+            foreach ($jobs as $job) {
+                if ((time() - $startingAt) > $maxProcessingSeconds) {
+                    break;
+                }
+
+                $completed++;
+
+                $this->processFunnelAction($job);
             }
-
-            $completed++;
-
-            $this->processFunnelAction($job);
+        } finally {
+            self::$isBatchRun = false;
         }
 
         Helper::debugLog('Automation followUpSequenceActions', 'Completed Jobs Count: ' . $completed);
+
+        // Stopped on the time cap, or took a full batch: more due jobs may be waiting.
+        $mayHaveMore = $completed < count($jobs) || count($jobs) >= $batchLimit;
+
+        return [
+            'completed' => $completed,
+            'queued'    => self::$queuedEmailJobs,
+            'has_more'  => $mayHaveMore && $this->didAdvance($jobs->first()),
+        ];
+    }
+
+    /**
+     * Whether processing changed the first job of the batch.
+     *
+     * A due row that processing leaves untouched would be picked up first again, so chaining
+     * another run straight away would spin on it. Such a row waits for the next scheduled tick.
+     *
+     * @param FunnelSubscriber|null $job The job as it was read before processing.
+     * @return bool
+     */
+    private function didAdvance($job)
+    {
+        if (!$job) {
+            return false;
+        }
+
+        $fresh = FunnelSubscriber::where('id', $job->id)->first();
+        if (!$fresh) {
+            return true;
+        }
+
+        foreach (['status', 'next_execution_time', 'next_sequence_id', 'last_sequence_id'] as $field) {
+            if ((string)$fresh->{$field} !== (string)$job->{$field}) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     public function processFunnelAction($funnelSubscriber)

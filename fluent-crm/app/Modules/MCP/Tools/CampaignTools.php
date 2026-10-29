@@ -6,6 +6,7 @@ use FluentCrm\App\Models\Campaign;
 use FluentCrm\App\Models\CampaignUrlMetric;
 use FluentCrm\App\Models\Subject;
 use FluentCrm\App\Modules\MCP\Helpers\MCPHelper;
+use FluentCrm\App\Services\Helper;
 
 /**
  * Campaign-centric MCP tools.
@@ -396,7 +397,7 @@ class CampaignTools
             return null;
         }
 
-        $settings = is_array($campaign->settings) ? $campaign->settings : (array) maybe_unserialize($campaign->settings);
+        $settings = is_array($campaign->settings) ? $campaign->settings : (array) Helper::safeUnserialize($campaign->settings);
 
         $start = microtime(true);
         $count = self::estimateRecipientsFromSettings($settings);
@@ -514,7 +515,7 @@ class CampaignTools
 
         $settings = $campaign->settings ?: [];
         if (is_string($settings)) {
-            $settings = (array) maybe_unserialize($settings);
+            $settings = (array) Helper::safeUnserialize($settings);
         }
 
         if (!empty($params['settings']) && is_array($params['settings'])) {
@@ -852,7 +853,7 @@ class CampaignTools
 
         // Compute recipients_count if not yet set.
         if (!$campaign->recipients_count) {
-            $settings = is_array($campaign->settings) ? $campaign->settings : (array) maybe_unserialize($campaign->settings);
+            $settings = is_array($campaign->settings) ? $campaign->settings : (array) Helper::safeUnserialize($campaign->settings);
             if (!empty($settings['subscribers']) || !empty($settings['excludedSubscribers'])) {
                 $count = (new Campaign())->getSubscriberIdsCountBySegmentSettings($settings);
                 $campaign->recipients_count = (int) $count;
@@ -865,7 +866,7 @@ class CampaignTools
         }
 
         // Same transition the controller applies.
-        $settings = is_array($campaign->settings) ? $campaign->settings : (array) maybe_unserialize($campaign->settings);
+        $settings = is_array($campaign->settings) ? $campaign->settings : (array) Helper::safeUnserialize($campaign->settings);
 
         if ($scheduleAt === null) {
             $settings['sending_type'] = 'instant';
@@ -897,13 +898,17 @@ class CampaignTools
             ];
         }
 
-        // Seed trackers from site defaults only when the campaign has not set them.
-        if (!isset($update['settings']['click_tracker']) || $update['settings']['click_tracker'] === '') {
+        // Seed trackers from site defaults only when the campaign has not set them. A metric with
+        // a per-campaign choice key (even '' for "follow the site") always starts from the site
+        // default, as the REST schedule does, so a value frozen by an earlier schedule cannot
+        // outlive a changed or cleared choice.
+        if (!isset($update['settings']['click_tracker']) || $update['settings']['click_tracker'] === '' || array_key_exists('click_tracking', $update['settings'])) {
             $update['settings']['click_tracker'] = fluentcrmTrackClicking();
         }
-        if (!isset($update['settings']['open_tracker']) || $update['settings']['open_tracker'] === '') {
+        if (!isset($update['settings']['open_tracker']) || $update['settings']['open_tracker'] === '' || array_key_exists('open_tracking', $update['settings'])) {
             $update['settings']['open_tracker'] = fluentcrmTrackEmailOpen();
         }
+        $update['settings'] = Campaign::applyTrackingChoice($update['settings']);
         $update['settings'] = maybe_serialize($update['settings']);
 
         $updated = Campaign::where('id', $campaign->id)->where('status', 'draft')->update($update);

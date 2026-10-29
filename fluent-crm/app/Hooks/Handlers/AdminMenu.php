@@ -807,6 +807,11 @@ class AdminMenu
             'server_time'                         => current_time('mysql'),
             // Schedule pickers say which timezone their times are in.
             'site_timezone'                       => wp_timezone_string(),
+            // Site tracking levels (yes, anonymous or no); a campaign can only pick a stricter one.
+            'email_tracking'                      => [
+                'open'  => Helper::trackingLevel(fluentcrmTrackEmailOpen()),
+                'click' => Helper::trackingLevel(fluentcrmTrackClicking())
+            ],
             // Real signal only for users who can run the repair (fcrm_manage_settings).
             'db_index_health_ok'                  => !PermissionManager::currentUserCan('fcrm_manage_settings') || !DbPerformanceService::hasBrokenIndex(false),
             'crm_pro_url'                         => 'https://fluentcrm.com/?utm_source=plugin&utm_medium=admin&utm_campaign=promo',
@@ -863,7 +868,9 @@ class AdminMenu
                 // Keep both keys for backward compatibility with existing filter integrations.
                 'paidmembershippro'    => ['svg'  => $this->getFunnelCatSvgIcon('paidmembershipspro')],
                 'paidmembershipspro'   => ['svg'  => $this->getFunnelCatSvgIcon('paidmembershipspro')],
+                // Keep the legacy category key for addons that still use the previous product name.
                 'restrictcontentpro'   => ['icon' => 'fc-icon-restric_content'],
+                'kadencememberships'   => ['icon' => 'fc-icon-restric_content'],
                 'tutorlms'             => ['svg' => $this->getFunnelCatSvgIcon('tutorlms')],
                 'wishlistmember'       => ['svg' => $this->getFunnelCatSvgIcon('wishlistmember')],
                 'surecart'             => ['svg' => $this->getFunnelCatSvgIcon('surecart')],

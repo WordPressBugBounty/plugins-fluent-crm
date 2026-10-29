@@ -64,4 +64,16 @@ class FunnelPolicy extends BasePolicy
     {
         return $this->currentUserCan('fcrm_delete_funnels');
     }
+
+    /**
+     * Deleting abandoned carts also removes their contacts' automation progress and
+     * metrics, so it needs the same capability as removing contacts from an automation.
+     *
+     * @param Request $request
+     * @return bool
+     */
+    public function handleBulkDeleteCart(Request $request)
+    {
+        return $this->currentUserCan('fcrm_delete_funnels');
+    }
 }

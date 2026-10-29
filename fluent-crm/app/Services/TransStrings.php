@@ -25,6 +25,8 @@ class TransStrings
             '%1$s of %2$s selected contacts are pending. Only they get the confirmation email.' => __('%1$s of %2$s selected contacts are pending. Only they get the confirmation email.', 'fluent-crm'),
             /* translators: %1$s is the contact status (e.g. Unsubscribed), %2$s is the reason the contact gave, %3$s is the date */
             '%1$s on %3$s. Reason: %2$s' => __('%1$s on %3$s. Reason: %2$s', 'fluent-crm'),
+            /* translators: %1$s is the processed count and %2$s is the skipped count. */
+            '%1$s processed, %2$s skipped.' => __('%1$s processed, %2$s skipped.', 'fluent-crm'),
             /* translators: %1$s is the contact status (e.g. Unsubscribed), %2$s is the reason the contact gave */
             '%1$s. Reason: %2$s' => __('%1$s. Reason: %2$s', 'fluent-crm'),
             /* translators: %1$s is the metric name (Open Rate or Click Rate), %2$s is its value; the trailing % is a literal percent sign */
@@ -69,7 +71,7 @@ class TransStrings
             '%s Unsubscribed' => __('%s Unsubscribed', 'fluent-crm'),
             /* translators: %s is a comma-separated list of search field keys the user typed, such as "zip:, area:" */
             '%s are not search fields, so they were matched as plain text.' => __('%s are not search fields, so they were matched as plain text.', 'fluent-crm'),
-            /* translators: %s is the number of selected contacts. Used inside button labels such as "Add 2 tags to 3 contacts" */
+            /* translators: %s is the number of selected contacts, used in the Add/Remove action label. */
             '%s contact' => __('%s contact', 'fluent-crm'),
             /* translators: %s is the number of contacts matching the selection */
             '%s contact found based on your selection' => __('%s contact found based on your selection', 'fluent-crm'),
@@ -77,7 +79,7 @@ class TransStrings
             '%s contact has been processed' => __('%s contact has been processed', 'fluent-crm'),
             /* translators: %s is the number of contacts processed so far */
             '%s contact processed so far...' => __('%s contact processed so far...', 'fluent-crm'),
-            /* translators: %s is the number of selected contacts. Used inside button labels such as "Add 2 tags to 3 contacts" */
+            /* translators: %s is the number of selected contacts, used in the Add/Remove action label. */
             '%s contacts' => __('%s contacts', 'fluent-crm'),
             /* translators: %s is the number of contacts matching the selection */
             '%s contacts found based on your selection' => __('%s contacts found based on your selection', 'fluent-crm'),
@@ -129,11 +131,11 @@ class TransStrings
             '%s subscribed contact' => __('%s subscribed contact', 'fluent-crm'),
             /* translators: %s is the number of subscribed contacts in the list */
             '%s subscribed contacts' => __('%s subscribed contacts', 'fluent-crm'),
-            /* translators: %s is the number of chosen tags (first pair) or lists (second pair). Used inside "Add %1$s to %2$s" */
+            /* translators: %s is the number of chosen tags, used in the Add/Remove action label. */
             '%s tag' => __('%s tag', 'fluent-crm'),
             /* translators: %s is the number of tags imported */
             '%s tag has been imported.' => __('%s tag has been imported.', 'fluent-crm'),
-            /* translators: %s is the number of chosen tags (first pair) or lists (second pair). Used inside "Add %1$s to %2$s" */
+            /* translators: %s is the number of chosen tags, used in the Add/Remove action label. */
             '%s tags' => __('%s tags', 'fluent-crm'),
             /* translators: %s is the number of tags imported */
             '%s tags have been imported.' => __('%s tags have been imported.', 'fluent-crm'),
@@ -161,6 +163,7 @@ class TransStrings
             '+%d more' => __('+%d more', 'fluent-crm'),
             '+155555555' => __('+155555555', 'fluent-crm'),
             'A bulk action is still running. Leaving stops it after the current batch; contacts already processed keep the change.' => __('A bulk action is still running. Leaving stops it after the current batch; contacts already processed keep the change.', 'fluent-crm'),
+            'A campaign can use less tracking than your compliance settings, not more.' => __('A campaign can use less tracking than your compliance settings, not more.', 'fluent-crm'),
             'A title for your link, so you do not forget it' => __('A title for your link, so you do not forget it', 'fluent-crm'),
             'A/B Testing Result' => __('A/B Testing Result', 'fluent-crm'),
             /* translators: Label of the first path of an A/B split test in an automation */
@@ -212,7 +215,7 @@ class TransStrings
             'Adapter Inactive' => __('Adapter Inactive', 'fluent-crm'),
             'Adapter Required' => __('Adapter Required', 'fluent-crm'),
             'Add' => __('Add', 'fluent-crm'),
-            /* translators: %1$s is a number of tags or lists such as "2 tags", %2$s is the contacts such as "3 contacts" or "all 120 contacts" */
+            /* translators: %1$s is the chosen tag count and %2$s is the selected contact count. */
             'Add %1$s to %2$s' => __('Add %1$s to %2$s', 'fluent-crm'),
             /* translators: %s is the contacts such as "3 contacts" or "all 120 contacts" */
             'Add %s to the company' => __('Add %s to the company', 'fluent-crm'),
@@ -318,6 +321,7 @@ class TransStrings
             'Advanced Filter' => __('Advanced Filter', 'fluent-crm'),
             'Advanced Filter is a Pro feature' => __('Advanced Filter is a Pro feature', 'fluent-crm'),
             'Advanced Filter requires FluentCRM Pro' => __('Advanced Filter requires FluentCRM Pro', 'fluent-crm'),
+            'After' => __('After', 'fluent-crm'),
             'After 1 Hour' => __('After 1 Hour', 'fluent-crm'),
             'After 1 Week' => __('After 1 Week', 'fluent-crm'),
             'After 2 Days' => __('After 2 Days', 'fluent-crm'),
@@ -349,6 +353,7 @@ class TransStrings
             'All Sequences' => __('All Sequences', 'fluent-crm'),
             'All Statuses' => __('All Statuses', 'fluent-crm'),
             'All available contacts' => __('All available contacts', 'fluent-crm'),
+            'All clicked URLs' => __('All clicked URLs', 'fluent-crm'),
             'All conditions inside a group must match.' => __('All conditions inside a group must match.', 'fluent-crm'),
             'All contacts and their data' => __('All contacts and their data', 'fluent-crm'),
             /* translators: %s is the name of the CRM being migrated from */
@@ -465,6 +470,7 @@ class TransStrings
             'Bar chart' => __('Bar chart', 'fluent-crm'),
             'Bar chart showing top lists by contact percentage' => __('Bar chart showing top lists by contact percentage', 'fluent-crm'),
             'Basic Information' => __('Basic Information', 'fluent-crm'),
+            'Before' => __('Before', 'fluent-crm'),
             'Best matches first' => __('Best matches first', 'fluent-crm'),
             'Billing Address' => __('Billing Address', 'fluent-crm'),
             'BizSetup_Admin_Emails_Help' => __('Internal use only. Hidden from customers. Use commas for multiple emails.', 'fluent-crm'),
@@ -603,6 +609,7 @@ class TransStrings
             'Classic Editor' => __('Classic Editor', 'fluent-crm'),
             'Clear' => __('Clear', 'fluent-crm'),
             'Clear all SMS statuses' => __('Clear all SMS statuses', 'fluent-crm'),
+            'Clear all filters' => __('Clear all filters', 'fluent-crm'),
             'Clear all labels' => __('Clear all labels', 'fluent-crm'),
             'Clear all lists' => __('Clear all lists', 'fluent-crm'),
             'Clear all statuses' => __('Clear all statuses', 'fluent-crm'),
@@ -684,6 +691,8 @@ class TransStrings
             'Compliance_One_Click_Unsub_Label' => __('Enable one-click unsubscribe (no feedback requested)', 'fluent-crm'),
             'Compliance_Open_Disable_Note' => __('Note: If you disable open tracking, email reports will not show open rates.', 'fluent-crm'),
             'Compliance_Personal_Data_Desc' => __('Include FluentCRM contact information in WordPress personal data exports for GDPR compliance.', 'fluent-crm'),
+            'Compliance_Verified_Email_Desc' => __('Some sites let users change their own email address without a confirmation email. When enabled, FluentCRM does not use such an address to find or link the user\'s contact until they reset their password. Disable it to match users by any email address they set.', 'fluent-crm'),
+            'Compliance_Verified_Email_Label' => __('Match WordPress users to contacts only by a confirmed email address', 'fluent-crm'),
             'Compose' => __('Compose', 'fluent-crm'),
             'Compose Your Email Body' => __('Compose Your Email Body', 'fluent-crm'),
             'Condition Blocks' => __('Condition Blocks', 'fluent-crm'),
@@ -778,6 +787,7 @@ class TransStrings
             'Could not generate AI summary. Please try again.' => __('Could not generate AI summary. Please try again.', 'fluent-crm'),
             'Could not generate email body. Please try again.' => __('Could not generate email body. Please try again.', 'fluent-crm'),
             'Could not import campaign' => __('Could not import campaign', 'fluent-crm'),
+            'Could not load clicked URLs. Retry to use recipient actions.' => __('Could not load clicked URLs. Retry to use recipient actions.', 'fluent-crm'),
             'Count' => __('Count', 'fluent-crm'),
             /* translators: %s is the number of contacts in this list */
             'Count: %s' => __('Count: %s', 'fluent-crm'),
@@ -996,8 +1006,6 @@ class TransStrings
             'Discount Type' => __('Discount Type', 'fluent-crm'),
             'Dismiss' => __('Dismiss', 'fluent-crm'),
             'Dispute' => __('Dispute', 'fluent-crm'),
-            'Divi Bloom Integration' => __('Divi Bloom Integration', 'fluent-crm'),
-            'Divi Themes' => __('Divi Themes', 'fluent-crm'),
             'Do Not Trigger Automations (Tag and List Events)' => __('Do Not Trigger Automations (Tag and List Events)', 'fluent-crm'),
             'Do more with FluentCRM Pro: more integrations, advanced automations, email sequences and detailed analytics.' => __('Do more with FluentCRM Pro: more integrations, advanced automations, email sequences and detailed analytics.', 'fluent-crm'),
             'Do not import segments from untrusted sources.' => __('Do not import segments from untrusted sources.', 'fluent-crm'),
@@ -1033,8 +1041,6 @@ class TransStrings
             'Dynamic_Coupon_Configuration' => __('The selected coupon configuration will be used when creating the dynamic coupon.', 'fluent-crm'),
             'Dynamic_Coupon_Usage' => __('This dynamic coupon can be used in emails or other actions as:', 'fluent-crm'),
             'E-Commerce' => __('E-Commerce', 'fluent-crm'),
-            'E-commerce Integrations' => __('E-commerce Integrations', 'fluent-crm'),
-            'Easy Digital Downloads Integration:' => __('Easy Digital Downloads Integration:', 'fluent-crm'),
             'Edi_If_ysatrtFstettt' => __('If you select a time range, FluentCRM will schedule the email within that time range.', 'fluent-crm'),
             'Edit' => __('Edit', 'fluent-crm'),
             /* translators: %s is the item type being edited, e.g. List or Tag */
@@ -1064,8 +1070,6 @@ class TransStrings
             'Editor' => __('Editor', 'fluent-crm'),
             'Editor is loading. Please wait...' => __('Editor is loading. Please wait...', 'fluent-crm'),
             'Educational' => __('Educational', 'fluent-crm'),
-            'Elementor Page Builder' => __('Elementor Page Builder', 'fluent-crm'),
-            'Elementor Pro Form Integration' => __('Elementor Pro Form Integration', 'fluent-crm'),
             'Eligible_Product_Categories_For_Discount' => __('Product categories the coupon applies to, or that must be in the cart for a "Fixed cart discount" to apply.', 'fluent-crm'),
             'Eligible_Products_For_Discount' => __('Products the coupon applies to, or that must be in the cart for a "Fixed cart discount" to apply.', 'fluent-crm'),
             'EmSet_Footer_Shortcodes' => __('Use the ##crm.manage_subscription_url## and ##crm.unsubscribe_url## smartcodes to insert the Manage Email Subscriptions URL and the Unsubscribe URL.', 'fluent-crm'),
@@ -1122,6 +1126,9 @@ class TransStrings
             'Email field is required' => __('Email field is required', 'fluent-crm'),
             'Email open tracking is disabled via a PHP hook' => __('Email open tracking is disabled via a PHP hook', 'fluent-crm'),
             'Email open tracking was disabled for this campaign.' => __('Email open tracking was disabled for this campaign.', 'fluent-crm'),
+            "Email tracking level\x04Anonymous" => _x('Anonymous', 'Email tracking level', 'fluent-crm'),
+            "Email tracking level\x04Off" => _x('Off', 'Email tracking level', 'fluent-crm'),
+            "Email tracking level\x04Tracked" => _x('Tracked', 'Email tracking level', 'fluent-crm'),
             'Email tracking was disabled for this email campaign.' => __('Email tracking was disabled for this email campaign.', 'fluent-crm'),
             'EmailSequencePromo.title' => __('Send drip emails to your contacts with email sequences', 'fluent-crm'),
             'EmailSettings_Footer_CANSPAM_Help' => __('Business Name, Business Address, and Unsubscribe URL are mandatory to comply with the CAN-SPAM Act guidelines. Without these, your emails may end up in the spam folder. It is also a good idea to include the Manage Email Subscriptions URL in the email footer. These are added here by default.', 'fluent-crm'),
@@ -1136,6 +1143,7 @@ class TransStrings
             'Email_Schedule_Info_sms' => __('Messages are being scheduled and sent in the background at the same time.', 'fluent-crm'),
             'Email_Sequence_Import_Note' => __('Upload an email sequence JSON file you exported earlier.', 'fluent-crm'),
             'Emails' => __('Emails', 'fluent-crm'),
+            'Emails & Actions' => __('Emails & Actions', 'fluent-crm'),
             'Emails Sent' => __('Emails Sent', 'fluent-crm'),
             'Emails are currently being processed' => __('Emails are currently being processed', 'fluent-crm'),
             /* translators: %1$s is the start date and time, %2$s is the end date and time of the sending window */
@@ -1197,6 +1205,7 @@ class TransStrings
             'Entrance (%s) - Waiting for next action' => __('Entrance (%s) - Waiting for next action', 'fluent-crm'),
             'Entries' => __('Entries', 'fluent-crm'),
             'Equal' => __('Equal', 'fluent-crm'),
+            'Equals' => __('Equals', 'fluent-crm'),
             'Error' => __('Error', 'fluent-crm'),
             'Error Details' => __('Error Details', 'fluent-crm'),
             'Errors' => __('Errors', 'fluent-crm'),
@@ -1278,12 +1287,14 @@ class TransStrings
             'Field Name' => __('Field Name', 'fluent-crm'),
             'Field Type' => __('Field Type', 'fluent-crm'),
             'Field Value Options' => __('Field Value Options', 'fluent-crm'),
+            'Fields' => __('Fields', 'fluent-crm'),
             'Fill in the username and app password above to get a ready-to-paste snippet.' => __('Fill in the username and app password above to get a ready-to-paste snippet.', 'fluent-crm'),
             'Filter' => __('Filter', 'fluent-crm'),
             'Filter Contacts' => __('Filter Contacts', 'fluent-crm'),
             'Filter by' => __('Filter by', 'fluent-crm'),
             'Filter by Property and Find the Right Contacts' => __('Filter by Property and Find the Right Contacts', 'fluent-crm'),
             'Filter by campaign' => __('Filter by campaign', 'fluent-crm'),
+            'Filter by clicked URLs' => __('Filter by clicked URLs', 'fluent-crm'),
             'Filter by status' => __('Filter by status', 'fluent-crm'),
             'Filter contacts by status' => __('Filter contacts by status', 'fluent-crm'),
             'Filters' => __('Filters', 'fluent-crm'),
@@ -1296,7 +1307,7 @@ class TransStrings
             'Fixed Cart Discount' => __('Fixed Cart Discount', 'fluent-crm'),
             'Fixed Date' => __('Fixed Date', 'fluent-crm'),
             'Fixed Product Discount' => __('Fixed Product Discount', 'fluent-crm'),
-            'Fluent Forms Integration' => __('Fluent Forms Integration', 'fluent-crm'),
+            'Fluent Ecosystem' => __('Fluent Ecosystem', 'fluent-crm'),
             'Fluent Forms connected to your CRM' => __('Fluent Forms connected to your CRM', 'fluent-crm'),
             'FluentCRM Field' => __('FluentCRM Field', 'fluent-crm'),
             'FluentCRM expected a JSON response but received HTML. Refresh the page and try again.' => __('FluentCRM expected a JSON response but received HTML. Refresh the page and try again.', 'fluent-crm'),
@@ -1317,7 +1328,6 @@ class TransStrings
             'Footer Text Color' => __('Footer Text Color', 'fluent-crm'),
             'For the most accurate preview, send a test email using the Quick Test button.' => __('For the most accurate preview, send a test email using the Quick Test button.', 'fluent-crm'),
             'For_Internal_S_' => __('Internal Subtitle (Optional)', 'fluent-crm'),
-            'Form Integrations' => __('Form Integrations', 'fluent-crm'),
             'Form Title' => __('Form Title', 'fluent-crm'),
             /* translators: %s is the form plugin name, e.g. Fluent Forms */
             'Form submissions from %s will be shown here. No form submissions were found for this contact.' => __('Form submissions from %s will be shown here. No form submissions were found for this contact.', 'fluent-crm'),
@@ -1373,12 +1383,12 @@ class TransStrings
             'Good morning' => __('Good morning', 'fluent-crm'),
             'Grace Period' => __('Grace Period', 'fluent-crm'),
             'Greater Than' => __('Greater Than', 'fluent-crm'),
+            'Greater than' => __('Greater than', 'fluent-crm'),
             'Group' => __('Group', 'fluent-crm'),
             'Group Name' => __('Group Name', 'fluent-crm'),
             'Grow Your Audience' => __('Grow Your Audience', 'fluent-crm'),
             'Grow Your Audience with Opt-in Forms' => __('Grow Your Audience with Opt-in Forms', 'fluent-crm'),
             'Gut_Suggesting_vB6t8' => __('Suggested value: between 600 and 800', 'fluent-crm'),
-            'Gutenberg / WordPress Editor Conditional Blocks' => __('Gutenberg / WordPress Editor Conditional Blocks', 'fluent-crm'),
             'Gutenberg Editor' => __('Gutenberg Editor', 'fluent-crm'),
             'Have a new license key?' => __('Have a new license key?', 'fluent-crm'),
             'Headings Font Family' => __('Headings Font Family', 'fluent-crm'),
@@ -1441,6 +1451,7 @@ class TransStrings
             /* translators: %s is the business address smartcode */
             'Include your business address (%s). A manage subscription or unsubscribe URL is required.' => __('Include your business address (%s). A manage subscription or unsubscribe URL is required.', 'fluent-crm'),
             'Included Contacts' => __('Included Contacts', 'fluent-crm'),
+            'Includes' => __('Includes', 'fluent-crm'),
             'Includes 4 FluentCampaign Pro tools.' => __('Includes 4 FluentCampaign Pro tools.', 'fluent-crm'),
             'Incoming Webhooks' => __('Incoming Webhooks', 'fluent-crm'),
             'Incomplete' => __('Incomplete', 'fluent-crm'),
@@ -1457,7 +1468,6 @@ class TransStrings
             'Installed' => __('Installed', 'fluent-crm'),
             'Installing...' => __('Installing...', 'fluent-crm'),
             'IntegrationSettings.importing_desc' => __('Please do not close this window or navigate to another page.', 'fluent-crm'),
-            'IntegrationSettings.woo_desc' => __('Collect and segment contacts from WooCommerce checkout and send them emails. Run automations and segment your customers in FluentCRM.', 'fluent-crm'),
             'Integrations' => __('Integrations', 'fluent-crm'),
             'Internal Campaign Title' => __('Internal Campaign Title', 'fluent-crm'),
             'Internal Description' => __('Internal Description', 'fluent-crm'),
@@ -1465,7 +1475,6 @@ class TransStrings
             'Internal Subtitle' => __('Internal Subtitle', 'fluent-crm'),
             'Internal Title' => __('Internal Title', 'fluent-crm'),
             'IntgSet_Send_Double_Optin' => __('A double opt-in email will be sent automatically', 'fluent-crm'),
-            'IntgSettings_Intro' => __('FluentCRM integrates with many popular plugins. These settings become available based on the plugins you have installed.', 'fluent-crm'),
             'IntgSettings_No_Match' => __('No integrations found matching your search or filter.', 'fluent-crm'),
             'Invalid' => __('Invalid', 'fluent-crm'),
             'Invalid Emails:' => __('Invalid Emails:', 'fluent-crm'),
@@ -1484,7 +1493,6 @@ class TransStrings
             'Keep existing contact data' => __('Keep existing contact data', 'fluent-crm'),
             'Keep this tab open' => __('Keep this tab open', 'fluent-crm'),
             'LMS' => __('LMS', 'fluent-crm'),
-            'LMS Integrations' => __('LMS Integrations', 'fluent-crm'),
             'Label' => __('Label', 'fluent-crm'),
             'Label Color' => __('Label Color', 'fluent-crm'),
             'Label Title' => __('Label Title', 'fluent-crm'),
@@ -1518,7 +1526,6 @@ class TransStrings
             'Learn more' => __('Learn more', 'fluent-crm'),
             /* translators: %s is the e-commerce plugin name, e.g. WooCommerce */
             'Learn more about %s Abandoned Cart features' => __('Learn more about %s Abandoned Cart features', 'fluent-crm'),
-            'LearnDash Integration:' => __('LearnDash Integration:', 'fluent-crm'),
             'Leave Without Saving' => __('Leave Without Saving', 'fluent-crm'),
             'Leave blank if you do not want to add contacts to any list.' => __('Leave blank if you do not want to add contacts to any list.', 'fluent-crm'),
             'Leave blank if you do not want to apply any tags.' => __('Leave blank if you do not want to apply any tags.', 'fluent-crm'),
@@ -1527,6 +1534,7 @@ class TransStrings
             'Leave it blank to display all campaigns' => __('Leave it blank to display all campaigns', 'fluent-crm'),
             'Length' => __('Length', 'fluent-crm'),
             'Less Than' => __('Less Than', 'fluent-crm'),
+            'Less than' => __('Less than', 'fluent-crm'),
             'Let\'s build a better CRM' => __('Let\'s build a better CRM', 'fluent-crm'),
             'License Key' => __('License Key', 'fluent-crm'),
             'License Management' => __('License Management', 'fluent-crm'),
@@ -1536,7 +1544,6 @@ class TransStrings
             'Licensed To' => __('Licensed To', 'fluent-crm'),
             'Lifetime' => __('Lifetime', 'fluent-crm'),
             'Lifetime Value' => __('Lifetime Value', 'fluent-crm'),
-            'LifterLMS Integration:' => __('LifterLMS Integration:', 'fluent-crm'),
             'Light' => __('Light', 'fluent-crm'),
             'Limit Usage to X Items' => __('Limit Usage to X Items', 'fluent-crm'),
             'Limits' => __('Limits', 'fluent-crm'),
@@ -1635,8 +1642,7 @@ class TransStrings
             'Mcp_FluentHub_Outdated_Desc' => __('FluentHub is active, but this version does not include the bundled MCP adapter yet. Update FluentHub when the MCP-ready build is available.', 'fluent-crm'),
             'Mcp_Intro_Desc' => __('MCP (Model Context Protocol) lets compatible AI clients like Claude Desktop, OpenAI Codex, and Cursor read and write your CRM data with your authorization. Read the setup guide for connection steps and troubleshooting.', 'fluent-crm'),
             'Medium' => __('Medium', 'fluent-crm'),
-            'MemberPress Integration' => __('MemberPress Integration', 'fluent-crm'),
-            'Membership Integrations' => __('Membership Integrations', 'fluent-crm'),
+            'Membership' => __('Membership', 'fluent-crm'),
             'Message' => __('Message', 'fluent-crm'),
             'Message Database Update' => __('Message Database Update', 'fluent-crm'),
             'Message Module' => __('Message Module', 'fluent-crm'),
@@ -1717,12 +1723,14 @@ class TransStrings
             'No chart data available.' => __('No chart data available.', 'fluent-crm'),
             'No chart data found' => __('No chart data found', 'fluent-crm'),
             'No companies found based on your search' => __('No companies found based on your search', 'fluent-crm'),
+            'No companies match these filters' => __('No companies match these filters', 'fluent-crm'),
             'No contact or campaign data collected' => __('No contact or campaign data collected', 'fluent-crm'),
             'No contacts match these filters' => __('No contacts match these filters', 'fluent-crm'),
             'No contacts match your search' => __('No contacts match your search', 'fluent-crm'),
             'No contacts yet. Create a contact to see it here.' => __('No contacts yet. Create a contact to see it here.', 'fluent-crm'),
             'No country data available' => __('No country data available', 'fluent-crm'),
             'No country data to display' => __('No country data to display', 'fluent-crm'),
+            'No custom fields available' => __('No custom fields available', 'fluent-crm'),
             'No custom fields configured for companies yet.' => __('No custom fields configured for companies yet.', 'fluent-crm'),
             'No custom fields yet. Add them in Settings, Custom Contact Fields.' => __('No custom fields yet. Add them in Settings, Custom Contact Fields.', 'fluent-crm'),
             'No data available' => __('No data available', 'fluent-crm'),
@@ -1771,6 +1779,7 @@ class TransStrings
             /* translators: %s is a comma-separated list of smartcodes, e.g. ##user.password_reset_direct_link## */
             'Not filled in this preview: %s' => __('Not filled in this preview: %s', 'fluent-crm'),
             'Not in CRM (ignored):' => __('Not in CRM (ignored):', 'fluent-crm'),
+            'Not installed' => __('Not installed', 'fluent-crm'),
             'Not_Import_Email_Campaigns_Alert' => __('Do not import email campaigns from untrusted sources.', 'fluent-crm'),
             'Not_Import_Recurring_Campaigns_Alert' => __('Do not import recurring campaigns from untrusted sources.', 'fluent-crm'),
             'Not_Import_SMS_Campaigns_Alert' => __('Do not import SMS campaigns from untrusted sources.', 'fluent-crm'),
@@ -1789,6 +1798,7 @@ class TransStrings
             'OR' => __('OR', 'fluent-crm'),
             'October' => __('October', 'fluent-crm'),
             'Official name shown on invoices and emails.' => __('Official name shown on invoices and emails.', 'fluent-crm'),
+            'On' => __('On', 'fluent-crm'),
             /* translators: Short badge next to a tag or list name. %1$s is how many selected contacts have it, %2$s is the number of selected contacts */
             'On %1$s of %2$s' => __('On %1$s of %2$s', 'fluent-crm'),
             'On Hold' => __('On Hold', 'fluent-crm'),
@@ -1815,6 +1825,7 @@ class TransStrings
             'Open_Tracking_Anonymous_Note' => __('Email open tracking is set to anonymous for this campaign. The stats are aggregated and may not reflect the actual number.', 'fluent-crm'),
             'Opened' => __('Opened', 'fluent-crm'),
             'Opens' => __('Opens', 'fluent-crm'),
+            'Operator' => __('Operator', 'fluent-crm'),
             'Opt-Out Carts' => __('Opt-Out Carts', 'fluent-crm'),
             'Opt-in Settings' => __('Opt-in Settings', 'fluent-crm'),
             'Optional' => __('Optional', 'fluent-crm'),
@@ -1827,16 +1838,14 @@ class TransStrings
             /* translators: %s is a human-readable time span, e.g. "5 mins" */
             'Overdue by %s' => __('Overdue by %s', 'fluent-crm'),
             'Owner' => __('Owner', 'fluent-crm'),
-            'Oxygen Builder Integration' => __('Oxygen Builder Integration', 'fluent-crm'),
             'PNG/JPEG, min 400×400px. Shown on branded content.' => __('PNG/JPEG, min 400×400px. Shown on branded content.', 'fluent-crm'),
             'POST Request Status' => __('POST Request Status', 'fluent-crm'),
             'PUT Request Status' => __('PUT Request Status', 'fluent-crm'),
             'Page' => __('Page', 'fluent-crm'),
             /* translators: %1$s is the current page number, %2$s is the total number of pages */
             'Page %1$s of %2$s' => __('Page %1$s of %2$s', 'fluent-crm'),
-            'Page Builder Integrations' => __('Page Builder Integrations', 'fluent-crm'),
+            'Page Builders' => __('Page Builders', 'fluent-crm'),
             'Page Preview' => __('Page Preview', 'fluent-crm'),
-            'Paid Memberships Pro Integration' => __('Paid Memberships Pro Integration', 'fluent-crm'),
             /* translators: %s is the A/B test path label (A or B) */
             'Path: %s' => __('Path: %s', 'fluent-crm'),
             'Pattern Name' => __('Pattern Name', 'fluent-crm'),
@@ -1940,6 +1949,7 @@ class TransStrings
             'Previous_Email_Hist' => __('All previous email history for this recurring campaign.', 'fluent-crm'),
             'Primary' => __('Primary', 'fluent-crm'),
             'Primary Company' => __('Primary Company', 'fluent-crm'),
+            'Primary Field' => __('Primary Field', 'fluent-crm'),
             'Primary Fields' => __('Primary Fields', 'fluent-crm'),
             'Priority (%)' => __('Priority (%)', 'fluent-crm'),
             'Privacy Reminder' => __('Privacy Reminder', 'fluent-crm'),
@@ -1952,6 +1962,7 @@ class TransStrings
             'Problem loading the editor?' => __('Problem loading the editor?', 'fluent-crm'),
             'Processing' => __('Processing', 'fluent-crm'),
             'Processing now...' => __('Processing now...', 'fluent-crm'),
+            'Processing stopped. Refresh the list and select contacts again before retrying.' => __('Processing stopped. Refresh the list and select contacts again before retrying.', 'fluent-crm'),
             'Product' => __('Product', 'fluent-crm'),
             'Product Categories' => __('Product Categories', 'fluent-crm'),
             'Product, promo code, or slogan (e.g. spring_sale)' => __('Product, promo code, or slogan (e.g. spring_sale)', 'fluent-crm'),
@@ -2033,7 +2044,7 @@ class TransStrings
             'Relationship type' => __('Relationship type', 'fluent-crm'),
             'Relative Time (e.g. 2 hours ago)' => __('Relative Time (e.g. 2 hours ago)', 'fluent-crm'),
             'Remove' => __('Remove', 'fluent-crm'),
-            /* translators: %1$s is a number of tags or lists such as "2 tags", %2$s is the contacts such as "3 contacts" or "all 120 contacts" */
+            /* translators: %1$s is the chosen tag count and %2$s is the selected contact count. */
             'Remove %1$s from %2$s' => __('Remove %1$s from %2$s', 'fluent-crm'),
             /* translators: %s is the filter value to remove */
             'Remove %s' => __('Remove %s', 'fluent-crm'),
@@ -2079,10 +2090,11 @@ class TransStrings
             'Resend Count' => __('Resend Count', 'fluent-crm'),
             'Resend Email' => __('Resend Email', 'fluent-crm'),
             'Resend Unopened Emails' => __('Resend Unopened Emails', 'fluent-crm'),
+            /* translators: %s is the number of selected campaign emails. */
+            'Resend eligible emails from the %s selected? Ineligible emails will be skipped.' => __('Resend eligible emails from the %s selected? Ineligible emails will be skipped.', 'fluent-crm'),
             'Reset' => __('Reset', 'fluent-crm'),
             'Reset All Filters' => __('Reset All Filters', 'fluent-crm'),
             'Reset Table Preferences' => __('Reset Table Preferences', 'fluent-crm'),
-            'Restrict Content Pro Integration' => __('Restrict Content Pro Integration', 'fluent-crm'),
             'Restrict the generated coupon to the contact\'s email only' => __('Restrict the generated coupon to the contact\'s email only', 'fluent-crm'),
             'Restrictions & Limits' => __('Restrictions & Limits', 'fluent-crm'),
             'Resume' => __('Resume', 'fluent-crm'),
@@ -2237,7 +2249,7 @@ class TransStrings
             'Select all' => __('Select all', 'fluent-crm'),
             /* translators: %s is the total number of items */
             'Select all %s' => __('Select all %s', 'fluent-crm'),
-            /* translators: %s is the number of contacts that match the current filter */
+            /* translators: %s is the total number of contacts matching the current filters. */
             'Select all %s contacts' => __('Select all %s contacts', 'fluent-crm'),
             'Select an existing coupon code' => __('Select an existing coupon code', 'fluent-crm'),
             'Select an option' => __('Select an option', 'fluent-crm'),
@@ -2246,7 +2258,9 @@ class TransStrings
             'Select country' => __('Select country', 'fluent-crm'),
             'Select data source and operator first' => __('Select data source and operator first', 'fluent-crm'),
             'Select date and time' => __('Select date and time', 'fluent-crm'),
+            'Select field' => __('Select field', 'fluent-crm'),
             'Select notes' => __('Select notes', 'fluent-crm'),
+            'Select only this page' => __('Select only this page', 'fluent-crm'),
             'Select or create' => __('Select or create', 'fluent-crm'),
             'Select sending conditions' => __('Select sending conditions', 'fluent-crm'),
             'Select status' => __('Select status', 'fluent-crm'),
@@ -2488,6 +2502,7 @@ class TransStrings
             'Tags' => __('Tags', 'fluent-crm'),
             /* translators: %s is the number of tags found in the uploaded CSV file */
             'Tags to Import (%s)' => __('Tags to Import (%s)', 'fluent-crm'),
+            'Tags will only be changed for subscribed contacts.' => __('Tags will only be changed for subscribed contacts.', 'fluent-crm'),
             'Tags, lists, and custom fields' => __('Tags, lists, and custom fields', 'fluent-crm'),
             /* translators: %s is the number of lists or tags selected in the filter */
             'Tags: %s' => __('Tags: %s', 'fluent-crm'),
@@ -2528,7 +2543,6 @@ class TransStrings
             'The wait time has been updated.' => __('The wait time has been updated.', 'fluent-crm'),
             'Theme mode' => __('Theme mode', 'fluent-crm'),
             'These contacts will stop receiving marketing emails.' => __('These contacts will stop receiving marketing emails.', 'fluent-crm'),
-            'These integrations are only available in the Pro version of FluentCRM.' => __('These integrations are only available in the Pro version of FluentCRM.', 'fluent-crm'),
             /* translators: %s is a comma-separated list of smartcodes */
             'These smartcodes will be replaced with dynamic values: %s' => __('These smartcodes will be replaced with dynamic values: %s', 'fluent-crm'),
             'This Quarter' => __('This Quarter', 'fluent-crm'),
@@ -2548,8 +2562,6 @@ class TransStrings
             'This value will be skipped' => __('This value will be skipped', 'fluent-crm'),
             'This will permanently delete the webhook. Continue?' => __('This will permanently delete the webhook. Continue?', 'fluent-crm'),
             'This will permanently remove the sticky note from this automation.' => __('This will permanently remove the sticky note from this automation.', 'fluent-crm'),
-            'Thrive Architect Integration' => __('Thrive Architect Integration', 'fluent-crm'),
-            'Thrive Themes Integration' => __('Thrive Themes Integration', 'fluent-crm'),
             'Thu' => __('Thu', 'fluent-crm'),
             'Thursday' => __('Thursday', 'fluent-crm'),
             'Time' => __('Time', 'fluent-crm'),
@@ -2596,6 +2608,7 @@ class TransStrings
             'Total:' => __('Total:', 'fluent-crm'),
             /* translators: %s is the total number of items */
             'Total: %s' => __('Total: %s', 'fluent-crm'),
+            'Tracking' => __('Tracking', 'fluent-crm'),
             'Transactional' => __('Transactional', 'fluent-crm'),
             'Transfer Data From Another CRM' => __('Transfer Data From Another CRM', 'fluent-crm'),
             'Trigger' => __('Trigger', 'fluent-crm'),
@@ -2604,11 +2617,11 @@ class TransStrings
             'Try' => __('Try', 'fluent-crm'),
             'Try a wider date range or check order status settings' => __('Try a wider date range or check order status settings', 'fluent-crm'),
             'Try another status, list or tag.' => __('Try another status, list or tag.', 'fluent-crm'),
+            'Try changing or clearing your filters.' => __('Try changing or clearing your filters.', 'fluent-crm'),
             'Try fewer words, check the spelling, or search one field such as city:berlin.' => __('Try fewer words, check the spelling, or search one field such as city:berlin.', 'fluent-crm'),
             'Trying fallback save. Please wait...' => __('Trying fallback save. Please wait...', 'fluent-crm'),
             'Tue' => __('Tue', 'fluent-crm'),
             'Tuesday' => __('Tuesday', 'fluent-crm'),
-            'Tutor LMS Integration:' => __('Tutor LMS Integration:', 'fluent-crm'),
             'Tutorial' => __('Tutorial', 'fluent-crm'),
             'Type' => __('Type', 'fluent-crm'),
             /* translators: %s is the number of contacts to delete, which the user must type to confirm */
@@ -2634,6 +2647,7 @@ class TransStrings
             'UTM Parameters' => __('UTM Parameters', 'fluent-crm'),
             'UTM Source' => __('UTM Source', 'fluent-crm'),
             'UTM Term' => __('UTM Term', 'fluent-crm'),
+            'Unable to load companies. Clear filters or try again.' => __('Unable to load companies. Clear filters or try again.', 'fluent-crm'),
             'Unique key' => __('Unique key', 'fluent-crm'),
             'Unit Price' => __('Unit Price', 'fluent-crm'),
             'Unknown error' => __('Unknown error', 'fluent-crm'),
@@ -2767,7 +2781,6 @@ class TransStrings
             'Visual Builder' => __('Visual Builder', 'fluent-crm'),
             'Visual Builder (Demo)' => __('Visual Builder (Demo)', 'fluent-crm'),
             'Visual_Email_Builder_Alert' => __('Visual Email Builder is a Pro feature. Please upgrade to Pro to use this feature.', 'fluent-crm'),
-            'WP Fusion Integration' => __('WP Fusion Integration', 'fluent-crm'),
             'WP_CLI_Help' => __('You can also use WP-CLI to sync the data if you have lots of customers.', 'fluent-crm'),
             /* translators: %1$s is the wait amount, %2$s is the time unit (e.g. days, hours, minutes) */
             'Wait %1$s %2$s' => __('Wait %1$s %2$s', 'fluent-crm'),
@@ -2814,10 +2827,8 @@ class TransStrings
             'Will be applied to all the imported contacts' => __('Will be applied to all the imported contacts', 'fluent-crm'),
             /* translators: %s is the name of the CRM being migrated from */
             'Will be applied to contacts that do not have any mapped tags in %s' => __('Will be applied to contacts that do not have any mapped tags in %s', 'fluent-crm'),
-            'WishList Member Integration' => __('WishList Member Integration', 'fluent-crm'),
             'WooCommerce' => __('WooCommerce', 'fluent-crm'),
             'WooCommerce Customers' => __('WooCommerce Customers', 'fluent-crm'),
-            'WooCommerce Integration:' => __('WooCommerce Integration:', 'fluent-crm'),
             'WordPress Default' => __('WordPress Default', 'fluent-crm'),
             /* translators: %s is the installed WordPress MCP Adapter plugin version number */
             'WordPress MCP Adapter %s' => __('WordPress MCP Adapter %s', 'fluent-crm'),
@@ -2919,7 +2930,6 @@ class TransStrings
             'e.g. User Type %s' => __('e.g. User Type %s', 'fluent-crm'),
             'e.g. Weekly Post Update' => __('e.g. Weekly Post Update', 'fluent-crm'),
             'e.g. support@yourdomain.com' => __('e.g. support@yourdomain.com', 'fluent-crm'),
-            'edd_integration_instruction' => __('Add and segment your Easy Digital Downloads customers when someone purchases a product. You can also send first-time customers an automated thank-you email. Segment your customers, run automations on product sales, and track the conversion rate of your marketing campaigns.', 'fluent-crm'),
             'email_will_be_sent_without_footer_contents' => __('If checked, the email is sent without the footer, including the unsubscribe link. Add an unsubscribe link to the email body with a smartcode.', 'fluent-crm'),
             'ends with' => __('ends with', 'fluent-crm'),
             'equals' => __('equals', 'fluent-crm'),
@@ -2936,11 +2946,10 @@ class TransStrings
             'includes none of (match all)' => __('includes none of (match all)', 'fluent-crm'),
             'install_fluentSMTP' => __('Install FluentSMTP Plugin (It\'s free)', 'fluent-crm'),
             'install_fluentcrm_pro' => __('This automation trigger is available in the Pro version of FluentCRM. Please download and install FluentCRM Pro.', 'fluent-crm'),
+            'install_fluentcrm_pro_block' => __('This block is available in the Pro version of FluentCRM. Please download and install FluentCRM Pro.', 'fluent-crm'),
             'is not one of' => __('is not one of', 'fluent-crm'),
             'is one of' => __('is one of', 'fluent-crm'),
             'lead' => __('lead', 'fluent-crm'),
-            'learndash_integration_instruction' => __('Run marketing automations for LMS actions like course enrollment, course completion, lesson completion, group membership enrollment, and more.', 'fluent-crm'),
-            'lifterlms_integration_instruction' => __('Run marketing automations for LMS actions like course enrollment, course completion, lesson completion, and more.', 'fluent-crm'),
             'max_email_per_second_desc' => __('Set the rate limit for sending emails to prevent server overload and comply with SMTP restrictions.', 'fluent-crm'),
             'max_email_per_second_note' => __('This is the maximum sending rate, not a guaranteed one. Actual email sending speed also depends on your cron frequency, server resources and your email service provider.', 'fluent-crm'),
             'n/a' => __('n/a', 'fluent-crm'),
@@ -2970,7 +2979,6 @@ class TransStrings
             'transaction_checkbox_note' => __('If enabled, no email footer or unsubscribe link will be added to the email.', 'fluent-crm'),
             'transactional' => __('transactional', 'fluent-crm'),
             'transfer_data_from_current_ems_to_fluentcrm' => __('Transfer your contacts, tags and associated data from your current email marketing software to FluentCRM.', 'fluent-crm'),
-            'tutorlms_integration_instruction' => __('Run marketing automations for Tutor LMS actions like course enrollment, course completion, and more.', 'fluent-crm'),
             'unsubscribed' => __('Unsubscribed', 'fluent-crm'),
             'update_subscribers_data_notice' => __('Update the data of contacts that already exist?', 'fluent-crm'),
             'use_the_predefined_dynamic_segment_introduction' => __('Use the predefined dynamic segments for your WordPress users, e-commerce customers or even affiliates.', 'fluent-crm'),

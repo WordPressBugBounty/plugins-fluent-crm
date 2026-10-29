@@ -6,6 +6,7 @@ use FluentCrm\App\Models\Campaign;
 use FluentCrm\App\Models\CampaignEmail;
 use FluentCrm\App\Services\CampaignProcessor;
 use FluentCrm\App\Services\ExternalIntegrations\Maintenance;
+use FluentCrm\App\Services\Funnel\FunnelProcessor;
 use FluentCrm\App\Services\Helper;
 use FluentCrm\App\Services\Libs\FileSystem;
 use FluentCrm\App\Services\Libs\Mailer\Handler;
@@ -169,8 +170,13 @@ class Scheduler
             return false;
         }
 
+        // A funnel batch run only queues emails; the run then starts one sending cycle for them.
+        if (FunnelProcessor::$isBatchRun) {
+            FunnelProcessor::$queuedEmailJobs++;
+            return true;
+        }
+
         if (!defined('FLUENTCRM_DOING_BULK_IMPORT')) {
-            // @todo: Implement this immediately
             (new Handler)->processSubscriberEmail($subscriber->id);
         }
 
@@ -314,8 +320,7 @@ class Scheduler
             $firstCampaign = $campaigns->first();
 
             if ($firstCampaign->status == 'pending-scheduled') {
-                $firstCampaign->status = 'processing';
-                $firstCampaign->save();
+                Campaign::claimForProcessing($firstCampaign->id);
             }
 
             $result = self::processCampaignById($firstCampaign->id);
@@ -328,8 +333,7 @@ class Scheduler
                 if ($firstCampaign && $firstCampaign->status != 'processing') {
                     $nextCampaign = $campaigns->last();
                     if ($nextCampaign->status == 'pending-scheduled') {
-                        $nextCampaign->status = 'processing';
-                        $nextCampaign->save();
+                        Campaign::claimForProcessing($nextCampaign->id);
                     }
                     self::fireCampaignProcessingChain($nextCampaign->id);
                 }
@@ -443,7 +447,7 @@ class Scheduler
     public static function processCampaignById($campaignId)
     {
         // Per-campaign lock: the AJAX chain bypasses processFiveMinutes' lock.
-        // TTL matches the set_time_limit(120) below.
+        // TTL matches the raised time limit below.
         $lockName = 'campaign_chain_' . (int)$campaignId;
         if (!self::acquireLock($lockName, 120)) {
             return false;
@@ -454,9 +458,7 @@ class Scheduler
         $continuation = '';
 
         try {
-            if (function_exists('set_time_limit')) {
-                @set_time_limit(120);
-            }
+            Helper::raiseTimeLimit(120);
 
             $campaign = Campaign::withoutGlobalScope('type')->find($campaignId);
             if (!$campaign) {
@@ -545,6 +547,44 @@ class Scheduler
         ], admin_url('admin-ajax.php'));
 
         \FluentCrm\App\Services\Libs\Mailer\Handler::fireNonBlockingRequest($url, [
+            'retry' => 1
+        ]);
+    }
+
+    /**
+     * Follow up a funnel processor run with the requests its result calls for.
+     *
+     * Chains the next run when due jobs are left, so a large queue drains without waiting for
+     * the five-minute tick, and starts a sending cycle only when the run queued emails. An idle
+     * mailer runs the processor again, so a send-now from a run that queued nothing only starts
+     * another processor run, and the two would keep calling each other while rows stay due.
+     *
+     * @param array|null $result followUpSequenceActions() result: has_more, queued.
+     */
+    public static function continueAutomationProcessing($result)
+    {
+        if (!empty($result['has_more'])) {
+            self::fireAutomationProcessingChain();
+        }
+
+        if (!empty($result['queued'])) {
+            self::fireSendNowRequest();
+        }
+    }
+
+    /**
+     * Fire a non-blocking request that runs the funnel processor again now.
+     * The funnel processor lock keeps runs from overlapping; the five-minute tick picks up
+     * the queue if the request is lost.
+     */
+    public static function fireAutomationProcessingChain()
+    {
+        $url = add_query_arg([
+            'action' => 'fluentcrm-post-automation-processing',
+            'time'   => time()
+        ], admin_url('admin-ajax.php'));
+
+        Handler::fireNonBlockingRequest($url, [
             'retry' => 1
         ]);
     }

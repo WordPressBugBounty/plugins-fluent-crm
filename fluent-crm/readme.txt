@@ -4,7 +4,7 @@ Tags: email marketing, newsletter, crm, email newsletter, subscribers
 Requires at least: 6.0
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 3.2.6
+Stable tag: 3.3.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -165,7 +165,7 @@ LifterLMS, LearnDash, TutorLMS, and LearnPress Integrations enable running funne
 
 <h4>MEMBERSHIP INTEGRATION:</h4>
 
-<ul><li>Paid Membership Pro</li><li>MemberPress</li><li>Wishlist Members</li><li>Restrict Content Pro</li><li>WPFusion</li></ul>
+<ul><li>Paid Membership Pro</li><li>MemberPress</li><li>Wishlist Members</li><li>Kadence Memberships (formerly Restrict Content Pro)</li><li>WPFusion</li></ul>
 
 <h4>Form INTEGRATION:</h4>
 <ul><li>Fluent Forms</li><li>Elementor Pro Form</li><li>Divi Bloom</li><li>ThriveArchitect</li><li>Beaver Builder Form</li></ul>
@@ -260,6 +260,27 @@ You can report any security bugs found in the source code of FluentCRM plugins t
 10. Pro Integrations
 
 == Changelog ==
+
+= 3.3.0 (Date: October 29, 2026) =
+- New: Campaign Calendar in Reports, with month, quarter, and year views for campaigns
+- New: Messaging reports for SMS and WhatsApp volume and delivery
+- New: FluentCart quick order previews in contact purchase history.
+- New: Global FluentCart Customer smartcodes.
+- New: Company custom-field filters.
+- Improvement: Clear-all-filters action on the contacts list.
+- Improvement: Faster large automation sends. Automation processing runs back to back instead of waiting for the five-minute cron.
+- Improvement: Restrict Content Pro is now labeled Kadence Memberships.
+- Improvement: Security hardening including contacts ab carts, links, stored data reads, and parser.
+- Improvement: Merged Emails and Actions tabs with bulk recipient actions.
+- Fixed: Report charts now include the selected end date.
+- Fixed: Preference forms accept an empty last name.
+- Fixed: Recurring campaigns keep the qualifying post in latest-post smartcodes.
+- Fixed: Admin screens respect the user's language for REST responses.
+- Fixed: Subscription renewals no longer restart Subscription activated automations.
+- Fixed: WooCommerce Subscriptions trial end and next payment dates issues.
+- Fixed: Same-day fixed-time sequence emails roll over correctly.
+- Fixed: Approved Twilio WhatsApp templates sync as approved.
+- Other Improvement & Bug Fixes
 
 = 3.2.6 (Date: October 12, 2026) =
 - New: Contact status dropdown with counts and smarter field-specific search.

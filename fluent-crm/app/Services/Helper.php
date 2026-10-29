@@ -112,15 +112,45 @@ class Helper
     }
 
     /**
+     * The contact that test emails, previews and test webhooks render for when none is chosen.
+     *
+     * Prefer the current user's linked contact, then an email match allowed by the verification policy.
+     * Otherwise always use the same fallback: the oldest contact.
+     * Shared by REST and MCP so both pick the same contact.
+     *
+     * @return Subscriber|null
+     */
+    public static function getSampleContact()
+    {
+        $user = wp_get_current_user();
+        if ($user && $user->ID) {
+            $own = Subscriber::where('user_id', $user->ID)->first();
+            if ($own) {
+                return $own;
+            }
+
+            if (self::isUserEmailVerified($user)) {
+                $own = Subscriber::where('email', $user->user_email)->first();
+                if ($own) {
+                    return $own;
+                }
+            }
+        }
+
+        return Subscriber::orderBy('id', 'ASC')->first();
+    }
+
+    /**
      * maybe_unserialize() without object instantiation; use for user-influenced values.
      *
      * @param mixed $value The (possibly serialized) value read from storage.
-     * @return mixed Serialized objects become inert incomplete classes.
+     * @return mixed stdClass is kept (it has no magic methods, and settings store it for empty
+     *               JSON objects); any other class becomes an inert incomplete class.
      */
     public static function safeUnserialize($value)
     {
         if (is_serialized($value)) {
-            return @unserialize(trim($value), ['allowed_classes' => false]);
+            return @unserialize(trim($value), ['allowed_classes' => ['stdClass']]);
         }
 
         return $value;
@@ -1684,6 +1714,103 @@ class Helper
         return array_filter($subscriber);
     }
 
+    /**
+     * Whether the user's current email may identify their contact.
+     *
+     * WordPress lets a user change their own email through the REST API with no confirmation,
+     * so that address proves nothing until a password reset reaches it.
+     * See Cleanup::flagUnverifiedEmailChange(). The `verified_email_match` compliance setting turns this off.
+     *
+     * @param \WP_User|false|null $user
+     * @return bool
+     */
+    public static function isUserEmailVerified($user)
+    {
+        if (!$user || empty($user->user_email)) {
+            return false;
+        }
+
+        if (self::getComplianceSettings()['verified_email_match'] === 'no') {
+            return true;
+        }
+
+        $unverified = get_user_meta($user->ID, '_fcrm_unverified_email', true);
+
+        return !$unverified || strtolower($unverified) !== strtolower($user->user_email);
+    }
+
+    /**
+     * The logged-in user's own contact, or null. Never the fc_hash_secure email-click cookie contact.
+     *
+     * Use this, not getCurrentContact(true, true), for anything that personalizes server-rendered
+     * page HTML (form prefill, page-builder conditions). A full-page cache can store that HTML and
+     * serve it to every visitor, and logged-in requests are the one case page caches keep private.
+     * getCurrentContact()'s request cache is skipped on purpose: earlier cookie-aware code on the
+     * page may already have put the cookie contact there. One lookup per user per request.
+     *
+     * @return \FluentCrm\App\Models\Subscriber|null
+     */
+    public static function getLoggedInContact()
+    {
+        static $contacts = [];
+
+        $userId = get_current_user_id();
+        if (!$userId) {
+            return null;
+        }
+
+        if (!array_key_exists($userId, $contacts)) {
+            $contacts[$userId] = FluentCrmApi('contacts')->getCurrentContact(false, false);
+        }
+
+        return $contacts[$userId];
+    }
+
+    /**
+     * Whether linking this user to the contact with this email would rest only on an unverified email.
+     *
+     * A user_id whose account email differs from the contact's is not an email match, so it is allowed.
+     *
+     * @param int $userId
+     * @param string $email The contact's email.
+     * @return bool
+     */
+    public static function isUnverifiedEmailLink($userId, $email)
+    {
+        $user = $userId ? get_user_by('ID', $userId) : false;
+
+        return $user && $email && strtolower($user->user_email) === strtolower($email) && !self::isUserEmailVerified($user);
+    }
+
+    /**
+     * Whether the email change being saved now is one the user made to their own account, unconfirmed.
+     *
+     * Only profile.php sends a confirmation email; the REST API and front-end profile forms apply
+     * the change at once. A user manager's change, or one made by code with no logged-in user, is trusted.
+     *
+     * @param int $userId
+     * @param string $newEmail
+     * @return bool
+     */
+    public static function isUnconfirmedSelfEmailChange($userId, $newEmail)
+    {
+        if (self::getComplianceSettings()['verified_email_match'] === 'no') {
+            return false;
+        }
+
+        if (get_current_user_id() !== (int)$userId || current_user_can('edit_users')) {
+            return false;
+        }
+
+        // wp-admin/user-edit.php applies a confirmed change while `_new_email` still holds the link's hash
+        $pending = get_user_meta($userId, '_new_email', true);
+        $isConfirmed = isset($_GET['newuseremail']) && is_array($pending) && !empty($pending['hash'])
+            && hash_equals($pending['hash'], (string)$_GET['newuseremail'])
+            && strtolower(trim($pending['newemail'])) === strtolower($newEmail);
+
+        return !$isConfirmed;
+    }
+
     public static function isUserSyncEnabled()
     {
         static $result = null;
@@ -2479,11 +2606,27 @@ class Helper
         return array_values($groups);
     }
 
+    /**
+     * Convert a tracker value (true, false, 'anonymous', or legacy 'yes'/'no') to 'yes', 'anonymous' or 'no'.
+     *
+     * @param mixed $status
+     * @return string
+     */
+    public static function trackingLevel($status)
+    {
+        if ($status === 'anonymous') {
+            return 'anonymous';
+        }
+
+        return (!$status || $status === 'no') ? 'no' : 'yes';
+    }
+
     public static function getComplianceSettings()
     {
         $defaults = [
             'anonymize_ip'           => 'no',
             'delete_contact_on_user' => 'no',
+            'verified_email_match'   => 'yes',
             'personal_data_export'   => 'yes',
             'one_click_unsubscribe'  => 'no',
             'enable_gravatar'        => 'yes',
@@ -2586,7 +2729,10 @@ class Helper
             $settings = wp_parse_args($settings, $defaults);
         }
 
-        return apply_filters('fluent_crm/experimental_settings', $settings);
+        // Cache the filtered value: caching the raw one made every later call skip the filter.
+        $settings = apply_filters('fluent_crm/experimental_settings', $settings);
+
+        return $settings;
     }
 
     public static function willMultiThreadEmail($minPendingLimit = 300)
@@ -3461,6 +3607,30 @@ class Helper
         }
 
         return get_option($optionKey);
+    }
+
+    /**
+     * Raise PHP's time limit to at least $seconds; never lower it.
+     *
+     * set_time_limit() lowers as readily as it raises, and the value outlives our code: under
+     * WP-CLI (unlimited) or on a host allowing more than $seconds, every later job in the same
+     * process (other plugins' Action Scheduler actions included) would inherit the lower limit.
+     * Mirrors ActionScheduler_Compatibility::raise_time_limit().
+     *
+     * @param int $seconds Minimum limit the caller needs, in seconds.
+     * @return void
+     */
+    public static function raiseTimeLimit($seconds)
+    {
+        $seconds = (int)$seconds;
+        $current = (int)ini_get('max_execution_time');
+
+        // 0 is unlimited.
+        if ($seconds < 1 || $current === 0 || $current >= $seconds || !function_exists('set_time_limit')) {
+            return;
+        }
+
+        @set_time_limit($seconds);
     }
 
     /**

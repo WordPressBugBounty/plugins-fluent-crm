@@ -205,11 +205,14 @@ class ListsController extends Controller
             ]);
         }
 
-        $list = Lists::where('id', $id)->update([
+        Lists::where('id', $id)->update([
             'title'       => sanitize_text_field($allData['title']),
             'slug'        => $allData['slug'],
             'description' => sanitize_textarea_field(Arr::get($allData, 'description')),
         ]);
+
+        // update() returns a row count; listeners of the hook below expect the model.
+        $list = Lists::find($id);
 
         do_action('fluentcrm_list_updated', $id);
 

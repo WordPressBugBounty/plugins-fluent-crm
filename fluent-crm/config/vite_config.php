@@ -73,6 +73,15 @@
             '_PromoCard.js'
         ]
     ],
+    '_BulkOptionList.js' => [
+        'file' => 'BulkOptionList.js',
+        'name' => 'BulkOptionList',
+        'imports' => [
+            '_vendor-element-plus.js',
+            '_vendor.js',
+            '_fc-bits-ui.js'
+        ]
+    ],
     '_CalendarIcon.js' => [
         'file' => 'CalendarIcon.js',
         'name' => 'CalendarIcon',
@@ -161,8 +170,8 @@
             '_fc-bits-ui.js'
         ]
     ],
-    '_Csv.js' => [
-        'file' => 'Csv.js',
+    '_Csv2.js' => [
+        'file' => 'Csv2.js',
         'name' => 'Csv',
         'imports' => [
             '_vendor-element-plus.js',
@@ -238,6 +247,7 @@
         'imports' => [
             '_vendor-element-plus.js',
             '_data_config.js',
+            '_csv.js',
             '_GenericPromo.js',
             '_vendor.js',
             '_fc-bits-ui.js'
@@ -324,6 +334,15 @@
             '_PromoCard.js',
             '_vendor.js',
             '_fc-bits-ui.js'
+        ]
+    ],
+    '_IconButton.js' => [
+        'file' => 'IconButton.js',
+        'name' => 'IconButton',
+        'imports' => [
+            '_vendor-element-plus.js',
+            '_fc-bits-ui.js',
+            '_vendor.js'
         ]
     ],
     '_InlineDoc.js' => [
@@ -550,6 +569,8 @@
             '_Searcher.js',
             '_PaginationBar.js',
             '_DataTable.js',
+            '_IconButton.js',
+            '_BulkOptionList.js',
             'resources/v3app/src/Modules/Contacts/Filter/FilterPopover.vue',
             'resources/v3app/src/Modules/Contacts/Filter/ActiveFiltersBar.vue',
             '_Badge.js',
@@ -566,6 +587,15 @@
             'resources/v3app/src/Modules/Contacts/RichFilters/Filters.vue',
             '_fc-bits-ui.js',
             '_vendor.js'
+        ]
+    ],
+    '__DynamicWidgetContent.js' => [
+        'file' => '_DynamicWidgetContent.js',
+        'name' => '_DynamicWidgetContent',
+        'imports' => [
+            '_vendor-element-plus.js',
+            '_vendor.js',
+            '_fc-bits-ui.js'
         ]
     ],
     '__FormBuilder.js' => [
@@ -648,10 +678,12 @@
             '_Confirm.js',
             'resources/admin/Modules/Email/Campaigns/_components/EmailPreview.vue',
             '_GenericPromo.js',
-            '_Badge.js',
+            '_FloatingBulkActionShell.js',
             '_fc-bits-ui.js',
             '_rest-download.js',
+            '_BulkOptionList.js',
             '_vendor.js',
+            '_Badge.js',
             '_SettingsIcons.js'
         ]
     ],
@@ -751,6 +783,10 @@
             '_vendor.js',
             '_fc-bits.js'
         ]
+    ],
+    '_csv.js' => [
+        'file' => 'csv.js',
+        'name' => 'csv'
     ],
     '_data_config.js' => [
         'file' => 'data_config.js',
@@ -1003,7 +1039,9 @@
             'resources/admin/Modules/Email/Campaigns/_components/EmailPreview.vue',
             '_PreviewIframeBuilder.js',
             '_Badge.js',
+            '_FloatingBulkActionShell.js',
             '_rest-download.js',
+            '_BulkOptionList.js',
             '_SettingsIcons.js',
             '_PromoCard.js',
             '_CampaignSubjectLines.js',
@@ -1110,7 +1148,9 @@
             '_Badge.js',
             '_GenericPromo.js',
             '_PromoCard.js',
+            '_FloatingBulkActionShell.js',
             '_rest-download.js',
+            '_BulkOptionList.js',
             '_SettingsIcons.js',
             '__VerifiedEmailInput.js',
             '_TestEmail.js',
@@ -1233,7 +1273,9 @@
             'resources/admin/Modules/Email/Campaigns/_components/EmailPreview.vue',
             '_Badge.js',
             '_GenericPromo.js',
+            '_FloatingBulkActionShell.js',
             '_rest-download.js',
+            '_BulkOptionList.js',
             '_SettingsIcons.js'
         ]
     ],
@@ -1534,6 +1576,7 @@
             'resources/admin/Modules/Email/Campaigns/_components/EmailPreview.vue',
             '_PreviewIframeBuilder.js',
             '_rest-download.js',
+            '_BulkOptionList.js',
             '_SettingsIcons.js',
             '_PromoCard.js'
         ]
@@ -1682,6 +1725,7 @@
             '_PaginationBar.js',
             '_DataTable.js',
             '_vendor.js',
+            '__DynamicWidgetContent.js',
             '_fc-bits-ui.js'
         ]
     ],
@@ -1719,6 +1763,7 @@
             '_vendor-element-plus.js',
             '_PaginationBar.js',
             '_DataTable.js',
+            '__DynamicWidgetContent.js',
             '_vendor.js',
             '_fc-bits-ui.js'
         ]
@@ -2002,6 +2047,7 @@
             '_StatCard.js',
             '_ChartBuilder.js',
             '_Confirm.js',
+            '_IconButton.js',
             '_TestEmail.js',
             '_ReadableRecipientTagger.js',
             '_RecipientTaggerForm.js',
@@ -2158,7 +2204,7 @@
         'imports' => [
             '_vendor-element-plus.js',
             '_CompanyInfoSide.js',
-            '_Csv.js',
+            '_Csv2.js',
             '_GenericPromo2.js',
             '_vendor.js',
             '_fc-bits-ui.js',
@@ -2228,6 +2274,8 @@
             '_Searcher.js',
             '_PaginationBar.js',
             '_DataTable.js',
+            '_IconButton.js',
+            '_BulkOptionList.js',
             'resources/v3app/src/Modules/Contacts/Filter/FilterPopover.vue',
             'resources/v3app/src/Modules/Contacts/Filter/ActiveFiltersBar.vue',
             '_Badge.js',
@@ -2292,7 +2340,7 @@
             '_ProBadge.js',
             '_vendor.js',
             '_fc-bits-ui.js',
-            '_Csv.js',
+            '_Csv2.js',
             '__FormBuilder2.js',
             '__OptionSelector.js',
             '_FormHandler.js',
@@ -2318,11 +2366,14 @@
             '_input-popover-dropdown2.js',
             '__AjaxSelector.js',
             '__VerifiedEmailInput.js',
+            '_csv.js',
             '_GenericPromo.js',
             '_Filterer2.js',
             '_Searcher.js',
             '_PaginationBar.js',
             '_DataTable.js',
+            '_IconButton.js',
+            '_BulkOptionList.js',
             'resources/v3app/src/Modules/Contacts/Filter/FilterPopover.vue',
             'resources/v3app/src/Modules/Contacts/Filter/ActiveFiltersBar.vue',
             '_Badge.js',
@@ -2440,12 +2491,15 @@
             '_Searcher.js',
             '_PaginationBar.js',
             '_DataTable.js',
+            '_IconButton.js',
+            '_BulkOptionList.js',
             'resources/v3app/src/Modules/Contacts/Filter/FilterPopover.vue',
             'resources/v3app/src/Modules/Contacts/Filter/ActiveFiltersBar.vue',
             '_Badge.js',
             '_contacts.js',
             '_relations.js',
             '_clipboard.js',
+            '_csv.js',
             '_GenericPromo.js',
             '_PromoCard.js'
         ]
@@ -2482,6 +2536,7 @@
         'imports' => [
             '_vendor-element-plus.js',
             '_contacts.js',
+            '_csv.js',
             '_Confirm2.js',
             '_ActionMenu.js',
             '__FormBuilder2.js',
@@ -2797,6 +2852,7 @@
             '_SettingsHeader.js',
             '_SaveButton.js',
             '_fc-bits-ui.js',
+            '_ProBadge.js',
             '_vendor.js'
         ]
     ],
@@ -2928,6 +2984,7 @@
         'imports' => [
             '_vendor-element-plus.js',
             '_contacts.js',
+            '_csv.js',
             '_Confirm2.js',
             '_ActionMenu.js',
             '_PaginationBar.js',

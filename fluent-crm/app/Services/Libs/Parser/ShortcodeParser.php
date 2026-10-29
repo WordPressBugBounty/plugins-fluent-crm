@@ -265,9 +265,13 @@ class ShortcodeParser
     {
         $this->allowedLevel = self::normalizeLevel($level);
 
-        return preg_replace_callback('/({{|##)+(.*?)(}}|##)/', function ($matches) use ($subscriber) {
+        $resolver = function ($matches) use ($subscriber) {
             return $this->replaceExtendedCrmValue($matches, $subscriber);
-        }, $templateString);
+        };
+
+        $templateString = $this->parseUrlAttributeSmartCodes($templateString, $resolver);
+
+        return preg_replace_callback('/({{|##)+(.*?)(}}|##)/', $resolver, $templateString);
     }
 
     public function replaceExtendedCrmValue($matches, $subscriber)
@@ -321,7 +325,7 @@ class ShortcodeParser
 
     public function parseShortcode($string, $data)
     {
-        return preg_replace_callback('/({{|##)+(.*?)(}}|##)/', function ($matches) use ($data) {
+        $resolver = function ($matches) use ($data) {
             $value = $this->replace($matches, $data);
 
             // A code left for a later pass comes back as written and must stay parseable.
@@ -330,7 +334,49 @@ class ShortcodeParser
             }
 
             return self::neutralizeSmartCodeDelimiters($value);
-        }, $string);
+        };
+
+        $string = $this->parseUrlAttributeSmartCodes($string, $resolver);
+
+        return preg_replace_callback('/({{|##)+(.*?)(}}|##)/', $resolver, $string);
+    }
+
+    /**
+     * Resolve smartcodes inside URL-bearing HTML attributes before the general text pass.
+     *
+     * A resolved contact value is not safe merely because the original template smartcode was
+     * escaped. Validate the complete personalized URL and escape it for its quoted attribute.
+     * Smartcodes intentionally deferred to a later parser pass remain intact until that pass.
+     *
+     * @param string   $html
+     * @param callable $resolver Smartcode callback used by the current parser pass.
+     * @return string
+     */
+    private function parseUrlAttributeSmartCodes($html, callable $resolver)
+    {
+        if (!is_string($html) || (strpos($html, '{{') === false && strpos($html, '##') === false)) {
+            return $html;
+        }
+
+        return (string)preg_replace_callback(
+            '/\b(href|src|action|formaction)\s*=\s*(["\'])(.*?)\2/is',
+            function ($matches) use ($resolver) {
+                if (strpos($matches[3], '{{') === false && strpos($matches[3], '##') === false) {
+                    return $matches[0];
+                }
+
+                $url = preg_replace_callback('/({{|##)+(.*?)(}}|##)/', $resolver, $matches[3]);
+
+                if (preg_match('/({{|##)+(.*?)(}}|##)/', (string)$url)) {
+                    $url = esc_attr($url);
+                } else {
+                    $url = esc_url($url, ['http', 'https', 'mailto', 'tel']);
+                }
+
+                return $matches[1] . '=' . $matches[2] . $url . $matches[2];
+            },
+            $html
+        );
     }
 
     /**
@@ -825,14 +871,27 @@ class ShortcodeParser
         }
 
         if ($key == 'latest_post') {
-            $posts = get_posts([
+            $queryArgs = [
                 'post_type'           => 'post',
                 'post_status'         => 'publish',
                 'posts_per_page'      => 1,
                 'orderby'             => 'date',
                 'order'               => 'DESC',
                 'ignore_sticky_posts' => 1
-            ]);
+            ];
+
+            /**
+             * Filter the post query used by latest-post smartcodes.
+             *
+             * Addons may constrain the query when the subscriber carries campaign context.
+             * The default remains the latest published standard post.
+             *
+             * @param array $queryArgs  Arguments passed to get_posts().
+             * @param mixed $subscriber Subscriber being used to render the smartcode.
+             */
+            $queryArgs = apply_filters('fluent_crm/latest_post_smartcode_query_args', $queryArgs, $subscriber);
+
+            $posts = get_posts($queryArgs);
 
             if (!count($posts)) {
                 return $defaultValue;

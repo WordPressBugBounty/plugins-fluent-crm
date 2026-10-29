@@ -469,7 +469,10 @@ class FunnelHelper
         PrivilegedSteps::assertCanSave($sequences, (int)$funnelId);
 
         $funnelSettings = \json_decode(Arr::get($data, 'funnel_settings'), true);
-        $funnelConditions = \json_decode(Arr::get($data, 'conditions', '[]'), true);
+        $funnelConditions = Arr::get($data, 'conditions');
+        if (is_string($funnelConditions)) {
+            $funnelConditions = \json_decode($funnelConditions, true);
+        }
 
         $funnel = Funnel::findOrFail($funnelId);
 
@@ -481,6 +484,7 @@ class FunnelHelper
             $funnel->title = sanitize_text_field($funnelTitle);
         }
 
+        // Preserve omitted conditions; an explicitly supplied empty array clears them.
         if (is_array($funnelConditions)) {
             $funnel->conditions = $funnelConditions;
         }

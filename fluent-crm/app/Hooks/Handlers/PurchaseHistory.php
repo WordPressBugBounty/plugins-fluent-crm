@@ -602,11 +602,6 @@ class PurchaseHistory
                 'order'       => $sort_type,
             ]);
 
-            // Sort orders by total amount manually
-            if ($sort_by === 'total_amount') {
-                $this->wooSortOrdersByTotalAmount($userOrders, $sort_type);
-            }
-
             foreach ($userOrders as $order) {
                 $orders[$order->get_id()] = $order;
             }
@@ -620,10 +615,6 @@ class PurchaseHistory
             'order'    => $sort_type,
         ]);
 
-        if ($sort_by === 'total_amount') {
-            $this->wooSortOrdersByTotalAmount($userOrders, $sort_type);
-        }
-
         foreach ($guestOrders as $order) {
             $userId = $order->get_user_id();
             if ($userId && $storeUseId != $userId) {
@@ -632,8 +623,15 @@ class PurchaseHistory
             $orders[$order->get_id()] = $order;
         }
 
+        $orders = array_values($orders);
 
-        return array_values($orders);
+        // Total is not an orders-table column, so sort the merged user + guest set here.
+        // (This sorted $userOrders twice before, and fatally when the contact had no WP user.)
+        if ($sort_by === 'total_amount') {
+            $this->wooSortOrdersByTotalAmount($orders, $sort_type);
+        }
+
+        return $orders;
     }
 
     /**

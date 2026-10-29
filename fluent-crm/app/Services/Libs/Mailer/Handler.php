@@ -109,9 +109,7 @@ class Handler extends BaseHandler
         }
 
         // max_execution_time (often 30s on the web) can kill the process before isTimeUp() stops it.
-        if (function_exists('set_time_limit')) {
-            @set_time_limit($this->maximumProcessingTime + 30);
-        }
+        Helper::raiseTimeLimit($this->maximumProcessingTime + 30);
 
         $systemMaxProcessingTime = fluentCrmMaxRunTime();
 

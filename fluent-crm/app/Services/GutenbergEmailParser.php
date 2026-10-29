@@ -29,6 +29,53 @@ class GutenbergEmailParser
     ];
 
     /**
+     * Synced pattern refs currently being rendered; stops a pattern that embeds itself
+     * (directly or through another pattern) from recursing forever.
+     */
+    private static $renderingPatternRefs = [];
+
+    /**
+     * Make a block-attribute value safe to place in a CSS declaration.
+     *
+     * Block attributes are user-controlled, and the result lands inside a <style> element or a
+     * style="" attribute. Characters that could end the declaration, the rule, the element or the
+     * attribute are never legitimate in a CSS value here, so a value containing one is dropped.
+     *
+     * @param mixed $value
+     * @param bool  $forAttribute Also reject quotes, for values placed inside a style="" attribute.
+     * @return string The trimmed value, or '' when it is unsafe.
+     */
+    private function sanitizeCssValue($value, $forAttribute = false)
+    {
+        if (!is_scalar($value)) {
+            return '';
+        }
+
+        $value = trim((string)$value);
+
+        $unsafe = $forAttribute ? '/[<>{};\\\\"\']/' : '/[<>{};\\\\]/';
+        if (preg_match($unsafe, $value)) {
+            return '';
+        }
+
+        return $value;
+    }
+
+    /**
+     * Whitelist a vertical-align attribute value.
+     *
+     * @param mixed  $value
+     * @param string $default
+     * @return string
+     */
+    private function normalizeVerticalAlign($value, $default = 'top')
+    {
+        $value = strtolower(trim((string)$value));
+
+        return in_array($value, ['top', 'center', 'middle', 'bottom'], true) ? $value : $default;
+    }
+
+    /**
      * Parse Gutenberg blocks and convert to email HTML
      *
      * @param string $content The post content with Gutenberg blocks
@@ -150,7 +197,10 @@ class GutenbergEmailParser
 
         if ($style && is_array($style)) {
             if ($linkColor = Arr::get($style, 'elements.link.color.text')) {
-                $childCss .= $idSelector . ' a { color: ' . $this->transformToCssVar($linkColor) . '; }';
+                $linkColor = $this->sanitizeCssValue($this->transformToCssVar($linkColor));
+                if ($linkColor !== '') {
+                    $childCss .= $idSelector . ' a { color: ' . $linkColor . '; }';
+                }
             }
 
             if ($color = Arr::get($style, 'color.text')) {
@@ -275,12 +325,10 @@ class GutenbergEmailParser
         }
 
         if ($blockName === 'core/list') {
-            if (!empty($styleAttr['font-size'])) {
-                $size = $styleAttr['font-size'];
+            if ($size = $this->sanitizeCssValue(Arr::get($styleAttr, 'font-size', ''))) {
                 $childCss .= $idSelector . ' li, ' . $idSelector . ' li p { font-size: ' . $size . '; }';
             }
-            if (!empty($styleAttr['line-height'])) {
-                $lineHeight = $styleAttr['line-height'];
+            if ($lineHeight = $this->sanitizeCssValue(Arr::get($styleAttr, 'line-height', ''))) {
                 $childCss .= $idSelector . ' li, ' . $idSelector . ' li p { line-height: ' . $lineHeight . '; }';
             }
         } else if ($blockName === 'core/button') {
@@ -341,7 +389,17 @@ class GutenbergEmailParser
             $styleAttr['padding'] = '20px';
         }
 
-        $this->inlineStyles[$idSelector] = $styleAttr;
+        // Everything above came from block attributes: keep only well-formed declarations.
+        $safeStyleAttr = [];
+        foreach ($styleAttr as $property => $value) {
+            $value = $this->sanitizeCssValue($value);
+            if ($value === '' || !preg_match('/^[a-z-]+$/i', (string)$property)) {
+                continue;
+            }
+            $safeStyleAttr[$property] = $value;
+        }
+
+        $this->inlineStyles[$idSelector] = $safeStyleAttr;
         $this->childCss .= $childCss . ' ';
     }
 
@@ -462,9 +520,10 @@ class GutenbergEmailParser
             $css .= $this->childCss;
         }
 
-        $css .= '</style>';
+        // Last line of defence: nothing generated here needs < or >, and either could end the element.
+        $css = str_replace(['<', '>'], '', substr($css, strlen('<style type="text/css">')));
 
-        return $css;
+        return '<style type="text/css">' . $css . '</style>';
     }
 
     /**
@@ -658,6 +717,7 @@ class GutenbergEmailParser
                 $url = $attrs['url'] ?? '';
                 if (!empty($url)) {
                     $linkText = __('Click here to view media content', 'fluent-crm');
+                    $url = $this->escapeButtonUrl($url);
                     return $this->wrapInTable("<p style=\"text-align: center; padding: 20px; background: #f0f0f0;\"><a href=\"{$url}\" style=\"color: #0073aa; text-decoration: underline;\">{$linkText}</a></p>", $attrs);
                 }
                 return '';
@@ -703,7 +763,11 @@ class GutenbergEmailParser
      */
     private function renderHeading($content, $attrs)
     {
-        $level = $attrs['level'] ?? 2;
+        // The level becomes part of the tag name, so it has to be a plain 1-6.
+        $level = (int)($attrs['level'] ?? 2);
+        if ($level < 1 || $level > 6) {
+            $level = 2;
+        }
 
         // Extract content if it's wrapped in heading tags
         if (preg_match('/<h[1-6][^>]*>(.*?)<\/h[1-6]>/s', $content, $matches)) {
@@ -749,7 +813,7 @@ class GutenbergEmailParser
 
         $class = 'fc_image';
 
-        $class .= ' fc_align_' . $align;
+        $class .= ' fc_align_' . sanitize_html_class((string)$align);
 
         $html = '<div class="' . $class . '">' . $innerHTML . '</div>';
 
@@ -773,7 +837,7 @@ class GutenbergEmailParser
         if (preg_match('/<' . $tag . '[^>]*class=["\']([^"\']+)["\']/i', $content, $matches)) {
             $classes = array_merge($classes, preg_split('/\s+/', trim((string)$matches[1])));
         }
-        $classes = array_filter(array_unique($classes));
+        $classes = array_filter(array_map('sanitize_html_class', array_unique($classes)));
         $classAttr = implode(' ', $classes);
 
         $fontSizeValue = '';
@@ -790,6 +854,10 @@ class GutenbergEmailParser
         if (!is_string($lineHeightValue)) {
             $lineHeightValue = '';
         }
+
+        // Both values end up in a style="" attribute and in the <style> block.
+        $fontSizeValue = $this->sanitizeCssValue($fontSizeValue, true);
+        $lineHeightValue = $this->sanitizeCssValue($lineHeightValue, true);
 
         $listItems = '';
         // If we have innerBlocks, render them
@@ -996,7 +1064,7 @@ class GutenbergEmailParser
         if ($visibilityClasses) {
             $classes = array_merge($classes, array_map('sanitize_html_class', $visibilityClasses));
         }
-        $classAttr = implode(' ', array_filter(array_unique($classes)));
+        $classAttr = implode(' ', array_filter(array_map('sanitize_html_class', array_unique($classes))));
 
         return $this->wrapDesktopHiddenForMso(
             "<{$tag} class='{$classAttr}'>{$listItems}</{$tag}>",
@@ -1214,7 +1282,8 @@ class GutenbergEmailParser
     private function renderQuote($content, $innerBlocks, $attrs)
     {
 
-        $borderColor = BlockEditorHelper::getBorderColor($attrs, '#4f46e5');
+        // The colour is placed inside a style="" attribute below.
+        $borderColor = $this->sanitizeCssValue(BlockEditorHelper::getBorderColor($attrs, '#4f46e5'), true) ?: '#4f46e5';
 
         $quoteSide = fluentcrm_is_rtl() ? 'right' : 'left';
         $styles = "border-{$quoteSide}: 4px solid " . $borderColor . '; padding-' . $quoteSide . ': 20px;';
@@ -1386,13 +1455,26 @@ class GutenbergEmailParser
             return esc_url($url);
         }
 
-        if (!preg_match('/^([a-z][a-z0-9+.-]*):/i', ltrim($url), $matches)) {
+        // Read the scheme the way a browser will: decode entities (&#106;avascript:) and drop the
+        // tabs, newlines and control characters it ignores (java<TAB>script:).
+        $probe = preg_replace('/[\x00-\x20\x7f]+/', '', html_entity_decode($url, ENT_QUOTES | ENT_HTML5, 'UTF-8'));
+        $safeProtocols = ['http', 'https', 'mailto', 'tel'];
+
+        // Smartcodes resolve after this renderer. Check the static remainder too, otherwise an
+        // empty leading smartcode can expose a hidden scheme such as javascript: at delivery time.
+        $staticProbe = preg_replace('/(?:\{\{[^{}\r\n]+}}|##[^#\r\n]+##)/', '', (string)$probe);
+        if (preg_match('/^([a-z][a-z0-9+.-]*):/i', (string)$staticProbe, $staticMatches) &&
+            !in_array(strtolower($staticMatches[1]), $safeProtocols, true)) {
+            return '';
+        }
+
+        if (!preg_match('/^([a-z][a-z0-9+.-]*):/i', (string)$probe, $matches)) {
             return esc_attr($url);
         }
 
         $protocol = strtolower($matches[1]);
 
-        if (in_array($protocol, ['http', 'https', 'mailto', 'tel'], true)) {
+        if (in_array($protocol, $safeProtocols, true)) {
             return esc_attr($url);
         }
 
@@ -1716,12 +1798,22 @@ class GutenbergEmailParser
             return '';
         }
 
+        // A pattern that embeds itself, directly or through another pattern, renders as empty.
+        if (isset(self::$renderingPatternRefs[$ref])) {
+            return '';
+        }
+
         $blocks = parse_blocks($content);
         if (empty($blocks)) {
             return '';
         }
 
-        $html = $this->renderBlocks($blocks, $nested);
+        self::$renderingPatternRefs[$ref] = true;
+        try {
+            $html = $this->renderBlocks($blocks, $nested);
+        } finally {
+            unset(self::$renderingPatternRefs[$ref]);
+        }
 
         // Wrap the pattern in a carrier table only when responsive hiding is configured.
         $visibilityClasses = array_filter((array)Arr::get($attrs, 'fcrmVisibilityClasses', []));
@@ -1994,7 +2086,7 @@ class GutenbergEmailParser
 
         $id = $attrs['elem_id'] ?? '';
 
-        $verticalAlignment = Arr::get($attrs, 'verticalAlignment', 'top');
+        $verticalAlignment = $this->normalizeVerticalAlign(Arr::get($attrs, 'verticalAlignment', 'top'));
 
         $columnCount = count($innerBlocks);
         $columnWidth = floor(100 / $columnCount);
@@ -2041,7 +2133,7 @@ class GutenbergEmailParser
                 $elementId = uniqid('block-', false);
                 $this->collectInlineStyles($elementId, $column['attrs'] ?? [], 'core/column');
 
-                $columnVerticalAlignment = Arr::get($column, 'attrs.verticalAlignment', $verticalAlignment);
+                $columnVerticalAlignment = $this->normalizeVerticalAlign(Arr::get($column, 'attrs.verticalAlignment', $verticalAlignment), $verticalAlignment);
                 $styles = [
                     'vertical-align' => $columnVerticalAlignment,
                 ];
@@ -2558,7 +2650,8 @@ class GutenbergEmailParser
             return str_replace($matches[0], ' style=' . $quote . $newStyle . $quote, $tag);
         }
 
-        return preg_replace('/>$/', ' style="' . $style . '">', $tag, 1);
+        // Plain concatenation, so the style text is never read as a regex backreference.
+        return substr($tag, 0, -1) . ' style="' . $style . '">';
     }
 
     /**
@@ -2614,6 +2707,11 @@ class GutenbergEmailParser
             $borderStyle = 'solid';
             $borderColor = '#6b7280';
         }
+
+        // These land inside the cells' style="" attribute, so an unsafe value falls back to the default.
+        $borderWidth = $this->sanitizeCssValue($borderWidth, true) ?: '1px';
+        $borderStyle = $this->sanitizeCssValue($borderStyle, true) ?: 'solid';
+        $borderColor = $this->sanitizeCssValue($borderColor, true) ?: '#6b7280';
 
         $borderCss = "border: {$borderWidth} {$borderStyle} {$borderColor};";
 
@@ -3127,12 +3225,13 @@ class GutenbergEmailParser
             $tdClass .= ' ' . $visibilityClassAttr;
         }
 
-        $tdId = Arr::get($atts, 'td_id', '');
+        // td_id can arrive straight from the block's attributes.
+        $tdIdAttr = esc_attr((string)Arr::get($atts, 'td_id', ''));
 
         $html = <<<HTML
 <table role="presentation" class="$tableClass"$tableWidthMarkup$tableAlignMarkup cellspacing="0" cellpadding="0" border="0">
     <tr>
-        <td id="$tdId" class="$tdClass">
+        <td id="$tdIdAttr" class="$tdClass">
             {$content}
         </td>
     </tr>
@@ -3216,6 +3315,7 @@ HTML;
     public function generateEmailHtml($content, $title = '')
     {
         $parsedContent = $this->parse($content);
+        $safeTitle = esc_html($title);
 
         return <<<HTML
 <!DOCTYPE html>
@@ -3224,7 +3324,7 @@ HTML;
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
-    <title>{$title}</title>
+    <title>{$safeTitle}</title>
     <style type="text/css">
         body {
             margin: 0;

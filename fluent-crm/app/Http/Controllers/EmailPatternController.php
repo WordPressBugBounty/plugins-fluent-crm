@@ -176,7 +176,10 @@ class EmailPatternController extends Controller
             $value['content'] = wp_kses_post($content);
         }
 
-        $value['category'] = sanitize_text_field($request->get('category', ''));
+        // Only touch the category when the request sends one, so a title-only update keeps it.
+        if ($request->has('category')) {
+            $value['category'] = sanitize_text_field($request->get('category', ''));
+        }
 
         if ($request->has('wp_pattern_category')) {
             $categoryIds = (array) $request->get('wp_pattern_category', []);

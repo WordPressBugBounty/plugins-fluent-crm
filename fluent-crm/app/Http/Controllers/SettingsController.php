@@ -12,6 +12,7 @@ use FluentCrm\App\Models\SystemLog;
 use FluentCrm\App\Services\AutoSubscribe;
 use FluentCrm\App\Services\DbPerformanceService;
 use FluentCrm\App\Services\Helper;
+use FluentCrm\App\Services\IntegrationCatalog;
 use FluentCrm\App\Services\Libs\Mailer\DoubleOptinRenderer;
 use FluentCrm\App\Services\RoleBasedTagging;
 use FluentCrm\Framework\Support\Arr;
@@ -596,7 +597,12 @@ class SettingsController extends Controller
         fluentcrm_update_option('user_syncing_settings', $userSyncSettings);
 
         if (is_array($dateTimeSettings) && array_key_exists('classic_date_time', $dateTimeSettings)) {
-            $experimentalSettings = Helper::getExperimentalSettings();
+            // Update the raw stored option (as updateExperimentalSettings() does); the getter's
+            // value carries defaults and filters that must not be persisted.
+            $experimentalSettings = get_option('_fluentcrm_experimental_settings', []);
+            if (!is_array($experimentalSettings)) {
+                $experimentalSettings = [];
+            }
             $experimentalSettings['classic_date_time'] = sanitize_text_field($dateTimeSettings['classic_date_time']) === 'yes' ? 'yes' : 'no';
             update_option('_fluentcrm_experimental_settings', $experimentalSettings, 'yes');
         }
@@ -839,19 +845,21 @@ class SettingsController extends Controller
         $refDate = gmdate('Y-m-d 00:00:01', current_time('timestamp') - $daysBefore * 86400);
         if (in_array('emails', $selectedLogs)) {
 
-            $campaignIds = CampaignEmail::where('created_at', '<', $refDate)
+            // Work on this chunk only: grouping every old row and re-marking every campaign
+            // on each call made the whole purge quadratic on large tables.
+            $chunk = CampaignEmail::where('created_at', '<', $refDate)
                 ->whereIn('status', CampaignEmail::SENT_STATUSES)
-                ->groupBy('campaign_id')
-                ->pluck('campaign_id');
-
-            foreach ($campaignIds->toArray() as $campaignId) {
-                fluentcrm_update_campaign_meta($campaignId, '_data_trunked', 'yes');
-            }
-
-            CampaignEmail::where('created_at', '<', $refDate)
-                ->whereIn('status', CampaignEmail::SENT_STATUSES)
+                ->orderBy('id', 'ASC')
                 ->limit($perChunk)
-                ->delete();
+                ->get(['id', 'campaign_id']);
+
+            if (!$chunk->isEmpty()) {
+                foreach (array_unique($chunk->pluck('campaign_id')->toArray()) as $campaignId) {
+                    fluentcrm_update_campaign_meta($campaignId, '_data_trunked', 'yes');
+                }
+
+                CampaignEmail::whereIn('id', $chunk->pluck('id')->toArray())->delete();
+            }
 
             $hasMore = CampaignEmail::where('created_at', '<', $refDate)
                 ->whereIn('status', CampaignEmail::SENT_STATUSES)
@@ -939,13 +947,18 @@ class SettingsController extends Controller
         if ($deleted) {
             $applicationUsers = fluentcrm_get_option('_rest_api_users', []);
 
-            foreach ($applicationUsers[$data['user_id']] as $index => $uuid) {
-                if ($uuid == $data['uuid']) {
-                    array_splice($applicationUsers[$data['user_id']], $index, 1);
-                }
-            }
+            // The key may be absent (a password created outside FluentCRM); splicing inside the
+            // loop also shifted indexes. Filter instead.
+            if (!empty($applicationUsers[$data['user_id']]) && is_array($applicationUsers[$data['user_id']])) {
+                $applicationUsers[$data['user_id']] = array_values(array_filter(
+                    $applicationUsers[$data['user_id']],
+                    function ($uuid) use ($data) {
+                        return $uuid != $data['uuid'];
+                    }
+                ));
 
-            fluentcrm_update_option('_rest_api_users', $applicationUsers);
+                fluentcrm_update_option('_rest_api_users', $applicationUsers);
+            }
         }
 
         if (!$deleted) {
@@ -1103,20 +1116,9 @@ class SettingsController extends Controller
     {
         $withFields = in_array('fields', $request->get('with', []));
 
-        /**
-         * Determine the deep integration providers for FluentCRM.
-         *
-         * This filter allows modification of the deep integration providers used in FluentCRM such as Woocommerce, Easy Digital Downloads, etc.
-         *
-         * @param array An array of deep integration providers.
-         * @param bool $withFields Whether to include fields in the integration providers.
-         * @since 2.5.1
-         *
-         */
-        $deepIntegrationProviders = apply_filters('fluentcrm_deep_integration_providers', [], $withFields);
-
+        // The catalog applies `fluentcrm_deep_integration_providers` and merges it over the full list.
         return [
-            'integrations' => $deepIntegrationProviders
+            'integrations' => IntegrationCatalog::getIntegrations($withFields)
         ];
     }
 
@@ -1175,28 +1177,38 @@ class SettingsController extends Controller
 
     public function updateComplianceSettings(Request $request)
     {
-        $data = Arr::only($request->all(), array_keys(Helper::getComplianceSettings()));
+        $current = Helper::getComplianceSettings();
+        $data = Arr::only($request->all(), array_keys($current));
         $validValues = [
             'yes',
             'no',
             'anonymous'
         ];
 
+        // Drop invalid values instead of saving '': wp_parse_args() keeps '' over the default,
+        // which silently turned default-on flags off.
         foreach ($data as $key => $datum) {
-            if (!in_array($datum, $validValues)) {
-                $data[$key] = '';
-            } else {
-                $data[$key] = $datum;
+            if (!in_array($datum, $validValues, true)) {
+                unset($data[$key]);
             }
         }
 
-        update_option('_fluentcrm_compliance_settings', $data, 'no');
+        // Merge over the raw stored option so a partial request keeps the keys it did not send.
+        $stored = get_option('_fluentcrm_compliance_settings', []);
+        if (!is_array($stored)) {
+            $stored = [];
+        }
+        $stored = array_merge($stored, $data);
 
-        do_action('fluent_crm/sync_subscriber_delete_setting', 'compliance_settings', $data['delete_contact_on_user']);
+        update_option('_fluentcrm_compliance_settings', $stored, 'no');
+
+        if (isset($data['delete_contact_on_user'])) {
+            do_action('fluent_crm/sync_subscriber_delete_setting', 'compliance_settings', $data['delete_contact_on_user']);
+        }
 
         return [
             'message'  => __('The settings have been updated.', 'fluent-crm'),
-            'settings' => $data
+            'settings' => wp_parse_args($stored, $current)
         ];
     }
 

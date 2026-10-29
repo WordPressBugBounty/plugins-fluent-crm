@@ -2,6 +2,8 @@
 
 namespace FluentCrm\App\Models;
 
+use FluentCrm\App\Services\Helper;
+
 /**
  *  Funnel Model - DB Model for Automation Funnels
  *
@@ -67,7 +69,7 @@ class Funnel extends Model
 
     public function getSettingsAttribute($settings)
     {
-        return \maybe_unserialize($settings);
+        return Helper::safeUnserialize($settings);
     }
 
     public function setConditionsAttribute($conditions)
@@ -77,7 +79,7 @@ class Funnel extends Model
 
     public function getConditionsAttribute($conditions)
     {
-        return \maybe_unserialize($conditions);
+        return Helper::safeUnserialize($conditions);
     }
 
     public function getSubscribersCount()

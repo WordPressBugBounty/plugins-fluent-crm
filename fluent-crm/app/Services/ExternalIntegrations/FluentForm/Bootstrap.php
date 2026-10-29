@@ -397,6 +397,13 @@ class Bootstrap extends IntegrationManagerController
         $customFieldSlugs = array_column($customFieldModel->getGlobalFields()['fields'], 'slug');
         $customValues = [];
 
+        // Only the contact fields the feed settings offer. A saved label is otherwise free text, and
+        // the contact model also accepts columns such as user_id and total_points.
+        $contactFieldKeys = array_diff(
+            array_merge(array_keys(Subscriber::mappables()), ['avatar']),
+            ['email', 'first_name', 'last_name']
+        );
+
         foreach (Arr::get($data, 'other_fields') as $fieldIndex => $field) {
             $fieldName = Arr::get($field, 'label');
             $fieldValue = str_replace('<br />', ' ', Arr::get($field, 'item_value'));
@@ -416,7 +423,7 @@ class Bootstrap extends IntegrationManagerController
                 }
                 // Preserve an explicit empty value so an existing custom field can be cleared.
                 $customValues[$fieldName] = $fieldValue;
-            } else if (!in_array($fieldValue, ['', null, []], true)) {
+            } else if (in_array($fieldName, $contactFieldKeys, true) && !in_array($fieldValue, ['', null, []], true)) {
                 $contact[$fieldName] = $fieldValue;
             }
         }

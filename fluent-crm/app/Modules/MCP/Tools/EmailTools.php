@@ -333,7 +333,7 @@ class EmailTools
             $body           = (string) $campaign->email_body;
             $preHeader      = (string) $campaign->email_pre_header;
             $designTemplate = (string) $campaign->design_template;
-            $settings       = is_array($campaign->settings) ? $campaign->settings : (array) maybe_unserialize($campaign->settings);
+            $settings       = is_array($campaign->settings) ? $campaign->settings : (array) Helper::safeUnserialize($campaign->settings);
         }
 
         if (isset($params['subject']) && $params['subject'] !== '') {
@@ -398,7 +398,7 @@ class EmailTools
             }
         }
 
-        // SmartCode contact: against_contact_*, then to_email, then any subscribed contact.
+        // SmartCode contact: against_contact_*, then to_email, then your own contact, then the oldest contact.
         $subscriber = null;
         if (!empty($params['against_contact_id'])) {
             $subscriber = Subscriber::find((int) $params['against_contact_id']);
@@ -406,21 +406,16 @@ class EmailTools
         if (!$subscriber && !empty($params['against_contact_email'])) {
             $subscriber = Subscriber::where('email', sanitize_email($params['against_contact_email']))->first();
         }
-        if (!$subscriber) {
+        // A preview of to_email's contact is a contact read; a real test send goes to that contact.
+        if (!$subscriber && ($requireRecipient || PermissionManager::currentUserCan('fcrm_read_contacts'))) {
             $subscriber = Subscriber::where('email', $toEmail)->first();
         }
         if (!$subscriber) {
-            // The fallback renders an unrelated contact's PII, so it needs contact-read.
-            if (!PermissionManager::currentUserCan('fcrm_read_contacts')) {
-                return MCPHelper::error('forbidden', 'No contact matches to_email, and rendering against an unrelated contact requires contact read permission. Send the test to an address that exists as a contact, or ask an administrator for contact-read access.', [
-                    'required' => 'fcrm_read_contacts',
-                    'to_email' => $toEmail,
-                ]);
-            }
-            $subscriber = Subscriber::where('status', 'subscribed')->first();
+            // Same fallback as the REST test email and preview.
+            $subscriber = Helper::getSampleContact();
         }
         if (!$subscriber) {
-            return MCPHelper::error('not_supported', 'No subscriber found to drive smartcode rendering. Add at least one subscribed contact.');
+            return MCPHelper::error('not_supported', 'No contact found to drive smartcode rendering. Add at least one contact.');
         }
 
         $rawTemplates = ['raw_html', 'raw_classic'];
@@ -509,7 +504,17 @@ class EmailTools
      */
     public static function renderEmailPreview($params)
     {
-        $rendered = self::buildRenderedEmail((array) $params, false);
+        $params = (array) $params;
+
+        // Choosing the render contact exposes its PII, so it needs contact-read (as in send-test-email).
+        if (!empty($params['against_contact_id']) || !empty($params['against_contact_email'])) {
+            $guard = MCPHelper::permissionGuard('fcrm_read_contacts');
+            if (is_wp_error($guard)) {
+                return $guard;
+            }
+        }
+
+        $rendered = self::buildRenderedEmail($params, false);
         if (is_wp_error($rendered)) {
             return $rendered;
         }
@@ -537,7 +542,9 @@ class EmailTools
             'body_format'      => $format,
             'headers'          => $rendered['headers'],
             'applied'          => $rendered['applied'],
-            'rendered_against' => $rendered['rendered_against'],
+            'rendered_against' => PermissionManager::currentUserCan('fcrm_read_contacts')
+                ? $rendered['rendered_against']
+                : ['note' => 'Rendered against a contact. Identity hidden (requires contact read permission).'],
             'withheld_smartcodes' => $rendered['withheld'],
             'note'             => 'Preview only. SmartCodes resolved with the exact settings a live send would use, except access links (password reset, opt-in confirmation, contact hashes), which only resolve in the email delivered to the contact and are listed in withheld_smartcodes. Footer links written as ##crm.unsubscribe_url## and ##crm.manage_subscription_url## are filled per recipient at send time. Nothing was sent and no records were created.',
         ];
@@ -553,13 +560,10 @@ class EmailTools
 
         // Back-compat: render_only previews instead of sending.
         if (!empty($params['render_only'])) {
-            // Same caps as render-email-preview: a preview exposes contact PII,
-            // and fcrm_manage_emails implies neither read cap.
-            foreach (['fcrm_read_emails', 'fcrm_read_contacts'] as $cap) {
-                $guard = MCPHelper::permissionGuard($cap);
-                if (is_wp_error($guard)) {
-                    return $guard;
-                }
+            // Same cap as render-email-preview and the REST preview.
+            $guard = MCPHelper::permissionGuard('fcrm_manage_emails');
+            if (is_wp_error($guard)) {
+                return $guard;
             }
 
             return self::renderEmailPreview($params);

@@ -501,7 +501,10 @@ class CampaignAnalyticsController extends Controller
             ->paginate();
 
         foreach ($unsubscribes as $unsubscribe) {
-            $unsubscribe->subscriber->reason = $unsubscribe->subscriber->unsubscribeReason();
+            // The contact may have been deleted since; keep the row instead of fataling the page.
+            if ($unsubscribe->subscriber) {
+                $unsubscribe->subscriber->reason = $unsubscribe->subscriber->unsubscribeReason();
+            }
         }
 
         return [

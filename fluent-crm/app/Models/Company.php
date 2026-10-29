@@ -4,6 +4,7 @@ namespace FluentCrm\App\Models;
 
 use FluentCrm\App\Models\Model;
 use FluentCrm\App\Models\Subscriber;
+use FluentCrm\App\Services\Helper;
 use FluentCrm\Framework\Support\Arr;
 
 class Company extends Model
@@ -157,7 +158,7 @@ class Company extends Model
 
     public function getMetaAttribute($meta)
     {
-        $metaData = \maybe_unserialize($meta);
+        $metaData = Helper::safeUnserialize($meta);
 
         if (!$metaData) {
             return [

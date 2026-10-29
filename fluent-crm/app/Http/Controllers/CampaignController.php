@@ -15,6 +15,7 @@ use FluentCrm\App\Services\CampaignProcessor;
 use FluentCrm\App\Services\Helper;
 use FluentCrm\App\Services\Libs\Mailer\Handler;
 use FluentCrm\App\Services\Libs\Mailer\Mailer;
+use FluentCrm\App\Services\PermissionManager;
 use FluentCrm\App\Services\Sanitize;
 use FluentCrm\Framework\Http\Request\Request;
 use FluentCrm\Framework\Support\Arr;
@@ -138,7 +139,7 @@ class CampaignController extends Controller
                         $clickData = $campMeta['_ano_url_clicks'] ?? null;
                         $clicks = 0;
                         if ($clickData) {
-                            $clickItems = maybe_unserialize($clickData);
+                            $clickItems = Helper::safeUnserialize($clickData);
                             if (is_array($clickItems)) {
                                 $clicks = array_sum($clickItems);
                             }
@@ -157,7 +158,7 @@ class CampaignController extends Controller
 
                     $revenueRaw = $campMeta['_campaign_revenue'] ?? null;
                     if ($revenueRaw) {
-                        $data = (array) maybe_unserialize($revenueRaw);
+                        $data = (array) Helper::safeUnserialize($revenueRaw);
                         $orderCount = isset($data['orderIds']) && is_array($data['orderIds']) ? count($data['orderIds']) : 0;
                         foreach ($data as $currency => $cents) {
                             if ($cents && $currency !== 'orderIds') {
@@ -181,7 +182,7 @@ class CampaignController extends Controller
                         if (!$label) {
                             return null;
                         }
-                        $settings = maybe_unserialize($label->settings);
+                        $settings = Helper::safeUnserialize($label->settings);
                         return [
                             'id'    => $label->id,
                             'slug'  => $label->slug,
@@ -284,6 +285,7 @@ class CampaignController extends Controller
         return $this->sendSuccess(compact('campaign', 'templates'));
     }
 
+    /** List campaign recipients using the same filters as selected campaign actions. */
     public function campaignEmails(Request $request, $campaignId)
     {
         $filterType = $request->get('filter_type');
@@ -291,28 +293,15 @@ class CampaignController extends Controller
 
         $campaign = Campaign::withoutGlobalScope('type')->findOrFail($campaignId);
 
-        $emailsQuery = CampaignEmail::with(['subscriber'])->where('campaign_id', $campaign->id);
-
-        if ($search) {
-            $emailsQuery->whereHas('subscriber', function ($q) use ($search) {
-                $q->searchBy($search);
-            });
-        }
-
         $filterType = in_array($filterType, ['click', 'view', 'unopened', 'failed']) ? $filterType : '';
-
-        if ($filterType == 'click') {
-            $emailsQuery = $emailsQuery->whereNotNull('click_counter')
-                ->orderBy('click_counter', 'DESC');
-        } else if ($filterType == 'view') {
-            $emailsQuery = $emailsQuery->where('is_open', '>', 0)
-                ->orderBy('is_open', 'DESC');
-        } else if ($filterType == 'unopened') {
-            $emailsQuery = $emailsQuery->where('is_open', '==', 0)
-                ->orderBy('is_open', 'DESC');
-        } else if ($filterType == 'failed') {
-            $emailsQuery = $emailsQuery->where('status', 'failed')
-                ->orderBy('id', 'DESC');
+        $emailsQuery = CampaignEmail::with(['subscriber'])->forCampaignRecipients($campaign->id, [
+            'filter_type' => $filterType,
+            'search' => $search,
+            'link_ids' => $request->get('link_ids', [])
+        ]);
+        $orderColumns = ['click' => 'click_counter', 'view' => 'is_open', 'unopened' => 'is_open', 'failed' => 'id'];
+        if (isset($orderColumns[$filterType])) {
+            $emailsQuery->orderBy($orderColumns[$filterType], 'DESC');
         }
 
         $emails = $emailsQuery->paginate();
@@ -669,7 +658,7 @@ class CampaignController extends Controller
 
     public function deleteCampaignEmails(Request $request, $campaignId)
     {
-        $selectionIds = array_filter($request->get('email_ids'), 'intval');
+        $selectionIds = array_filter(array_map('intval', (array)$request->get('email_ids', [])));
 
         if ($selectionIds) {
             CampaignEmail::where('campaign_id', $campaignId)
@@ -811,6 +800,16 @@ class CampaignController extends Controller
         $data['settings']['click_tracker'] = fluentcrmTrackClicking();
         $data['settings']['open_tracker'] = fluentcrmTrackEmailOpen();
 
+        // A request without these keys keeps the choice already stored on the campaign.
+        if ($request->exists('open_tracking')) {
+            $data['settings']['open_tracking'] = Campaign::sanitizeTrackingChoice($request->get('open_tracking'));
+        }
+        if ($request->exists('click_tracking')) {
+            $data['settings']['click_tracking'] = Campaign::sanitizeTrackingChoice($request->get('click_tracking'));
+        }
+
+        $data['settings'] = Campaign::applyTrackingChoice($data['settings']);
+
         $data['settings'] = maybe_serialize($data['settings']);
 
         // Only transition from 'draft', so concurrent requests cannot both schedule.
@@ -870,10 +869,16 @@ class CampaignController extends Controller
             ->findOrFail($campaignId);
 
         if ($campaign->status == 'pending-scheduled' && (strtotime($campaign->scheduled_at) - current_time('timestamp')) < 360) {
-            $campaign->status = 'processing';
-            $campaign->recipients_count = 0;
-            $campaign->save();
-            do_action('fluent_crm/campaign_processing_start', $campaign);
+            if (Campaign::claimForProcessing($campaign->id, ['recipients_count' => 0])) {
+                $campaign->status = 'processing';
+                $campaign->recipients_count = 0;
+                do_action('fluent_crm/campaign_processing_start', $campaign);
+            } else {
+                // Unscheduled or claimed elsewhere since we read it; report the current state.
+                $campaign = Campaign::withoutGlobalScope('type')
+                    ->with(['subjects'])
+                    ->findOrFail($campaignId);
+            }
         }
 
         if ($campaign->status != 'processing') {
@@ -997,12 +1002,12 @@ class CampaignController extends Controller
 
         $subscriber = Subscriber::where('email', $email)->first();
         if (!$subscriber) {
-            $subscriber = Subscriber::where('status', 'subscribed')->first();
+            $subscriber = Helper::getSampleContact();
         }
 
         if (!$subscriber) {
             return $this->sendError([
-                'message' => __('No subscribed contact found to send the test to. Please add at least one contact with the Subscribed status.', 'fluent-crm')
+                'message' => __('No contact found to send the test to. Please add at least one contact.', 'fluent-crm')
             ]);
         }
 
@@ -1173,18 +1178,23 @@ class CampaignController extends Controller
 
         $emailBody = $campaign->email_body;
 
-        if ($this->request->get('contact_id')) {
-            $subscriber = Subscriber::find($this->request->getSafe('contact_id', 'sanitize_text_field'));
-        } else {
-            $subscriber = fluentcrm_get_current_contact();
+        $subscriber = null;
+        // Picking a contact is a contact read; email-only users get the sample contact.
+        if ($this->request->get('contact_id') && PermissionManager::currentUserCan('fcrm_read_contacts')) {
+            $subscriber = Subscriber::find((int)$this->request->get('contact_id'));
         }
 
         if (!$subscriber) {
-            $subscriber = Subscriber::where('status', 'subscribed')->first();
+            $subscriber = Helper::getSampleContact();
         }
 
         if ($this->request->get('disable_subscriber') == 'yes') {
             $subscriber = null;
+        }
+
+        if ($subscriber && !empty($campaign->id)) {
+            // Keep preview smartcodes in the same campaign context used while queueing emails.
+            $subscriber->campaign_id = (int)$campaign->id;
         }
 
         $designTemplate = $campaign->design_template;
@@ -1687,11 +1697,19 @@ class CampaignController extends Controller
         if ($campaign->status == 'scheduled') {
             $newTime = $request->get('scheduled_at');
             // Reschedule only on a valid new time; a title-only payload must not null the schedule.
-            if ($newTime && strtotime($newTime) && $newTime != $campaign->scheduled_at) {
+            $newTimestamp = $newTime ? strtotime($newTime) : false;
+            if ($newTimestamp) {
+                // Store a real DATETIME; relative strings like "tomorrow" were saved verbatim
+                // and became 0000-00-00 (due immediately) on non-strict MySQL.
+                $newTime = gmdate('Y-m-d H:i:s', $newTimestamp);
+            }
+
+            if ($newTimestamp && $newTime != $campaign->scheduled_at) {
                 $campaign->scheduled_at = $newTime;
                 $campaign->save();
+                // Leave in-flight (processing) and paused/cancelled rows alone; only waiting rows move.
                 CampaignEmail::where('campaign_id', $campaign->id)
-                    ->whereNotIn('status', ['sent', 'failed', 'bounced'])
+                    ->whereNotIn('status', ['sent', 'failed', 'bounced', 'processing', 'paused', 'cancelled'])
                     ->update([
                         'status'       => 'scheduled',
                         'scheduled_at' => $newTime

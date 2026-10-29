@@ -48,8 +48,8 @@ class MailChimpMigrator extends BaseMigrator
 
     public function verifyCredentials($credential)
     {
-        $api = $this->getApi($credential);
         try {
+            $api = $this->getApi($credential);
             $result = $api->get('lists');
             if (!$api->success()) {
                 throw new \Exception($api->getLastError());

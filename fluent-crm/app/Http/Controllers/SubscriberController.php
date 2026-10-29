@@ -250,6 +250,8 @@ class SubscriberController extends Controller
                     'message' => __('Value is not valid', 'fluent-crm')
                 ]);
             }
+        } else if ($column == 'avatar') {
+            $value = esc_url_raw($value);
         } else if ($column == 'company_id') {
             Company::findOrFail($value);
         }
@@ -727,7 +729,6 @@ class SubscriberController extends Controller
             $emailsQuery->where('is_open', 0);
         }
 
-        $emails = $emailsQuery->paginate();
         $tab = Arr::get($request->all(), 'tab', 'crm');
 
         if (defined('FLUENTMAIL_PLUGIN_FILE') && $tab == 'fluentsmtp') {
@@ -745,6 +746,8 @@ class SubscriberController extends Controller
 
                 $emails['data'] = $this->formatResult($emails['data']);
             }
+        } else {
+            $emails = $emailsQuery->paginate();
         }
 
         /**
@@ -774,13 +777,19 @@ class SubscriberController extends Controller
 
         // Only manage_options users see unredacted bodies; edit_users is not enough on multisite.
         $redactSecrets = !current_user_can('manage_options');
+        // Same rule as the CRM email tab: read-only contact users get log metadata, not content.
+        $metadataOnly = !PermissionManager::currentUserCan('fcrm_manage_contacts');
 
         foreach ($result as $key => $row) {
-            $result[$key] = array_map('maybe_unserialize', (array)$row);
+            $result[$key] = array_map([Helper::class, 'safeUnserialize'], (array)$row);
             $result[$key]['id'] = (int)$result[$key]['id'];
             $result[$key]['retries'] = (int)$result[$key]['retries'];
             $result[$key]['from'] = htmlspecialchars($result[$key]['from']);
             $result[$key]['subject'] = wp_kses_post(wp_unslash($result[$key]['subject']));
+
+            if ($metadataOnly) {
+                unset($result[$key]['body'], $result[$key]['headers'], $result[$key]['attachments'], $result[$key]['response'], $result[$key]['extra']);
+            }
 
             if ($redactSecrets && isset($result[$key]['body']) && $this->emailLogBodyHasSensitiveData($result[$key]['body'])) {
                 $result[$key]['body'] = $this->getRedactedEmailBodyNotice();
@@ -1393,7 +1402,7 @@ class SubscriberController extends Controller
             $subscriberIds = $subscribersModel->pluck('id')->toArray();
 
         } else {
-            $subscriberIds = array_map('intval', $request->get('subscriber_ids', []));
+            $subscriberIds = array_map('intval', (array)$request->get('subscriber_ids', []));
             $subscriberIds = array_filter($subscriberIds);
         }
 
@@ -1907,7 +1916,7 @@ class SubscriberController extends Controller
     public function searchContacts(Request $request)
     {
         $search = trim($request->getSafe('search', 'sanitize_text_field', ''));
-        $limit = absint($request->get('limit', 20));
+        $limit = min(100, absint($request->get('limit', 20)));
         if (!$limit) {
             $limit = 20;
         }

@@ -9,6 +9,7 @@ use FluentCrm\App\Models\FunnelSubscriber;
 use FluentCrm\App\Models\Lists;
 use FluentCrm\App\Models\Tag;
 use FluentCrm\App\Hooks\Handlers\Scheduler;
+use FluentCrm\App\Services\Helper;
 use FluentCrm\App\Services\Reporting;
 use FluentCrm\Framework\Http\Request\Request;
 use FluentCrm\App\Models\CampaignUrlMetric;
@@ -288,9 +289,11 @@ class ReportingController extends Controller
 
     public function deleteEmails(Request $request)
     {
-        $emailIds = $request->get('email_ids');
-        CampaignEmail::whereIn('id', $emailIds)
-            ->delete();
+        $emailIds = array_filter(array_map('intval', (array)$request->get('email_ids', [])));
+        if ($emailIds) {
+            CampaignEmail::whereIn('id', $emailIds)
+                ->delete();
+        }
 
         return [
             'message' => __('Selected emails have been deleted', 'fluent-crm')
@@ -342,7 +345,7 @@ class ReportingController extends Controller
 
     public function getContactsByTags(Request $request)
     {
-        $limit = intval($request->get('per_page', 20));
+        $limit = max(1, min(100, intval($request->get('per_page', 20))));
 
         $tags = Tag::select(['fc_tags.id', 'fc_tags.title'])
             ->selectRaw('COUNT(subscriber_id) as contact_count')
@@ -361,7 +364,7 @@ class ReportingController extends Controller
 
     public function getContactsByLists(Request $request)
     {
-        $limit = intval($request->get('per_page', 20));
+        $limit = max(1, min(100, intval($request->get('per_page', 20))));
 
         $lists = Lists::select(['fc_lists.id', 'fc_lists.title'])
             ->selectRaw('COUNT(subscriber_id) as contact_count')
@@ -474,7 +477,7 @@ class ReportingController extends Controller
             $clicks = $emailStat ? (int) $emailStat->clicks : 0;
             if ($campaign->getClickTrackingStatus(false) === 'anonymous') {
                 $clicks = 0;
-                $clickItems = maybe_unserialize($campaignMeta['_ano_url_clicks'] ?? null);
+                $clickItems = Helper::safeUnserialize($campaignMeta['_ano_url_clicks'] ?? null);
                 if (is_array($clickItems)) {
                     $clicks = array_sum($clickItems);
                 }
@@ -488,7 +491,7 @@ class ReportingController extends Controller
                 'unsubscribers' => $unsubscribeCount ? (int) $unsubscribeCount->total : 0,
             ], $campaign->anonymousStatFlags());
 
-            $revenue = maybe_unserialize($campaignMeta['_campaign_revenue'] ?? null);
+            $revenue = Helper::safeUnserialize($campaignMeta['_campaign_revenue'] ?? null);
             if ($revenue) {
                 foreach ((array) $revenue as $currency => $cents) {
                     if ($cents && $currency !== 'orderIds') {
@@ -508,7 +511,7 @@ class ReportingController extends Controller
 
     public function getAutomationReports(Request $request)
     {
-        $limit = intval($request->get('per_page', 15));
+        $limit = max(1, min(100, intval($request->get('per_page', 15))));
 
         $funnels = Funnel::where('status', 'published')
             ->orderBy('created_at', 'DESC')
@@ -652,7 +655,7 @@ class ReportingController extends Controller
         global $wpdb;
 
         $search = sanitize_text_field($request->get('search', ''));
-        $limit = intval($request->get('per_page', 50));
+        $limit = max(1, min(100, intval($request->get('per_page', 50))));
 
         $query = Campaign::select(['id', 'title'])
             ->where('status', 'archived');
@@ -688,7 +691,7 @@ class ReportingController extends Controller
 
     public function getRecentTags(Request $request)
     {
-        $limit = intval($request->get('per_page', 5));
+        $limit = max(1, min(100, intval($request->get('per_page', 5))));
 
         $tags = Tag::select(['fc_tags.id', 'fc_tags.title', 'fc_tags.created_at'])
             ->selectRaw('COUNT(subscriber_id) as contact_count')

@@ -54,13 +54,30 @@ class TemplatePolicy extends BasePolicy
         return $this->currentUserCan('fcrm_manage_email_templates');
     }
 
+    /**
+     * "Delete emails" has no permission dependencies, so the template manage capability is
+     * re-asserted; read access alone must not be enough to delete a template.
+     *
+     * @param Request $request
+     * @return bool
+     */
     public function delete(Request $request)
     {
-        return $this->templates($request) && $this->currentUserCan('fcrm_manage_email_delete');
+        return $this->verifyRequest($request) && $this->currentUserCan('fcrm_manage_email_delete');
     }
 
+    /**
+     * Bulk delete needs the delete permission; bulk status change is an ordinary edit.
+     *
+     * @param Request $request
+     * @return bool
+     */
     public function handleBulkAction(Request $request)
     {
-        return $this->delete($request);
+        if ($request->getSafe('action_name', 'sanitize_text_field', '') === 'delete_templates') {
+            return $this->delete($request);
+        }
+
+        return $this->verifyRequest($request);
     }
 }

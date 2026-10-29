@@ -9,6 +9,7 @@ use FluentCrm\App\Models\CustomCompanyField;
 use FluentCrm\App\Models\Subscriber;
 use FluentCrm\App\Models\SubscriberNote;
 use FluentCrm\App\Services\AutoSubscribe;
+use FluentCrm\App\Services\CompanyCustomFilter;
 use FluentCrm\App\Services\Helper;
 use FluentCrm\App\Services\Libs\FileSystem;
 use FluentCrm\App\Services\Sanitize;
@@ -19,7 +20,7 @@ use FluentCrm\Framework\Support\Collection;
 class CompanyController extends Controller
 {
     /**
-     * Return paginated companies with contact counts batched for the current page.
+     * Return primary/custom-filtered companies with contact counts batched for the current page.
      *
      * @param Request $request
      * @return array
@@ -31,30 +32,19 @@ class CompanyController extends Controller
             'order' => Helper::sanitizeOrderBy($request->get('sort_order'), 'DESC')
         ];
 
-        $companies = Company::orderBy($order['by'], $order['order'])
-            ->with(['owner'])
-            ->searchBy($request->getSafe('search', 'sanitize_text_field'));
+        $companies = $this->companyQuery($request->get('search', ''), $request->get('inline_filters', []))
+            ->orderBy($order['by'], $order['order'])->with(['owner']);
 
-        $inlineFilters = $request->get('inline_filters', []);
-
-        if ($inlineFilters && is_array($inlineFilters)) {
-            $inlineFilters = array_filter($inlineFilters);
-
-            foreach ($inlineFilters as $key => $values) {
-                if (!is_array($values)) {
-                    continue;
-                }
-                $values = array_map('sanitize_text_field', $values);
-
-                if ($key == 'company_categories') {
-                    $companies->whereIn('industry', $values);
-                } else if ($key == 'company_types') {
-                    $companies->whereIn('type', $values);
-                }
-            }
+        try {
+            $filters = new CompanyCustomFilter($request->get('custom_filters', []));
+        } catch (\InvalidArgumentException $exception) {
+            return $this->sendError(['message' => $exception->getMessage()], 422);
         }
-
-        $companies = $companies->paginate();
+        $companies = $filters->paginate(
+            $companies,
+            max(1, (int) $request->get('per_page', 15)),
+            max(1, (int) $request->get('page', 1))
+        );
         $companyIds = array_map('intval', $companies->pluck('id')->toArray());
         $contactCounts = [];
 
@@ -85,6 +75,22 @@ class CompanyController extends Controller
         ];
     }
 
+    /** Build the listing query with search, Industry and Company Type constraints. */
+    private function companyQuery($search, $inlineFilters)
+    {
+        $query = Company::searchBy(sanitize_text_field($search));
+        foreach (is_array($inlineFilters) ? array_filter($inlineFilters) : [] as $key => $values) {
+            if (!is_array($values)) {
+                continue;
+            }
+            $column = ['company_categories' => 'industry', 'company_types' => 'type'][$key] ?? null;
+            if ($column) {
+                $query->whereIn($column, array_map('sanitize_text_field', $values));
+            }
+        }
+        return $query;
+    }
+
     public function searchCompanies(Request $request)
     {
         $search = $request->getSafe('search', 'sanitize_text_field');
@@ -99,7 +105,10 @@ class CompanyController extends Controller
             });
         }
 
-        $companies = $companies->limit(50)->get();
+        // Fetch one past the page size so has_more reflects this search, not the whole table.
+        $companies = $companies->limit(51)->get();
+        $hasMore = $companies->count() > 50;
+        $companies = $companies->slice(0, 50);
 
         $formatted = [];
 
@@ -136,7 +145,7 @@ class CompanyController extends Controller
 
         return [
             'results'  => $formatted,
-            'has_more' => Company::count() >= 50
+            'has_more' => $hasMore
         ];
     }
 
@@ -150,7 +159,7 @@ class CompanyController extends Controller
             ->whereDoesntHave('companies', function ($query) use ($companyId) {
                 $query->where('fc_companies.id', $companyId);
             })
-            ->limit($request->getSafe('limit', 'intval', 20))
+            ->limit(min(100, max(1, $request->getSafe('limit', 'intval', 20))))
             ->get();
 
         return [
@@ -279,6 +288,8 @@ class CompanyController extends Controller
         }
 
         $data = $this->getSanitizedData($allData);
+        // createOrUpdate() resolves the row from $data, so pin it to the company in the URL.
+        $data['id'] = $company->id;
 
         $company = FluentCrmApi('companies')->createOrUpdate($data);
 
@@ -303,7 +314,6 @@ class CompanyController extends Controller
 
         $validColumns = ['type', 'logo', 'owner_id', 'refetch_logo'];
         $types = Helper::companyTypes();
-        $statuses = Helper::companyTypes();
 
         $this->validate([
             'column'      => $column,
@@ -325,10 +335,17 @@ class CompanyController extends Controller
             return $this->sendError([
                 'message' => __('Value is not valid', 'fluent-crm')
             ]);
-        } else if ($column == 'status' && !in_array($value, $statuses)) {
-            return $this->sendError([
-                'message' => __('Value is not valid', 'fluent-crm')
-            ]);
+        }
+
+        if ($column == 'logo') {
+            $value = esc_url_raw($value);
+        } else if ($column == 'owner_id') {
+            $value = (int)$value;
+            if (!Subscriber::where('id', $value)->exists()) {
+                return $this->sendError([
+                    'message' => __('Value is not valid', 'fluent-crm')
+                ]);
+            }
         }
 
         $companies = Company::whereIn('id', $companyIds)->get();
@@ -355,7 +372,7 @@ class CompanyController extends Controller
             if ($oldValue != $value) {
                 $company->{$column} = $value;
                 $company->save();
-                if (in_array($column, ['type', 'status', 'owner_id'])) {
+                if (in_array($column, ['type', 'owner_id'])) {
                     do_action('fluent_crm/company_' . $column . '_to_' . $value, $company, $oldValue);
                 }
             }
@@ -378,11 +395,12 @@ class CompanyController extends Controller
         ];
     }
 
+    /** Execute bulk actions only for explicitly selected company IDs. */
     public function handleBulkActions(Request $request)
     {
         $actionName = sanitize_text_field($request->get('action_name', ''));
 
-        $companyIds = array_map('intval', $request->get('company_ids', []));
+        $companyIds = array_map('intval', (array)$request->get('company_ids', []));
         $companyIds = array_filter($companyIds);
 
         // Bulk actions take the ids the user selected; there is no "everything in this filter" mode.
@@ -402,7 +420,7 @@ class CompanyController extends Controller
                 'message'            => __('All companies have been processed', 'fluent-crm')
             ];
         }
-        $companyIds = $companyQuery->pluck('id')->toArray();
+        $companyIds = $companies->pluck('id')->toArray();
         $lastCompanyId = end($companyIds);
 
         if ($actionName == 'delete_companies') {
@@ -442,7 +460,8 @@ class CompanyController extends Controller
             ];
         } else if ($actionName == 'change_company_type') {
             $newType = sanitize_text_field($request->get('new_status', ''));
-            if (!$newType) {
+            // The value becomes part of a hook name, so only accept a known type.
+            if (!$newType || !in_array($newType, Helper::companyTypes(), true)) {
                 return $this->sendError([
                     'message' => __('Please select a new type', 'fluent-crm')
                 ]);
@@ -463,7 +482,7 @@ class CompanyController extends Controller
             ];
         } else if ($actionName == 'change_company_category') {
             $newCategory = sanitize_text_field($request->get('new_status', ''));
-            if (!$newCategory) {
+            if (!$newCategory || !in_array($newCategory, Helper::companyCategories(), true)) {
                 return $this->sendError([
                     'message' => __('Please select a new category', 'fluent-crm')
                 ]);

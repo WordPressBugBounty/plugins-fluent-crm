@@ -878,7 +878,8 @@ class FunnelController extends Controller
 
         if ($actionName == 'change_funnel_status') {
             $newStatus = sanitize_text_field($request->get('status', ''));
-            if (!$newStatus) {
+            // Same allow-list as updateFunnelProperty(); any other value silently stops the automation.
+            if (!in_array($newStatus, ['draft', 'published'], true)) {
                 return $this->sendError([
                     'message' => __('Please select a status', 'fluent-crm')
                 ]);
@@ -925,6 +926,7 @@ class FunnelController extends Controller
 
                 $funnel->deleteMeta('funnel_label');
                 $funnel->deleteMeta('description');
+                $funnel->deleteMeta(FunnelHelper::STICKY_NOTE_META_KEY);
                 $funnel->delete();
             }
 
@@ -1291,7 +1293,13 @@ class FunnelController extends Controller
 
         $type = 'created';
 
-        if ($funnelCampaignId && $funnel->id == Arr::get($data, 'parent_id')) {
+        // Trust the stored owner, not the client's parent_id: otherwise a request could point
+        // campaign.id at another automation's email and overwrite it (same rule as
+        // SendEmailAction::savingAction).
+        $storedCampaign = $funnelCampaignId ? FunnelCampaign::where('id', $funnelCampaignId)->first() : null;
+        unset($data['parent_id'], $data['id']);
+
+        if ($storedCampaign && $storedCampaign->parent_id == $funnel->id) {
             $data['settings'] = \maybe_serialize($data['settings']);
             $data['type'] = 'funnel_email_campaign';
             $data['title'] = $funnel->title . ' (' . $funnel->id . ')';
@@ -1793,16 +1801,11 @@ class FunnelController extends Controller
         }
 
 
-        $user = get_user_by('ID', get_current_user_id());
-        $email = $user->user_email;
-
-        $subscriber = Subscriber::where('email', $email)
-            ->orWhere('status', 'subscribed')
-            ->first();
+        $subscriber = Helper::getSampleContact();
 
         if (!$subscriber) {
             return $this->sendError([
-                'message' => __('No subscribed contact is available for the test webhook. Add at least one contact with the Subscribed status.', 'fluent-crm')
+                'message' => __('No contact is available for the test webhook. Add at least one contact.', 'fluent-crm')
             ]);
         }
 

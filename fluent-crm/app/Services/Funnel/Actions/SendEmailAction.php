@@ -123,21 +123,35 @@ class SendEmailAction extends BaseAction
     public function savingAction($sequence, $funnel)
     {
         $funnelCampaign = Arr::get($sequence, 'settings.campaign', []);
-        $funnelCampaignId = Arr::get($funnelCampaign, 'id');
+        $funnelCampaignId = intval(Arr::get($funnelCampaign, 'id'));
+        $campaignFields = array_keys(FunnelCampaign::getMock());
+        $data = Arr::only($funnelCampaign, $campaignFields);
 
         $isStripped = Arr::get($sequence, 'is_stripped');
-        if ($isStripped && $funnelCampaignId) {
+        if ($funnelCampaignId) {
             $refCampaign = FunnelCampaign::find($funnelCampaignId);
             if (!$refCampaign) {
-                return $sequence;
+                throw new \Exception(esc_html__('The referenced automation email could not be found.', 'fluent-crm'));
             }
-            $data = Arr::only($refCampaign->toArray(), array_keys(FunnelCampaign::getMock()));
-        } else {
-            $data = Arr::only($funnelCampaign, array_keys(FunnelCampaign::getMock()));
+            $storedData = Arr::only($refCampaign->toArray(), $campaignFields);
+
+            // Preserve omitted fields and use stored ownership when deciding whether to update or copy.
+            unset($data['id'], $data['parent_id']);
+            $data = $isStripped ? $storedData : array_replace_recursive($storedData, $data);
         }
 
         $sequenceId = Arr::get($sequence, 'id');
-        $data['settings']['mailer_settings'] = Arr::get($sequence, 'settings.mailer_settings', []);
+        // Omitted sender settings are preserved; an explicitly empty configuration resets them.
+        $mailerSettings = (array) Arr::get($data, 'settings.mailer_settings', []);
+        $incomingMailerSettings = Arr::get(
+            $sequence,
+            'settings.mailer_settings',
+            $isStripped ? null : Arr::get($funnelCampaign, 'settings.mailer_settings')
+        );
+        if (is_array($incomingMailerSettings)) {
+            $mailerSettings = $incomingMailerSettings ? array_replace($mailerSettings, $incomingMailerSettings) : [];
+        }
+        $data['settings']['mailer_settings'] = $mailerSettings;
 
         if ($funnelCampaignId && $funnel->id == Arr::get($data, 'parent_id')) {
             $data['settings'] = \maybe_serialize($data['settings']);
@@ -150,14 +164,25 @@ class SendEmailAction extends BaseAction
             $data['title'] = $funnel->title . ' (' . $funnel->id . ' - ' . $sequenceId . ')';
             $campaign = FunnelCampaign::create($data);
             $funnelCampaignId = $campaign->id;
+        }
 
-            if ($data['design_template'] == 'visual_builder' && !empty($funnelCampaign['_visual_builder_design'])) {
+        // Save supplied designs for updates too, preserving omitted or stripped builder content.
+        if (Arr::get($data, 'design_template') == 'visual_builder') {
+            if (!$isStripped && array_key_exists('_visual_builder_design', $funnelCampaign)) {
                 fluentcrm_update_campaign_meta($funnelCampaignId, '_visual_builder_design', $funnelCampaign['_visual_builder_design']);
+            } elseif (isset($refCampaign) && $refCampaign->id != $funnelCampaignId) {
+                $design = fluentcrm_get_campaign_meta($refCampaign->id, '_visual_builder_design', true);
+                if ($design !== false) {
+                    fluentcrm_update_campaign_meta($funnelCampaignId, '_visual_builder_design', $design);
+                }
             }
+        } elseif (!$isStripped && array_key_exists('design_template', $funnelCampaign)) {
+            fluentcrm_delete_campaign_meta($funnelCampaignId, '_visual_builder_design');
         }
 
         $sequence['settings']['reference_campaign'] = $funnelCampaignId;
         $sequence['settings']['campaign'] = [];
+        $sequence['settings']['mailer_settings'] = $mailerSettings;
         return $sequence;
     }
 

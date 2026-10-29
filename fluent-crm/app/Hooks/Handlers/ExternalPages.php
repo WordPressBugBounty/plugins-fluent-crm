@@ -7,6 +7,7 @@ use FluentCrm\App\Models\CampaignUrlMetric;
 use FluentCrm\App\Models\CampaignEmail;
 use FluentCrm\App\Models\Meta;
 use FluentCrm\App\Models\Subscriber;
+use FluentCrm\App\Models\SubscriberMeta;
 use FluentCrm\App\Models\SubscriberNote;
 use FluentCrm\App\Models\SubscriberPivot;
 use FluentCrm\App\Models\Webhook;
@@ -80,13 +81,41 @@ class ExternalPages
         }
     }
 
+    /**
+     * Confirm an Amazon SNS topic subscription by fetching its SubscribeURL.
+     *
+     * Only an https URL on an SNS host is fetched, through the safe HTTP API and without
+     * redirects: a forged SubscribeURL on another amazonaws.com host (an S3 website, an EC2
+     * instance) could otherwise redirect the server to internal addresses (SSRF).
+     *
+     * @param string $subscribeUrl SubscribeURL from the SNS SubscriptionConfirmation message.
+     * @return bool Whether the URL was fetched.
+     */
+    public function confirmSesSubscription($subscribeUrl)
+    {
+        $parts = wp_parse_url((string)$subscribeUrl);
+        $scheme = isset($parts['scheme']) ? strtolower($parts['scheme']) : '';
+        $host = isset($parts['host']) ? strtolower($parts['host']) : '';
+
+        if ($scheme !== 'https' || !preg_match('/^sns(-fips)?\.[a-z0-9-]+\.amazonaws\.com(\.cn)?$/', $host)) {
+            return false;
+        }
+
+        \wp_safe_remote_get($subscribeUrl, [
+            'redirection' => 0,
+            'timeout'     => 10
+        ]);
+
+        return true;
+    }
+
     public function bounceHandlerSES()
     {
         // check bounce key
         $sesBounceKey = fluentcrm_get_option('_fc_bounce_key');
         $verifyKey = Arr::get($_REQUEST, 'verify_key');
 
-        if (!$sesBounceKey || $verifyKey !== $sesBounceKey) {
+        if (!$sesBounceKey || !is_string($verifyKey) || !hash_equals((string)$sesBounceKey, $verifyKey)) {
             wp_send_json([
                 'status'  => 422,
                 'message' => __('verify_key verification failed', 'fluent-crm')
@@ -118,12 +147,7 @@ class ExternalPages
         }
 
         if ($notificationType == 'SubscriptionConfirmation') {
-            $subscribeUrl = esc_url_raw($postdata['SubscribeURL'] ?? '');
-            // Only confirm subscriptions from AWS SNS domains to prevent SSRF
-            $host = wp_parse_url($subscribeUrl, PHP_URL_HOST);
-            if ($host && preg_match('/\.amazonaws\.com(\.cn)?$/i', $host)) {
-                \wp_remote_get($subscribeUrl);
-            }
+            $this->confirmSesSubscription(esc_url_raw($postdata['SubscribeURL'] ?? ''));
             wp_send_json([
                 'status'  => 200,
                 'message' => __('success', 'fluent-crm')
@@ -460,7 +484,12 @@ class ExternalPages
 
         $subscriber = Subscriber::where('email', $email)->first();
 
-        if (!$subscriber || $subscriber->status != 'subscribed' || $this->isPublicSubscriptionRequestCoolingDown($subscriber)) {
+        if (!$subscriber || $subscriber->status != 'subscribed') {
+            $this->sendPublicSubscriptionRequestResponse();
+        }
+
+        $claim = $this->claimPublicSubscriptionRequestSlot($subscriber);
+        if (!$claim) {
             $this->sendPublicSubscriptionRequestResponse();
         }
 
@@ -489,8 +518,8 @@ class ExternalPages
             'body'    => $emailBody
         ]);
 
-        if ($isSent) {
-            $this->markPublicSubscriptionRequestSent($subscriber);
+        if (!$isSent) {
+            $this->releasePublicSubscriptionRequestSlot($claim);
         }
 
         $this->sendPublicSubscriptionRequestResponse();
@@ -509,7 +538,14 @@ class ExternalPages
 
         $subscriber = Subscriber::where('email', $email)->first();
 
-        if (!$subscriber || $this->isPublicSubscriptionRequestCoolingDown($subscriber)) {
+        // Never mail bounced or complained addresses from a public, unauthenticated form: it burns
+        // sending reputation. Same response as an unknown email, so it is not an oracle.
+        if (!$subscriber || in_array($subscriber->status, ['bounced', 'complained', 'spammed'], true)) {
+            $this->sendPublicSubscriptionRequestResponse();
+        }
+
+        $claim = $this->claimPublicSubscriptionRequestSlot($subscriber);
+        if (!$claim) {
             $this->sendPublicSubscriptionRequestResponse();
         }
 
@@ -539,43 +575,100 @@ class ExternalPages
             'body'    => $emailBody
         ]);
 
-        if ($isSent) {
-            $this->markPublicSubscriptionRequestSent($subscriber);
+        if (!$isSent) {
+            $this->releasePublicSubscriptionRequestSlot($claim);
         }
 
         $this->sendPublicSubscriptionRequestResponse();
     }
 
     /**
-     * Whether a public link request for this contact is inside its 5-minute cooldown.
+     * Claim this contact's public link-request slot, which then cools down for 5 minutes.
+     *
+     * The contact's oldest cooldown meta row is the one canonical row. It is claimed with a
+     * compare-and-set UPDATE on its id and the value read here, so of several parallel requests
+     * only one sends the email. Parallel first requests may each insert a row; every request
+     * re-reads the oldest row after inserting, so they all compete for the same row.
      *
      * @param Subscriber $subscriber
-     * @return bool
+     * @return array|false ['id' => row id, 'value' => claimed timestamp, 'previous' => value before the claim],
+     *                     or false while the contact is cooling down or another request won.
      */
-    private function isPublicSubscriptionRequestCoolingDown($subscriber)
+    private function claimPublicSubscriptionRequestSlot($subscriber)
     {
-        $lastRequestedAt = (int) fluentcrm_get_subscriber_meta(
-            $subscriber->id,
-            '_last_public_subscription_request_timestamp',
-            0
-        );
+        global $wpdb;
 
-        return $lastRequestedAt && (time() - $lastRequestedAt < 5 * MINUTE_IN_SECONDS);
+        $key = '_last_public_subscription_request_timestamp';
+        $table = $wpdb->prefix . 'fc_subscriber_meta';
+        $now = time();
+
+        // fc_subscriber_meta also holds custom field values; exclude object_type 'custom_field'.
+        $readRow = function () use ($wpdb, $table, $subscriber, $key) {
+            return $wpdb->get_row($wpdb->prepare(
+                "SELECT `id`, `value` FROM {$table} WHERE `subscriber_id` = %d AND `key` = %s AND (`object_type` IS NULL OR `object_type` != 'custom_field') ORDER BY `id` ASC LIMIT 1",
+                $subscriber->id,
+                $key
+            ));
+        };
+
+        $row = $readRow();
+        if (!$row) {
+            SubscriberMeta::create([
+                'key'           => $key,
+                'created_by'    => get_current_user_id(),
+                'object_type'   => 'option',
+                'value'         => '0',
+                'subscriber_id' => $subscriber->id,
+                'created_at'    => fluentCrmTimestamp()
+            ]);
+            $row = $readRow();
+            if (!$row) {
+                return false;
+            }
+        }
+
+        $previous = (string)$row->value;
+        if ((int)$previous && ($now - (int)$previous < 5 * MINUTE_IN_SECONDS)) {
+            return false;
+        }
+
+        $claimed = $wpdb->query($wpdb->prepare(
+            "UPDATE {$table} SET `value` = %s, `updated_at` = %s WHERE `id` = %d AND `value` = %s",
+            (string)$now,
+            fluentCrmTimestamp(),
+            $row->id,
+            $previous
+        ));
+
+        if (!$claimed) {
+            return false;
+        }
+
+        return [
+            'id'       => (int)$row->id,
+            'value'    => (string)$now,
+            'previous' => $previous
+        ];
     }
 
     /**
-     * Start the cooldown. Call only after the request email was sent.
+     * Give back a claimed slot after the email failed to send, so the contact can retry.
      *
-     * @param Subscriber $subscriber
+     * Restores the earlier value only while the row still holds this request's claim.
+     *
+     * @param array $claim Return value of claimPublicSubscriptionRequestSlot().
      * @return void
      */
-    private function markPublicSubscriptionRequestSent($subscriber)
+    private function releasePublicSubscriptionRequestSlot($claim)
     {
-        fluentcrm_update_subscriber_meta(
-            $subscriber->id,
-            '_last_public_subscription_request_timestamp',
-            time()
-        );
+        global $wpdb;
+
+        $wpdb->query($wpdb->prepare(
+            "UPDATE {$wpdb->prefix}fc_subscriber_meta SET `value` = %s WHERE `id` = %d AND `value` = %s",
+            $claim['previous'],
+            $claim['id'],
+            $claim['value']
+        ));
     }
 
     /**
@@ -846,7 +939,9 @@ class ExternalPages
 
             do_action('fluent_crm/track_activity_by_subscriber', $subscriber);
 
-            if ($subscriber->status != 'subscribed') {
+            // A bounced or complained address must never be re-subscribed by an old link (mail
+            // scanners re-fetch archived confirmation emails); only an admin may lift that status.
+            if ($subscriber->status != 'subscribed' && !in_array($subscriber->status, ['bounced', 'complained', 'spammed'], true)) {
 
                 $subscriber = $subscriber->updateStatus('subscribed');
 
@@ -863,7 +958,7 @@ class ExternalPages
                     'type'          => 'system_log',
                     'title'         => __('Subscriber double opt-in confirmed', 'fluent-crm'),
                     /* translators: %s: IP address the contact confirmed double opt-in from */
-                    'description'   => sprintf(__('Contact confirmed double opt-in from IP address: %s', 'fluent-crm'), $this->request->getIp())
+                    'description'   => sprintf(__('Contact confirmed double opt-in from IP address: %s', 'fluent-crm'), $this->request->getIp(fluentCrmWillAnonymizeIp()))
                 ]);
 
                 /**
@@ -1300,7 +1395,8 @@ class ExternalPages
         $detachedListIds = [];
         $publicLists = Helper::getPublicLists();
         if ($publicLists) {
-            $lists = Arr::get($_REQUEST, 'lists', []);
+            // Public input: a scalar here made array_intersect() throw a TypeError on PHP 8.
+            $lists = array_map('intval', (array)Arr::get($_REQUEST, 'lists', []));
             $alreadyListIds = array_keys($subscriber->lists->keyBy('id')->toArray());
             $publicListIds = array_values(array_keys($publicLists->keyBy('id')->toArray()));
             $addedListIds = array_values(array_intersect($lists, $publicListIds));
@@ -1322,7 +1418,10 @@ class ExternalPages
 
             // Check if unique
             $exist = Subscriber::where('email', $email)->where('id', '!=', $subscriber->id)->first();
-            if ($exist) {
+            // An address owned by a WordPress user other than the linked one is refused with the same
+            // message, so the form does not reveal which addresses have an account.
+            $emailUser = get_user_by('email', $email);
+            if ($exist || ($emailUser && (int)$emailUser->ID !== (int)$subscriber->user_id)) {
                 wp_send_json_error([
                     'message' => __('This email address is already used by another account. Please use a different email address', 'fluent-crm')
                 ], 422);

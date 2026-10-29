@@ -27,7 +27,8 @@ class UsersController extends Controller
     public function index(Request $request)
     {
         $roles = $request->getSafe('roles', 'sanitize_text_field', []);
-        $limit = $request->limit ?: 5;
+        // WP_User_Query treats -1 as "every user"; keep it to a page.
+        $limit = max(1, min(100, intval($request->limit ?: 5)));
 
         // Restrict `fields` to an allowlist so WP_User_Query never returns user_pass or similar columns.
         $allowedFields = ['ID', 'display_name', 'user_email', 'user_login', 'user_nicename'];

@@ -14,21 +14,43 @@ trait ReportingHelperTrait
 
         // Site timezone: the compared columns are written with current_time(),
         // so UTC-based bounds shift every day boundary by the site offset.
-        return new \DateTime($from, wp_timezone());
+        return $this->makeDateOr($from, '-30 days');
     }
 
     protected function makeToDate($to)
     {
         $to = $to ?: '+1 days';
 
-        return new \DateTime($to, wp_timezone());
+        return $this->makeDateOr($to, '+1 days');
+    }
+
+    /**
+     * Parse a request-supplied date in the site timezone, falling back to a default.
+     * The value comes straight from the date_range query arg; an unparsable string
+     * made \DateTime throw and the report answer 500.
+     *
+     * @param string $value
+     * @param string $fallback
+     * @return \DateTime
+     */
+    private function makeDateOr($value, $fallback)
+    {
+        try {
+            return new \DateTime((string)$value, wp_timezone());
+        } catch (\Exception $e) {
+            return new \DateTime($fallback, wp_timezone());
+        }
     }
 
     protected function makeDatePeriod($from, $to, $interval = null)
     {
         $interval = $interval ?: static::$daily;
 
-        return new \DatePeriod($from, new \DateInterval($interval), $to);
+        // Reports include the entire end day; DatePeriod excludes its end boundary.
+        // Clone before advancing to local midnight so callers retain their query bounds.
+        $exclusiveEnd = (clone $to)->setTime(0, 0, 0)->modify('+1 day');
+
+        return new \DatePeriod($from, new \DateInterval($interval), $exclusiveEnd);
     }
 
     protected function getFrequency($from, $to)

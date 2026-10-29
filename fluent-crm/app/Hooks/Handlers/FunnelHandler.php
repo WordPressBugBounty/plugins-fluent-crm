@@ -177,11 +177,15 @@ class FunnelHandler
                 return;
             }
 
+            $result = null;
             try {
-                (new FunnelProcessor())->followUpSequenceActions();
+                $result = (new FunnelProcessor())->followUpSequenceActions();
             } finally {
                 $this->releaseFunnelProcessorLock();
             }
+
+            // After the release, so the next run can take the lock.
+            Scheduler::continueAutomationProcessing($result);
         });
     }
 

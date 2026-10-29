@@ -6,6 +6,7 @@ use FluentCrm\App\Services\BlockParser;
 use FluentCrm\App\Services\Helper;
 use FluentCrm\Framework\Support\Arr;
 use FluentCrm\Framework\Support\Str;
+use FluentCrm\Framework\Validator\ValidationException;
 
 /**
  *  CampaignEmail Model - DB Model for Campaign Emails
@@ -166,6 +167,87 @@ class CampaignEmail extends Model
         );
     }
 
+    /** Validate campaign click links and constrain recipients without duplicating email rows. */
+    public function scopeForCampaignRecipientLinks($query, $campaignId, $values, $filterType)
+    {
+        $message = __('The campaign link selection is invalid. Refresh the list and select links again.', 'fluent-crm');
+        $invalid = function () use ($message) {
+            throw new ValidationException($message, 422, null, ['link_ids' => [$message]]);
+        };
+        if (!is_array($values)) {
+            $invalid();
+        }
+        $ids = [];
+        foreach ($values as $value) {
+            if ((!is_int($value) && !is_string($value)) || !ctype_digit((string) $value) ||
+                (float) $value > PHP_INT_MAX || (int) $value < 1) {
+                $invalid();
+            }
+            $ids[] = (int) $value;
+        }
+        $ids = array_values(array_unique($ids));
+        if (!$ids) {
+            return $query;
+        }
+        $metrics = CampaignUrlMetric::where('campaign_id', absint($campaignId))->where('type', 'click');
+        $knownIds = (clone $metrics)->whereIn('url_id', $ids)->distinct()->pluck('url_id')->all();
+        if ($filterType !== 'click' || count($knownIds) !== count($ids)) {
+            $invalid();
+        }
+        return $query->whereIn('subscriber_id', $metrics->whereIn('url_id', $ids)->select('subscriber_id'));
+    }
+
+    /** Recipient filters of the campaign emails list; a selected Pro action uses the same set. */
+    const RECIPIENT_FILTER_TYPES = ['all', 'click', 'view', 'unopened', 'failed'];
+
+    /**
+     * Apply the recipient filters shared by campaign lists and selected Pro actions.
+     *
+     * An unknown filter type is rejected rather than read as "all", so a malformed action
+     * request can never widen to every recipient of the campaign.
+     */
+    public function scopeForCampaignRecipients($query, $campaignId, array $filters = [])
+    {
+        $filterType = $filters['filter_type'] ?? 'all';
+        if ($filterType === null || $filterType === '') {
+            $filterType = 'all';
+        }
+        if (!in_array($filterType, self::RECIPIENT_FILTER_TYPES, true)) {
+            $message = __('The recipient filter is invalid. Refresh the list and try again.', 'fluent-crm');
+            throw new ValidationException($message, 422, null, ['filter_type' => [$message]]);
+        }
+
+        $query->where('campaign_id', absint($campaignId));
+        $search = sanitize_text_field($filters['search'] ?? '');
+        if ($search !== '') {
+            $query->whereHas('subscriber', function ($subscriberQuery) use ($search) {
+                $subscriberQuery->searchBy($search);
+            });
+        }
+
+        $links = array_key_exists('link_ids', $filters) ? $filters['link_ids'] : [];
+        $query->forCampaignRecipientLinks($campaignId, $links, $filterType);
+
+        switch ($filterType) {
+            case 'click':
+                // Specific-link membership comes from metrics, including legacy rows without counters.
+                if (!$links) {
+                    $query->whereNotNull('click_counter');
+                }
+                break;
+            case 'view':
+                $query->where('is_open', '>', 0);
+                break;
+            case 'unopened':
+                $query->where('is_open', 0);
+                break;
+            case 'failed':
+                $query->where('status', 'failed');
+                break;
+        }
+        return $query;
+    }
+
     public function markAs($status)
     {
         $this->status = $status;
@@ -267,6 +349,10 @@ class CampaignEmail extends Model
         $campaign = $this->campaign;
         $subscriber = $this->subscriber;
 
+        if ($subscriber) {
+            $subscriber->campaign_id = $this->campaign_id;
+        }
+
         $emailBody = ($this->email_body) ? $this->email_body : (($campaign) ? $campaign->email_body : '');
 
         // Only administrators see a queued body as stored; everyone else gets the template re-rendered.
@@ -316,7 +402,6 @@ class CampaignEmail extends Model
         $footerText = Arr::get($emailFooterConfig, 'footer_content', '');
 
         if ($subscriber) {
-            $subscriber->campaign_id = $this->campaign_id;
             /**
              * Determine the footer text of a campaign email for previewing.
              *
@@ -433,6 +518,7 @@ class CampaignEmail extends Model
 
         if ($subscriber) {
             $subscriber->email_id = $this->id;
+            $subscriber->campaign_id = $this->campaign_id;
         }
 
         // Access-token smartcodes resolve only when this email goes to the contact's own address.
@@ -495,8 +581,6 @@ class CampaignEmail extends Model
         $emailFooterConfig = [];
         $footerText = '';
         if ($subscriber) {
-            $subscriber->campaign_id = $this->campaign_id;
-
             static $footerConfigCache = [];
             $cacheKey = $this->campaign_id ?: 0;
             if (isset($footerConfigCache[$cacheKey])) {
@@ -713,9 +797,22 @@ class CampaignEmail extends Model
             ->get();
     }
 
-    public function getOpenCount($subjectId)
+    /**
+     * Opens for one A/B subject. email_subject_id has no index, so pass the campaign id
+     * to let the (campaign_id, status) index narrow the scan.
+     *
+     * @param int $subjectId
+     * @param int|null $campaignId
+     * @return int
+     */
+    public function getOpenCount($subjectId, $campaignId = null)
     {
-        return static::where('email_subject_id', $subjectId)
+        $query = static::query();
+        if ($campaignId) {
+            $query->where('campaign_id', $campaignId);
+        }
+
+        return $query->where('email_subject_id', $subjectId)
             ->where('is_open', '>', 0)
             ->count();
     }
@@ -727,6 +824,6 @@ class CampaignEmail extends Model
 
     public function getEmailHeadersAttribute($settings)
     {
-        return \maybe_unserialize($settings);
+        return Helper::safeUnserialize($settings);
     }
 }

@@ -82,7 +82,11 @@ class RedirectionHandler
             return $urlData->url;
         }
 
-        if (!$campaignEmail->is_open && !$isAnonymousClick) {
+        // A tracked click also counts as an open, unless the campaign's review step set opens to
+        // anonymous or off: an identified open would then name a contact the setting keeps out.
+        $clickCountsAsOpen = !$isAnonymousClick && !Campaign::sanitizeTrackingChoice(Arr::get((array) $campaign->settings, 'open_tracking'));
+
+        if (!$campaignEmail->is_open && $clickCountsAsOpen) {
             do_action('fluent_crm/email_opened', $campaignEmail);
         }
 
@@ -129,13 +133,17 @@ class RedirectionHandler
             }
         }
 
+        (new Cleanup())->clearUnverifiedEmailOnClick($campaignEmail);
+
         do_action('fluent_crm/email_url_clicked', $campaignEmail, $urlData);
 
         $args = $campaign->getUtmParams();
 
         if (!$isAnonymousClick) {
             $campaignEmail->click_counter += 1;
-            $campaignEmail->is_open = 1;
+            if ($clickCountsAsOpen) {
+                $campaignEmail->is_open = 1;
+            }
             $campaignEmail->save();
             // A click proves the address receives mail.
             (new Cleanup())->resetSoftBounceCount($campaignEmail->subscriber);

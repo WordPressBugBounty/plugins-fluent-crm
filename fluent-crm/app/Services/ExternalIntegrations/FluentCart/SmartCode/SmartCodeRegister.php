@@ -4,6 +4,12 @@ namespace FluentCrm\App\Services\ExternalIntegrations\FluentCart\SmartCode;
 
 class SmartCodeRegister
 {
+    public static function register()
+    {
+        self::push();
+        add_filter('fluent_crm/extended_smart_codes', [self::class, 'pushCustomerCodes']);
+    }
+
     public static function push()
     {
         $smartCodesConfig = [
@@ -28,28 +34,6 @@ class SmartCodeRegister
                     '{{cart_order.created_at}}' => __('Order Creation Date', 'fluent-crm'),
                     '{{cart_order.total_paid}}' => __('Total Paid Amount', 'fluent-crm'),
                     '{{cart_order.shipping_status}}' => __('Shipping Status', 'fluent-crm'),
-                ]
-            ],
-            'cart_customer' => [
-                'title' => __('Cart Customer', 'fluent-crm'),
-                'description' => __('Customer-related smartcodes', 'fluent-crm'),
-                'shortcodes' => [
-                    '{{cart_customer.user_id}}' => __('User ID', 'fluent-crm'),
-                    '{{cart_customer.contact_id}}' => __('Customer Contact ID', 'fluent-crm'),
-                    '{{cart_customer.email}}' => __('Customer Email', 'fluent-crm'),
-                    '{{cart_customer.first_name}}' => __('Customer First Name', 'fluent-crm'),
-                    '{{cart_customer.last_name}}' => __('Customer Last Name', 'fluent-crm'),
-                    '{{cart_customer.status}}' => __('Customer Status', 'fluent-crm'),
-                    '{{cart_customer.purchase_value}}' => __('Total Purchase Value', 'fluent-crm'),
-                    '{{cart_customer.purchase_count}}' => __('Total Purchase Count', 'fluent-crm'),
-                    '{{cart_customer.first_purchase_date}}' => __('First Purchase Date', 'fluent-crm'),
-                    '{{cart_customer.last_purchase_date}}' => __('Last Purchase Date', 'fluent-crm'),
-                    '{{cart_customer.aov}}' => __('Average Order Value (AOV)', 'fluent-crm'),
-                    '{{cart_customer.notes}}' => __('Customer Notes', 'fluent-crm'),
-                    '{{cart_customer.country}}' => __('Customer Country', 'fluent-crm'),
-                    '{{cart_customer.city}}' => __('Customer City', 'fluent-crm'),
-                    '{{cart_customer.state}}' => __('Customer State', 'fluent-crm'),
-                    '{{cart_customer.postcode}}' => __('Customer Postcode', 'fluent-crm'),
                 ]
             ],
 //            'cart_transaction' => [
@@ -99,5 +83,37 @@ class SmartCodeRegister
                 return $codes;
             }, 10, 2);
         }
+    }
+
+    /**
+     * Global picker group (like Pro's "Woo Customer"): usable in automations, campaigns, templates
+     * and contact emails. Resolver is hooked in FluentCart::addHooks() and looks the customer up by
+     * the contact's email, so no funnel context is needed.
+     */
+    public static function pushCustomerCodes($codes)
+    {
+        $codes['cart_customer'] = [
+            'key'        => 'cart_customer',
+            'title'      => __('FluentCart Customer', 'fluent-crm'),
+            'shortcodes' => [
+                '{{cart_customer.user_id}}' => __('User ID', 'fluent-crm'),
+                '{{cart_customer.contact_id}}' => __('Customer Contact ID', 'fluent-crm'),
+                '{{cart_customer.email}}' => __('Customer Email', 'fluent-crm'),
+                '{{cart_customer.first_name}}' => __('Customer First Name', 'fluent-crm'),
+                '{{cart_customer.last_name}}' => __('Customer Last Name', 'fluent-crm'),
+                '{{cart_customer.status}}' => __('Customer Status', 'fluent-crm'),
+                '{{cart_customer.purchase_value}}' => __('Total Purchase Value', 'fluent-crm'),
+                '{{cart_customer.purchase_count}}' => __('Total Purchase Count', 'fluent-crm'),
+                '{{cart_customer.first_purchase_date}}' => __('First Purchase Date', 'fluent-crm'),
+                '{{cart_customer.last_purchase_date}}' => __('Last Purchase Date', 'fluent-crm'),
+                '{{cart_customer.aov}}' => __('Average Order Value (AOV)', 'fluent-crm'),
+                '{{cart_customer.notes}}' => __('Customer Notes', 'fluent-crm'),
+                '{{cart_customer.country}}' => __('Customer Country', 'fluent-crm'),
+                '{{cart_customer.city}}' => __('Customer City', 'fluent-crm'),
+                '{{cart_customer.state}}' => __('Customer State', 'fluent-crm'),
+                '{{cart_customer.postcode}}' => __('Customer Postcode', 'fluent-crm'),
+            ]
+        ];
+        return $codes;
     }
 }

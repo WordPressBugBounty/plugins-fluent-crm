@@ -57,7 +57,8 @@ class FluentFormSubmissionTrigger extends BaseTrigger
     {
         $valueOptions = $this->getValueOptions($funnel);
 
-        $formId = Arr::get($funnel->settings, 'form_id');
+        // The subtitle is rendered as HTML (v-html), so only a validated numeric id may reach it.
+        $formId = $this->getSelectedFormId($funnel);
 
         $subtitle = __('This automation will start when a form is submitted.', 'fluent-crm');
 
@@ -66,7 +67,7 @@ class FluentFormSubmissionTrigger extends BaseTrigger
                 /* translators: %1$s: form shortcode, %2$s: opening link tag to the form editor, %3$s: closing link tag */
                 __('Use shortcode %1$s to show the form on your WordPress pages or posts. %2$sEdit the form%3$s', 'fluent-crm'),
                 '<b> [fluentform id="' . $formId . '"] </b>',
-                '<a target="_blank" href="' . admin_url('admin.php?page=fluent_forms&route=editor&form_id=' . $formId) . '">',
+                '<a target="_blank" href="' . esc_url(admin_url('admin.php?page=fluent_forms&route=editor&form_id=' . $formId)) . '">',
                 '</a>'
             );
         }
@@ -139,9 +140,31 @@ class FluentFormSubmissionTrigger extends BaseTrigger
             ->get();
     }
 
+    /**
+     * The automation's selected form id, or 0 when none is set or the stored value is not a whole
+     * positive number.
+     *
+     * form_id is stored as given, including from an imported automation file. A malformed value such
+     * as "7bad" must mean "no form" everywhere: cast to int it would show form 7 in the editor (and
+     * MySQL would match it to form 7), while submissions from form 7 would never start it.
+     *
+     * @param object $funnel
+     * @return int
+     */
+    protected function getSelectedFormId($funnel)
+    {
+        $formId = Arr::get((array)$funnel->settings, 'form_id');
+
+        if (is_int($formId)) {
+            return max(0, $formId);
+        }
+
+        return (is_string($formId) && ctype_digit($formId)) ? (int)$formId : 0;
+    }
+
     protected function getValueOptions($funnel)
     {
-        $formId = Arr::get($funnel->settings, 'form_id');
+        $formId = $this->getSelectedFormId($funnel);
         if (!$formId) {
             return [];
         }
@@ -205,8 +228,9 @@ class FluentFormSubmissionTrigger extends BaseTrigger
 
         $processedValues = $funnel->settings;
 
-        if (Arr::get($processedValues, 'form_id') != $form->id) {
-            return; // not our form
+        $formId = $this->getSelectedFormId($funnel);
+        if (!$formId || $formId !== (int)$form->id) {
+            return; // no valid form selected, or not our form
         }
 
         // Automations saved before update_type existed run with the defaults ("Update if Exists").

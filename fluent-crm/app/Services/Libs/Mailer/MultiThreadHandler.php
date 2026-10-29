@@ -93,9 +93,7 @@ class MultiThreadHandler extends BaseHandler
             return false;
         }
 
-        if (function_exists('set_time_limit')) {
-            @set_time_limit($this->maximumProcessingTime + 30);
-        }
+        Helper::raiseTimeLimit($this->maximumProcessingTime + 30);
 
         $systemMaxProcessingTime = fluentCrmMaxRunTime();
 

@@ -3,6 +3,7 @@
 namespace FluentCrm\App\Hooks\Handlers;
 
 use FluentCrm\App\Models\Subscriber;
+use FluentCrm\App\Services\Helper;
 use FluentCrm\Framework\Support\Arr;
 use FluentForm\App\Models\Submission;
 use FluentForm\App\Modules\Acl\Acl;
@@ -55,8 +56,9 @@ class FormSubmissions
         }
 
         $app = fluentCrm();
-        $page = intval($app->request->get('page', 1));
-        $per_page = intval($app->request->get('per_page', 10));
+        // Same bounds as FormsController's entry lists; a zero or negative page broke the offset.
+        $page = max(1, intval($app->request->get('page', 1)));
+        $per_page = max(1, min(1000, intval($app->request->get('per_page', 10))));
 
         $query = fluentCrmDb()->table('fluentform_submissions')
             ->select([
@@ -78,11 +80,18 @@ class FormSubmissions
 
         $total = $query->count();
 
-        $submissions = $query
-            ->limit($per_page)
-            ->offset($per_page * ($page - 1))
-            ->orderBy('fluentform_submissions.id', 'desc')
-            ->get();
+        // A huge page makes this a float, which the query builder casts to 0 (the first page).
+        // A page past the end, or an offset that overflows, is simply empty.
+        $offset = $per_page * ($page - 1);
+
+        $submissions = [];
+        if (is_int($offset) && $offset < $total) {
+            $submissions = $query
+                ->limit($per_page)
+                ->offset($offset)
+                ->orderBy('fluentform_submissions.id', 'desc')
+                ->get();
+        }
 
         $formattedSubmissions = [];
         foreach ($submissions as $submission) {
@@ -221,7 +230,8 @@ class FormSubmissions
 
     private function resolveContactValue($providedKey)
     {
-        $contact = FluentCrmApi('contacts')->getCurrentContact(true, true);
+        // The rendered form is cacheable page HTML: only the logged-in user's contact may prefill it.
+        $contact = Helper::getLoggedInContact();
 
         // maybe has fallback value
         $dynamicKey = explode('|', $providedKey);

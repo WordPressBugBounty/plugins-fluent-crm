@@ -538,9 +538,10 @@ class FunnelTools
             ]);
         }
 
-        $contact = MCPHelper::resolveContact($params);
-        if (is_wp_error($contact)) {
-            return $contact;
+        $contactId = (int) ($params['contact_id'] ?? 0);
+        $email     = isset($params['email']) ? sanitize_email($params['email']) : '';
+        if (!$contactId && !$email) {
+            return MCPHelper::error('invalid_param', 'Provide contact_id or email');
         }
 
         $funnel = Funnel::find($funnelId);
@@ -548,9 +549,17 @@ class FunnelTools
             return MCPHelper::error('not_found', 'Automation not found', ['funnel_id' => $funnelId]);
         }
 
-        $row = FunnelSubscriber::where('funnel_id', $funnelId)
-            ->where('subscriber_id', $contact->id)
-            ->first();
+        // Looked up only among the automation's contacts: a funnel writer may lack contact read,
+        // so an unknown contact and a contact outside this automation get the same answer.
+        $rowQuery = FunnelSubscriber::where('funnel_id', $funnelId);
+        if ($contactId) {
+            $rowQuery->where('subscriber_id', $contactId);
+        } else {
+            $rowQuery->whereHas('subscriber', function ($q) use ($email) {
+                $q->where('email', $email);
+            });
+        }
+        $row = $rowQuery->first();
         if (!$row) {
             return MCPHelper::error('not_found', 'Contact is not enrolled in this automation');
         }

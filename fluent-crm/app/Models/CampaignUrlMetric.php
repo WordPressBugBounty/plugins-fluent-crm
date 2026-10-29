@@ -279,7 +279,7 @@ class CampaignUrlMetric extends Model
     {
         $clickMetrics = $this->getClickMetrics($campaignId, $subjectId);
 
-        $openCount = (new CampaignEmail)->getOpenCount($subjectId);
+        $openCount = (new CampaignEmail)->getOpenCount($subjectId, $campaignId);
 
         $clickTotal = array_sum($clickMetrics->pluck('total')->toArray());
 

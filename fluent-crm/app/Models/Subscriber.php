@@ -88,13 +88,18 @@ class Subscriber extends Model
             }
 
             if ($model->user_id && Helper::isUserSyncEnabled()) {
-                $user = get_user_by('email', $model->email);
+                // Start from the link stored before this save; callers may derive user_id from the new email.
+                $user = get_user_by('ID', $model->getOriginal('user_id') ?: $model->user_id);
+                $emailUser = get_user_by('email', $model->email);
 
-                $email_mismatch = false;
+                $email_mismatch = !$emailUser;
 
                 if (!$user) {
-                    $email_mismatch = true;
-                    $user = get_user_by('ID', $model->user_id);
+                    // The linked user is gone; relink to the user who owns the email, if any.
+                    $user = $emailUser;
+                } elseif ($emailUser && $emailUser->ID != $user->ID) {
+                    // The email belongs to a different user. Never relink to that user or write to their profile.
+                    return;
                 }
 
                 if ($user) {
@@ -1087,6 +1092,12 @@ class Subscriber extends Model
             if ($user) {
                 $subscriberData['user_id'] = $user->ID;
             }
+        }
+
+        // Callers derive user_id from the user's email; a self-set, unconfirmed email must not create the link.
+        if (!empty($subscriberData['user_id']) && (!$exist || (int)$exist->user_id !== (int)$subscriberData['user_id'])
+            && Helper::isUnverifiedEmailLink($subscriberData['user_id'], $subscriberData['email'])) {
+            unset($subscriberData['user_id']);
         }
 
         $isNew = true;
@@ -2701,17 +2712,19 @@ class Subscriber extends Model
 
         $user = get_user_by('email', $this->email);
 
-        if ($user) {
-            $this->user_id = $user->ID;
-            $this->save();
-
-            // remove the same user_id for other subscribers
-            self::where('user_id', $user->ID)
-                ->where('id', '!=', $this->id)
-                ->update([
-                    'user_id' => NULL
-                ]);
+        if (!Helper::isUserEmailVerified($user)) {
+            return false;
         }
+
+        $this->user_id = $user->ID;
+        $this->save();
+
+        // remove the same user_id for other subscribers
+        self::where('user_id', $user->ID)
+            ->where('id', '!=', $this->id)
+            ->update([
+                'user_id' => NULL
+            ]);
 
         return $user;
     }

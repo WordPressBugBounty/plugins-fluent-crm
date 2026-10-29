@@ -24,6 +24,24 @@ class Campaign extends Model
 
     protected static $type = 'campaign';
 
+    /**
+     * Atomically move a campaign from pending-scheduled to processing.
+     *
+     * A read-then-save() could overwrite an unschedule that landed in between and send a
+     * campaign the user had just cancelled; the status condition in the UPDATE prevents that.
+     *
+     * @param int $campaignId
+     * @param array $extra Extra columns to set in the same update.
+     * @return bool True only for the caller that made the transition.
+     */
+    public static function claimForProcessing($campaignId, $extra = [])
+    {
+        return (bool)static::withoutGlobalScope('type')
+            ->where('id', $campaignId)
+            ->where('status', 'pending-scheduled')
+            ->update(array_merge(['status' => 'processing'], $extra));
+    }
+
     public static function boot()
     {
         parent::boot();
@@ -84,7 +102,7 @@ class Campaign extends Model
 
     public function getSettingsAttribute($settings)
     {
-        $settings = \maybe_unserialize($settings);
+        $settings = Helper::safeUnserialize($settings);
         $settings = is_array($settings) ? $settings : [];
         $templateConfig = Arr::get($settings, 'template_config', []);
 
@@ -595,6 +613,9 @@ class Campaign extends Model
                 continue; // We don't want to send emails to non-subscribed members
             }
 
+            // Smartcode query filters use this to apply campaign-specific content rules.
+            $subscriber->campaign_id = $this->id;
+
             $time = fluentCrmTimestamp();
             $email = [
                 'campaign_id'   => $this->id,
@@ -642,7 +663,6 @@ class Campaign extends Model
                 $email['email_headers'] = maybe_serialize($email['email_headers']);
             }
 
-            $subscriber->campaign_id = $this->id;
             $subscribersByHash[$email['email_hash']] = $subscriber;
 
             $rows[] = $email;
@@ -1133,6 +1153,62 @@ class Campaign extends Model
         }
 
         return null;
+    }
+
+    /**
+     * Apply the per-campaign tracking choice to the tracker values a campaign sends with.
+     *
+     * `open_tracking` and `click_tracking` hold the choice made on the review step: 'anonymous'
+     * or 'no'. Anything else means "follow the site". A choice only makes tracking stricter
+     * (tracked > anonymous > off) than the value already in `open_tracker` / `click_tracker`,
+     * so the site's compliance settings always win. With no choice, the settings come back unchanged.
+     *
+     * @param array $settings Campaign settings with open_tracker / click_tracker already set.
+     * @return array
+     */
+    public static function applyTrackingChoice($settings)
+    {
+        $keys = [
+            'open_tracking'  => 'open_tracker',
+            'click_tracking' => 'click_tracker'
+        ];
+
+        foreach ($keys as $choiceKey => $trackerKey) {
+            $choice = self::sanitizeTrackingChoice($settings[$choiceKey] ?? '');
+            if (!$choice) {
+                continue;
+            }
+
+            $choiceValue = $choice === 'no' ? false : 'anonymous';
+            $current = $settings[$trackerKey] ?? true;
+
+            if (self::trackingRank($choiceValue) < self::trackingRank($current)) {
+                $settings[$trackerKey] = $choiceValue;
+            }
+        }
+
+        return $settings;
+    }
+
+    /**
+     * Sanitize a per-campaign tracking choice: 'anonymous', 'no', or '' to follow the site.
+     *
+     * @param mixed $choice
+     * @return string
+     */
+    public static function sanitizeTrackingChoice($choice)
+    {
+        return in_array($choice, ['anonymous', 'no'], true) ? $choice : '';
+    }
+
+    /**
+     * Rank a tracker value: 2 tracked, 1 anonymous, 0 off. Accepts the legacy yes/no strings.
+     */
+    private static function trackingRank($status)
+    {
+        $ranks = ['no' => 0, 'anonymous' => 1, 'yes' => 2];
+
+        return $ranks[Helper::trackingLevel($status)];
     }
 
     /**

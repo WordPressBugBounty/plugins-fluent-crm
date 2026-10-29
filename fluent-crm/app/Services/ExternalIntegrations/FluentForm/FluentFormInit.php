@@ -110,7 +110,7 @@ class FluentFormInit
         $html = '<li>';
         $html .= '<span class="fc_mepr_subscription_header">';
         $html .= '<span class="fc_mepr_subscription_status ' . esc_attr($subscription->status) . '">' . esc_html($subscription->status) . '</span>';
-        $html .= '<span class="fc_mepr_subscription_price">' . $subscription->formatted_recurring_amount . '<small>/'.$subscription->billing_interval.'</small></span>';
+        $html .= '<span class="fc_mepr_subscription_price">' . $subscription->formatted_recurring_amount . '<small>/' . esc_html($subscription->billing_interval) . '</small></span>';
         $html .= '</span>';
         $html .= '<a href="' . $permalink . '" target="_blank" class="fc_mepr_subscription_title">';
         $html .= '<b>' . esc_html($subscription->item_name) . '<span class="fc_dash_external dashicons dashicons-external"></span></b>';

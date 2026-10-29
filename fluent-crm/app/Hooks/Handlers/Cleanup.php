@@ -185,7 +185,7 @@ class Cleanup
 
         $subscriber = Subscriber::where('user_id', $userId)->first();
 
-        if (!$subscriber && $deletedUser) {
+        if (!$subscriber && Helper::isUserEmailVerified($deletedUser)) {
             $subscriber = Subscriber::where('email', $deletedUser->user_email)->first();
         }
 
@@ -276,10 +276,83 @@ class Cleanup
         CompanyNote::where('subscriber_id', $id)->delete();
     }
 
+    /**
+     * Flag an email that a user gave themselves without WordPress confirming it.
+     *
+     * While flagged, the address does not match the user to a contact (Helper::isUserEmailVerified()).
+     * A trusted change clears the flag. Runs after AutoSubscribeHandler::syncUserUpdate(), which reads
+     * the flag of the old email.
+     *
+     * @param int $userId
+     * @param \WP_User $oldData
+     */
+    public function flagUnverifiedEmailChange($userId, $oldData)
+    {
+        $user = get_user_by('ID', $userId);
+        if (!$user || !$oldData || strtolower($user->user_email) === strtolower($oldData->user_email)) {
+            return;
+        }
+
+        if (Helper::isUnconfirmedSelfEmailChange($userId, $user->user_email)) {
+            update_user_meta($userId, '_fcrm_unverified_email', $user->user_email);
+        } else {
+            delete_user_meta($userId, '_fcrm_unverified_email');
+        }
+    }
+
+    /**
+     * A password reset link reached the user's address, which proves they own it.
+     *
+     * @param \WP_User $user
+     */
+    public function clearUnverifiedEmail($user)
+    {
+        if ($user && !empty($user->ID)) {
+            delete_user_meta($user->ID, '_fcrm_unverified_email');
+        }
+    }
+
+    /**
+     * A logged-in user who clicks a tracked link from an email sent to their flagged address owns that inbox.
+     *
+     * Called by RedirectionHandler::trackUrlClick() only after the per-email token is verified. Clears the flag and
+     * links the clicked contact, unless it belongs to another user or this user already has a contact.
+     *
+     * @param \FluentCrm\App\Models\CampaignEmail $campaignEmail
+     */
+    public function clearUnverifiedEmailOnClick($campaignEmail)
+    {
+        $userId = get_current_user_id();
+        if (!$userId || !$campaignEmail || !$campaignEmail->email_address) {
+            return;
+        }
+
+        // User meta is already cached for the logged-in user; the compliance option may cost a query, so it goes second.
+        $unverified = get_user_meta($userId, '_fcrm_unverified_email', true);
+        if (!$unverified || Helper::getComplianceSettings()['verified_email_match'] === 'no') {
+            return;
+        }
+
+        $user = get_userdata($userId);
+        $contact = $campaignEmail->subscriber;
+
+        // The contact must still hold the address the email went to, or an old link could claim a changed contact.
+        if ($user && $contact && strtolower($unverified) === strtolower($user->user_email)
+            && strtolower($unverified) === strtolower($campaignEmail->email_address)
+            && strtolower($unverified) === strtolower($contact->email)) {
+            delete_user_meta($userId, '_fcrm_unverified_email');
+
+            if (!$contact->user_id && !Subscriber::where('user_id', $userId)->exists()) {
+                Subscriber::where('id', $contact->id)->update(['user_id' => $userId]);
+            }
+        }
+    }
+
     public function handleUserPasswordChanged($user)
     {
-        $contact = Subscriber::where('email', $user->user_email)
-            ->first();
+        $contact = Helper::isUserEmailVerified($user)
+            ? Subscriber::where('email', $user->user_email)->first()
+            : Subscriber::where('user_id', $user->ID)->first();
 
         if (!$contact) {
             return false;

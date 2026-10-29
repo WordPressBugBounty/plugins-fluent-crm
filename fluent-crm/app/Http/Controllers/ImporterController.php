@@ -346,10 +346,12 @@ class ImporterController extends Controller
 
         if (class_exists('\Restrict_Content_Pro')) {
             $drivers['rcp'] = [
-                'label'            => __('Restrict Content Pro', 'fluent-crm'),
+                'label'            => __('Kadence Memberships', 'fluent-crm'),
+                // Shown under the label so sites that still know the plugin by its old name can find it.
+                'formerly'         => 'Restrict Content Pro',
                 'logo'             => fluentCrmMix('images/rcp.png'),
                 'disabled'         => true,
-                'disabled_message' => __('Import Restrict Content Pro members by membership level, then segment them with tags. This is a Pro feature. Please upgrade to activate it.', 'fluent-crm')
+                'disabled_message' => __('Import Kadence Memberships members by membership level, then segment them with tags. This is a Pro feature. Please upgrade to activate it.', 'fluent-crm')
             ];
         }
 

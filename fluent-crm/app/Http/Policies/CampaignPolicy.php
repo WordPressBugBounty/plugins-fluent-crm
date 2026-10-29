@@ -27,14 +27,20 @@ class CampaignPolicy extends BasePolicy
         return $this->currentUserCan('fcrm_manage_emails');
     }
 
+    /**
+     * "Delete emails" has no permission dependencies, so manage access is re-asserted.
+     *
+     * @param Request $request
+     * @return bool
+     */
     public function delete(Request $request)
     {
-        return $this->currentUserCan('fcrm_manage_email_delete');
+        return $this->verifyRequest($request) && $this->currentUserCan('fcrm_manage_email_delete');
     }
 
     public function deleteCampaignEmails(Request $request)
     {
-        return $this->currentUserCan('fcrm_manage_email_delete');
+        return $this->delete($request);
     }
 
     /**
@@ -48,7 +54,7 @@ class CampaignPolicy extends BasePolicy
         $actionName = $request->getSafe('action_name', 'sanitize_text_field', '');
 
         if ($actionName === 'delete_campaigns') {
-            return $this->currentUserCan('fcrm_manage_email_delete');
+            return $this->delete($request);
         }
 
         if ($actionName === 'apply_labels') {

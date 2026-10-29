@@ -2,10 +2,15 @@
 
 (new \FluentCrm\App\Services\ExternalIntegrations\Oxygen\ConditionBuilder())->init();
 
+/*
+ * The conditions below decide which elements end up in the page HTML, and a full-page cache can
+ * serve that HTML to every visitor. So they match only the logged-in user's contact, never one
+ * identified by the email-click cookie (see Helper::getLoggedInContact()).
+ */
+
 function fcrmOxyCheckTagCondition($value, $operator)
 {
-    $contactApi = FluentCrmApi('contacts');
-    $contact = $contactApi->getCurrentContact(true, true);
+    $contact = \FluentCrm\App\Services\Helper::getLoggedInContact();
 
     if(!$contact) {
         if($operator == 'exist') {
@@ -37,8 +42,7 @@ function fcrmOxyCheckTagCondition($value, $operator)
 
 function fcrmOxyCheckStatusCondition($value, $operator)
 {
-    $contactApi = FluentCrmApi('contacts');
-    $contact = $contactApi->getCurrentContact(true, true);
+    $contact = \FluentCrm\App\Services\Helper::getLoggedInContact();
 
     if(!$contact) {
         if($operator == '=') {
@@ -58,8 +62,7 @@ function fcrmOxyCheckStatusCondition($value, $operator)
 
 function fcrmOxyCheckContactExistCondition($value, $operator)
 {
-    $contactApi = FluentCrmApi('contacts');
-    $contact = $contactApi->getCurrentContact(true, true);
+    $contact = \FluentCrm\App\Services\Helper::getLoggedInContact();
 
     if($value == 'yes') {
         return !!$contact;

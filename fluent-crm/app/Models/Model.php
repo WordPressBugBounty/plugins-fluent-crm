@@ -22,9 +22,21 @@ class Model extends BaseModel
         return $query->orderBy($field, 'asc');
     }
 
+    /**
+     * Page size for paginate(), read from the request.
+     *
+     * Clamped to 1-1000: a negative value made limit() a no-op (every row loaded)
+     * and 0 divided by zero in the paginator. 1000 is above every UI page size.
+     *
+     * @return int
+     */
     public function getPerPage()
     {
-        return (isset($_REQUEST['per_page'])) ? intval($_REQUEST['per_page']) : 15;
+        if (!isset($_REQUEST['per_page'])) {
+            return 15;
+        }
+
+        return max(1, min(1000, intval($_REQUEST['per_page'])));
     }
 
     /**

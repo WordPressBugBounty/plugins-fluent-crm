@@ -460,8 +460,8 @@ $router->prefix('forms')->withPolicy('FormsPolicy')->group(function ($router) {
  */
 $router->prefix('docs')->withPolicy('ReportPolicy')->group(function ($router) {
     $router->get('/', [DocsController::class, 'index']);
-    $router->get('/{doc_id}', [DocsController::class, 'getDoc'])->int('doc_id');
     $router->get('/addons', [DocsController::class, 'getAddons']);
+    $router->get('/{doc_id}', [DocsController::class, 'getDoc'])->alphaNumDash('doc_id');
 });
 
 /*

@@ -142,7 +142,7 @@ class AutoSubscribeHandler
             $checkedTag = 'checked="true"';
         }
 
-        $html = '<p class="comment-form-fc-consent comment-form-cookies-consent"><input ' . $checkedTag . ' id="wp-comment-fc-consent" name="wp-comment-fc-consent" type="checkbox" value="yes"><label for="wp-comment-fc-consent">' . $label . '</label></p>';
+        $html = '<p class="comment-form-fc-consent comment-form-cookies-consent"><input ' . $checkedTag . ' id="wp-comment-fc-consent" name="wp-comment-fc-consent" type="checkbox" value="yes"><label for="wp-comment-fc-consent">' . wp_kses_post($label) . '</label></p>';
 
         return $html . $buttonHtml;
     }
@@ -243,7 +243,17 @@ class AutoSubscribeHandler
 
         if ($user->user_email != $oldData->user_email) {
             // email has been changed
-            $oldSubscriber = Subscriber::where('email', $oldData->user_email)->first();
+            // An unverified address must not pick a contact (Helper::isUserEmailVerified()).
+            $oldSubscriber = Subscriber::where('user_id', $userId)->first();
+            if (!$oldSubscriber && Helper::isUserEmailVerified($oldData)) {
+                $oldSubscriber = Subscriber::where('email', $oldData->user_email)->first();
+            }
+
+            // An unconfirmed address must neither adopt a contact nor be written onto one,
+            // or the real owner's later sign-ups would merge into this user's contact.
+            if (Helper::isUnconfirmedSelfEmailChange($userId, $user->user_email)) {
+                return false;
+            }
 
             // check if a contact is exist with the new email id
             $newSubscriber = Subscriber::where('email', $user->user_email)->first();
@@ -311,6 +321,13 @@ class AutoSubscribeHandler
 
         $updateData['updated_at'] = current_time('mysql');
 
+        if (!Helper::isUserEmailVerified($user)) {
+            unset($updateData['user_id']);
+            return fluentCrmDb()->table('fc_subscribers')
+                ->where('user_id', $user->ID)
+                ->update($updateData);
+        }
+
         return fluentCrmDb()->table('fc_subscribers')
             ->where('email', $user->user_email)
             ->update($updateData);
@@ -327,7 +344,7 @@ class AutoSubscribeHandler
         }
 
         $subscriber = Subscriber::where('user_id', $userId)->first();
-        if (!$subscriber) {
+        if (!$subscriber && Helper::isUserEmailVerified($user)) {
             $subscriber = Subscriber::where('email', $user->user_email)->first();
         }
 
@@ -351,7 +368,14 @@ class AutoSubscribeHandler
         }
 
         $user = get_user_by('ID', $userId);
-        $contact = Subscriber::where('email', $user->user_email)->first();
+        if (Helper::isUserEmailVerified($user)) {
+            $contact = Subscriber::where('email', $user->user_email)->first();
+        } else {
+            $contact = Subscriber::where('user_id', $userId)->first();
+            if (!$contact) {
+                return;
+            }
+        }
 
         $addressData = $customer->get_billing();
 
@@ -386,6 +410,10 @@ class AutoSubscribeHandler
         $countryCode = Helper::getCfIpCountry();
 
         if (!$countryCode) {
+            return;
+        }
+
+        if (!Helper::isUserEmailVerified($wpUser)) {
             return;
         }
 

@@ -487,7 +487,7 @@ function fluentcrm_get_subscriber_meta($subscriberId, $key, $deafult = '')
         ->first();
 
     if ($item && $item->value) {
-        return maybe_unserialize($item->value);
+        return \FluentCrm\App\Services\Helper::safeUnserialize($item->value);
     }
 
     return $deafult;

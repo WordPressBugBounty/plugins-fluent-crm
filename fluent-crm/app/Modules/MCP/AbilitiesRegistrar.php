@@ -542,7 +542,7 @@ class AbilitiesRegistrar
 
             'fluent-crm/render-email-preview' => [
                 'label'       => 'Render Email Preview',
-                'description' => 'Render the final email with SmartCodes resolved for a saved campaign or inline draft (campaign_id or subject + body), using live-send sender/footer settings. Returns the readable text by default; body_format=html adds the full HTML (mostly template CSS). Sends and writes nothing: safe to auto-approve. Needs fcrm_read_emails AND fcrm_read_contacts. Real delivery: send-test-email.',
+                'description' => 'Render the final email with SmartCodes resolved for a saved campaign or inline draft (campaign_id or subject + body), using live-send sender/footer settings. Returns the readable text by default; body_format=html adds the full HTML (mostly template CSS). Sends and writes nothing: safe to auto-approve. Needs fcrm_manage_emails, like the REST preview; against_contact_* and a to_email contact need fcrm_read_contacts. Real delivery: send-test-email.',
                 'input_schema' => [
                     'type'       => 'object',
                     'properties' => [
@@ -560,7 +560,7 @@ class AbilitiesRegistrar
                         'reply_to_email'   => ['type' => 'string'],
                         'is_transactional' => ['type' => 'string', 'enum' => ['yes', 'no'], 'default' => 'no', 'description' => '"yes" omits the footer, as in a live send.'],
                         'disable_footer'   => ['type' => 'string', 'enum' => ['yes', 'no'], 'description' => 'Overrides the derived footer behaviour.'],
-                        'against_contact_id'    => ['type' => 'integer', 'description' => 'SmartCode contact. Default: contact with your WP user email, else any subscribed contact.'],
+                        'against_contact_id'    => ['type' => 'integer', 'description' => 'SmartCode contact; needs fcrm_read_contacts. Default: your own contact, else the oldest contact.'],
                         'against_contact_email' => ['type' => 'string'],
                         'settings'              => ['type' => 'object', 'description' => 'Merged into render settings (template_config, footer_settings); wins over top-level params.'],
                         'body_format'           => ['type' => 'string', 'enum' => ['text', 'html', 'both'], 'default' => 'text', 'description' => 'text = the email as a reader sees it; html = the full rendered HTML; both = both.'],
@@ -568,8 +568,8 @@ class AbilitiesRegistrar
                 ],
                 'execute_callback'    => [EmailTools::class, 'renderEmailPreview'],
                 'permission_callback' => function () {
-                    // Both caps: the preview exposes the resolved contact's PII.
-                    return MCPHelper::requireAllCaps(['fcrm_read_emails', 'fcrm_read_contacts']);
+                    // Same cap as the REST preview: POST campaigns/email-preview-html falls to CampaignPolicy, which needs manage for writes.
+                    return MCPHelper::requireAnyCap(['fcrm_manage_emails']);
                 },
                 'annotations' => ['readonly' => true, 'destructive' => false, 'idempotent' => true, 'openWorldHint' => false],
             ],
@@ -595,7 +595,7 @@ class AbilitiesRegistrar
                         'reply_to_email'   => ['type' => 'string'],
                         'is_transactional' => ['type' => 'string', 'enum' => ['yes', 'no'], 'default' => 'no', 'description' => '"yes" omits the footer, as in a live send.'],
                         'disable_footer'   => ['type' => 'string', 'enum' => ['yes', 'no'], 'description' => 'Overrides the derived footer behaviour.'],
-                        'against_contact_id'   => ['type' => 'integer', 'description' => 'SmartCode contact; needs fcrm_read_contacts. Default: contact matching to_email, else any subscribed contact (also needs fcrm_read_contacts).'],
+                        'against_contact_id'   => ['type' => 'integer', 'description' => 'SmartCode contact; needs fcrm_read_contacts. Default: contact matching to_email, else your own contact, else the oldest contact.'],
                         'against_contact_email' => ['type' => 'string', 'description' => 'Same as against_contact_id, by email.'],
                     ],
                 ],

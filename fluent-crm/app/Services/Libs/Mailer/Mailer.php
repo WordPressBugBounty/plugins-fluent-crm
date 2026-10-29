@@ -22,13 +22,7 @@ class Mailer
         }
 
         if (self::willIncludeName()) {
-            if ($name = Arr::get($data, 'to.name')) {
-                $name = sanitize_text_field($name);
-                // Quote names containing a comma.
-                if (strpos($name, ',') !== false) {
-                    $name = '"' . str_replace('"', '\"', $name) . '"';
-                }
-
+            if ($name = static::cleanDisplayName(Arr::get($data, 'to.name'))) {
                 $to = $name . ' <' . $to . '>';
             }
         }
@@ -92,6 +86,28 @@ class Mailer
         }
 
         return apply_filters('fluent_crm/email_headers', $headers, $data, $subscriber, $emailModel);
+    }
+
+    /**
+     * Make a contact name safe to use as the display name in a "Name <email>" To value.
+     *
+     * wp_mail() and most SMTP plugins split a string To value on every comma and ignore
+     * quotes, so a name such as "x,someone@example.com,y" would add a recipient. Contacts
+     * can set their own name through public forms, so the address separators and quoting
+     * characters are replaced with spaces instead of being quoted.
+     *
+     * @param mixed $name
+     * @return string Empty when nothing printable is left.
+     */
+    protected static function cleanDisplayName($name)
+    {
+        if (!is_string($name) || $name === '') {
+            return '';
+        }
+
+        $name = str_replace([',', ';', '<', '>', '"', '\\'], ' ', sanitize_text_field($name));
+
+        return trim(preg_replace('/\s+/', ' ', $name));
     }
 
     private static function willIncludeName()

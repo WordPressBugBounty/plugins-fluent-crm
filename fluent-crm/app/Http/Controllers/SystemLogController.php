@@ -27,7 +27,7 @@ class SystemLogController extends Controller
 
         $logs = $this->getLogsQuery($search);
 
-        $logs = $logs->paginate($request->per_page ?: 20);
+        $logs = $logs->paginate(max(1, min(1000, intval($request->per_page ?: 20))));
 
         return [
             'logs' => $logs

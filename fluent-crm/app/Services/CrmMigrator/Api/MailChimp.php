@@ -36,15 +36,14 @@ class MailChimp
      */
     public function __construct($api_key, $api_endpoint = null)
     {
-        $this->api_key = $api_key;
+        $this->api_key = trim((string)$api_key);
 
         if ($api_endpoint === null) {
-            if (strpos($this->api_key, '-') === false) {
-                // phpcs:ignore WordPress.Security.EscapeOutput.ExceptionNotEscaped
-                throw new \Exception("Invalid MailChimp API key `{$api_key}` supplied.");
+            // The data center becomes the request host, so only "<key>-<2 letters><digits>" is accepted (SSRF).
+            if (!preg_match('/^[a-z0-9]+-([a-z]{2}\d{1,3})$/i', $this->api_key, $matches)) {
+                throw new \Exception('Invalid MailChimp API key supplied.');
             }
-            list(, $data_center) = explode('-', $this->api_key);
-            $this->api_endpoint  = str_replace('<dc>', $data_center, $this->api_endpoint);
+            $this->api_endpoint = str_replace('<dc>', strtolower($matches[1]), $this->api_endpoint);
         } else {
             $this->api_endpoint  = $api_endpoint;
         }
@@ -210,7 +209,6 @@ class MailChimp
         curl_setopt($ch, CURLOPT_HTTPHEADER, $httpHeader);
         curl_setopt($ch, CURLOPT_USERAGENT, 'DrewM/MailChimp-API/3.0 (github.com/drewm/mailchimp-api)');
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_VERBOSE, true);
         curl_setopt($ch, CURLOPT_HEADER, true);
         curl_setopt($ch, CURLOPT_TIMEOUT, $timeout);
         curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, $this->verify_ssl);
