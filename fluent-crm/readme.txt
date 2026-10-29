@@ -4,7 +4,7 @@ Tags: email marketing, newsletter, crm, email newsletter, subscribers
 Requires at least: 6.0
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 3.3.0
+Stable tag: 3.3.1
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -260,6 +260,9 @@ You can report any security bugs found in the source code of FluentCRM plugins t
 10. Pro Integrations
 
 == Changelog ==
+
+= 3.3.1 (Date: October 29, 2026) =
+- Hotfix: Contacts page JS error Issue Fixed
 
 = 3.3.0 (Date: October 29, 2026) =
 - New: Campaign Calendar in Reports, with month, quarter, and year views for campaigns

@@ -170,9 +170,9 @@
             '_fc-bits-ui.js'
         ]
     ],
-    '_Csv2.js' => [
-        'file' => 'Csv2.js',
-        'name' => 'Csv',
+    '_CsvImportStep.js' => [
+        'file' => 'CsvImportStep.js',
+        'name' => 'CsvImportStep',
         'imports' => [
             '_vendor-element-plus.js',
             '_fc-bits.js',
@@ -247,7 +247,7 @@
         'imports' => [
             '_vendor-element-plus.js',
             '_data_config.js',
-            '_csv.js',
+            '_csvCell.js',
             '_GenericPromo.js',
             '_vendor.js',
             '_fc-bits-ui.js'
@@ -784,9 +784,9 @@
             '_fc-bits.js'
         ]
     ],
-    '_csv.js' => [
-        'file' => 'csv.js',
-        'name' => 'csv'
+    '_csvCell.js' => [
+        'file' => 'csvCell.js',
+        'name' => 'csvCell'
     ],
     '_data_config.js' => [
         'file' => 'data_config.js',
@@ -2204,7 +2204,7 @@
         'imports' => [
             '_vendor-element-plus.js',
             '_CompanyInfoSide.js',
-            '_Csv2.js',
+            '_CsvImportStep.js',
             '_GenericPromo2.js',
             '_vendor.js',
             '_fc-bits-ui.js',
@@ -2340,7 +2340,7 @@
             '_ProBadge.js',
             '_vendor.js',
             '_fc-bits-ui.js',
-            '_Csv2.js',
+            '_CsvImportStep.js',
             '__FormBuilder2.js',
             '__OptionSelector.js',
             '_FormHandler.js',
@@ -2366,7 +2366,7 @@
             '_input-popover-dropdown2.js',
             '__AjaxSelector.js',
             '__VerifiedEmailInput.js',
-            '_csv.js',
+            '_csvCell.js',
             '_GenericPromo.js',
             '_Filterer2.js',
             '_Searcher.js',
@@ -2499,7 +2499,7 @@
             '_contacts.js',
             '_relations.js',
             '_clipboard.js',
-            '_csv.js',
+            '_csvCell.js',
             '_GenericPromo.js',
             '_PromoCard.js'
         ]
@@ -2536,7 +2536,7 @@
         'imports' => [
             '_vendor-element-plus.js',
             '_contacts.js',
-            '_csv.js',
+            '_csvCell.js',
             '_Confirm2.js',
             '_ActionMenu.js',
             '__FormBuilder2.js',
@@ -2984,7 +2984,7 @@
         'imports' => [
             '_vendor-element-plus.js',
             '_contacts.js',
-            '_csv.js',
+            '_csvCell.js',
             '_Confirm2.js',
             '_ActionMenu.js',
             '_PaginationBar.js',
